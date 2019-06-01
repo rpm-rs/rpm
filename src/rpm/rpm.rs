@@ -1,6 +1,6 @@
 use nom;
-use quick_xml::events::Event;
-use quick_xml::Reader;
+
+
 use std::fmt;
 use std::io;
 
@@ -81,7 +81,7 @@ struct Lead {
 }
 
 impl Lead {
-    fn parse(mut input: &[u8]) -> Result<Self, RPMError> {
+    fn parse(input: &[u8]) -> Result<Self, RPMError> {
         let (rest, magic) = complete::take(4usize)(input)?;
         for i in 0..magic.len() {
             if magic[i] != RPM_MAGIC[i] {
@@ -222,7 +222,7 @@ where
         assert_eq!(bytes.len(), index_header.header_size as usize);
 
         // add data to entries
-        for mut entry in &mut entries {
+        for entry in &mut entries {
             let mut remaining = &bytes[entry.offset as usize..];
             match &mut entry.data {
                 IndexData::Null => {}
@@ -242,7 +242,7 @@ where
                     parse_entry_data_number(remaining, entry.num_items, ints, be_i64)?.0;
                 }
                 IndexData::StringTag(ref mut string) => {
-                    let (rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
+                    let (_rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
                     string.push_str(String::from_utf8_lossy(raw_string).as_ref());
                 }
                 IndexData::Bin(ref mut bin) => {
@@ -324,7 +324,7 @@ impl Header<IndexSignatureTag> {
     fn parse_signature<I: std::io::BufRead>(
         input: &mut I,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
-        let mut result = Self::parse(input)?;
+        let result = Self::parse(input)?;
         // this structure is aligned to 8 bytes - rest is filled up with zeros.
         // if the size of our store is not a modulo of 8, we discard bytes to align to the 8 byte boundary.
         let modulo = result.index_header.header_size % 8;
@@ -397,7 +397,7 @@ impl IndexHeader {
         // then number of of entries
         let (rest, num_entries) = be_u32(rest)?;
         // then size of header
-        let (rest, header_size) = be_u32(rest)?;
+        let (_rest, header_size) = be_u32(rest)?;
 
         Ok(IndexHeader {
             magic: magic.try_into().unwrap(),
@@ -477,21 +477,21 @@ impl<T: num::FromPrimitive + num::ToPrimitive> IndexEntry<T> {
             }
             IndexData::Int16(d) => {
                 raw_datatype = 3;
-                let mut iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
                 for (i, byte) in iter.enumerate() {
                     store[self.offset as usize + i] = byte;
                 }
             }
             IndexData::Int32(d) => {
                 raw_datatype = 4;
-                let mut iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
                 for (i, byte) in iter.enumerate() {
                     store[self.offset as usize + i] = byte;
                 }
             }
             IndexData::Int64(d) => {
                 raw_datatype = 5;
-                let mut iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
                 for (i, byte) in iter.enumerate() {
                     store[self.offset as usize + i] = byte;
                 }
@@ -535,7 +535,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive> IndexEntry<T> {
 }
 
 fn append_string(data: &str, offset: usize, store: &mut [u8]) {
-    let mut iter = data.bytes();
+    let iter = data.bytes();
     let mut index = 0;
     for byte in iter {
         store[offset + index] = byte;
@@ -1075,10 +1075,10 @@ mod tests {
 
     #[test]
     fn test_header() -> Result<(), Box<std::error::Error>> {
-        let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut rpm_file_path = d.clone();
         rpm_file_path.push("389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
-        let mut rpm_file =
+        let rpm_file =
             std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(rpm_file);
 
