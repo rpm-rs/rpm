@@ -1,29 +1,35 @@
 use nom;
 
-
-use std::fmt;
-use std::io;
-
+use cpio;
 use enum_display_derive;
+use libflate;
+use lzma;
+use md5;
+use md5::{Digest, Md5};
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
 use num;
 use num_derive;
+use std::collections;
 use std::convert::TryInto;
+use std::fmt;
 use std::fmt::Display;
+use std::io;
+use std::os::unix::fs::PermissionsExt;
+use std::time::UNIX_EPOCH;
 
 const LEAD_SIZE: usize = 96;
 const RPM_MAGIC: [u8; 4] = [0xed, 0xab, 0xee, 0xdb];
 
 const HEADER_MAGIC: [u8; 3] = [0x8e, 0xad, 0xe8];
 
-struct RPMPackage {
-    metadata: RPMPackageMetadata,
-    content: Vec<u8>,
+pub struct RPMPackage {
+    pub metadata: RPMPackageMetadata,
+    pub content: Vec<u8>,
 }
 
 impl RPMPackage {
-    fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -33,17 +39,17 @@ impl RPMPackage {
         })
     }
 
-    fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
     }
 }
 #[derive(PartialEq)]
-struct RPMPackageMetadata {
-    lead: Lead,
-    signature: Header<IndexSignatureTag>,
-    header: Header<IndexTag>,
+pub struct RPMPackageMetadata {
+    pub lead: Lead,
+    pub signature: Header<IndexSignatureTag>,
+    pub header: Header<IndexTag>,
 }
 
 impl RPMPackageMetadata {
@@ -68,7 +74,7 @@ impl RPMPackageMetadata {
     }
 }
 
-struct Lead {
+pub struct Lead {
     magic: [u8; 4],
     major: u8,
     minor: u8,
@@ -169,6 +175,31 @@ impl Lead {
         out.write_all(&self.reserved)?;
         Ok(())
     }
+
+    fn new(name: &str) -> Self {
+        let mut name_size = name.len();
+
+        // the last byte needs to be the null terminator
+        if name_size > 65 {
+            name_size = 65;
+        }
+
+        let mut name_arr = [0; 66];
+        for i in 0..name_size - 1 {
+            name_arr[i] = name.as_bytes()[i];
+        }
+        Lead {
+            magic: RPM_MAGIC,
+            major: 3,
+            minor: 0,
+            package_type: 0,
+            arch: 0,
+            name: name_arr,
+            os: 1,
+            signature_type: 5,
+            reserved: [0; 16],
+        }
+    }
 }
 
 impl PartialEq for Lead {
@@ -190,14 +221,14 @@ impl PartialEq for Lead {
 }
 
 #[derive(Debug, PartialEq)]
-struct Header<T: num::FromPrimitive> {
+pub struct Header<T: num::FromPrimitive> {
     index_header: IndexHeader,
     index_entries: Vec<IndexEntry<T>>,
 }
 
 impl<T> Header<T>
 where
-    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug,
+    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy,
 {
     fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; 16] = [0; 16];
@@ -279,7 +310,7 @@ where
         let mut store_buf = vec![0; self.index_header.header_size as usize];
 
         for entry in &self.index_entries {
-            entry.write(out, &mut store_buf);
+            entry.write(out, &mut store_buf)?;
         }
         out.write_all(&store_buf)?;
         Ok(())
@@ -318,9 +349,57 @@ where
             entry.tag,
         )))
     }
+
+    fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
+        let mut header_immutable_index_data = vec![];
+        let mut hie = IndexEntry::new(tag, (records_count + 1) * -16, IndexData::Bin(Vec::new()));
+        hie.num_items = 16;
+        hie.write_index(&mut header_immutable_index_data);
+        IndexEntry::new(tag, offset, IndexData::Bin(header_immutable_index_data))
+    }
 }
 
 impl Header<IndexSignatureTag> {
+    fn new_signature_header(size: i32, md5: &[u8]) -> Self {
+        let mut offset = 0;
+        let mut entries = vec![
+            IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_SIZE,
+                offset,
+                IndexData::Int32(vec![size]),
+            ),
+            IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_MD5,
+                offset,
+                IndexData::Bin(md5.to_vec()),
+            ),
+        ];
+        for mut entry in &mut entries {
+            entry.offset = offset;
+            offset += entry.data.byte_size() as i32;
+        }
+
+        let mut all_entries = vec![Header::create_region_tag(
+            IndexSignatureTag::HEADER_SIGNATURES,
+            entries.len() as i32,
+            offset,
+        )];
+
+        for entry in entries.drain(0..) {
+            all_entries.push(entry);
+        }
+
+        let mut store_size = offset + 16;
+        store_size += store_size % 8;
+
+        let ih = IndexHeader::new(all_entries.len() as u32, store_size as u32);
+
+        Header {
+            index_header: ih,
+            index_entries: all_entries,
+        }
+    }
+
     fn parse_signature<I: std::io::BufRead>(
         input: &mut I,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
@@ -348,15 +427,349 @@ impl Header<IndexSignatureTag> {
 }
 
 impl Header<IndexTag> {
-    fn get_payload_format(&self) -> Result<&str, RPMError> {
+    fn new_header(
+        name: String,
+        version: String,
+        release: String,
+        desc: String,
+        summary: String,
+        arch: String,
+        license: String,
+        entries: Vec<RPMFileEntry>,
+        directories: Vec<String>,
+
+        mut requires: Vec<Dependency>,
+        mut provides: Vec<Dependency>,
+        obsoletes: Vec<Dependency>,
+        conflicts: Vec<Dependency>,
+    ) -> Self {
+        let mut file_sizes = Vec::new();
+        let mut file_modes = Vec::new();
+        let mut file_rdevs = Vec::new();
+        let mut file_mtimes = Vec::new();
+        let mut file_md5s = Vec::new();
+        let mut file_linktos = Vec::new();
+        let mut file_flags = Vec::new();
+        let mut file_usernames = Vec::new();
+        let mut file_groupnames = Vec::new();
+        let mut file_devices = Vec::new();
+        let mut file_inodes = Vec::new();
+        let mut file_langs = Vec::new();
+        let mut dir_indixes = Vec::new();
+        let mut base_names = Vec::new();
+
+        let mut combined_file_sizes = 0;
+        for entry in &entries {
+            combined_file_sizes += entry.size;
+            file_sizes.push(entry.size);
+            file_modes.push(entry.mode);
+            file_rdevs.push(entry.file_rdevice);
+            file_mtimes.push(entry.modified_at);
+            file_md5s.push(entry.md5_checksum.clone());
+            file_linktos.push(entry.link.clone());
+            file_flags.push(entry.flag);
+            file_usernames.push(entry.user.clone());
+            file_groupnames.push(entry.group.clone());
+            file_devices.push(entry.file_device);
+            file_inodes.push(entry.inode);
+            file_langs.push(entry.lang.clone());
+            dir_indixes.push(entry.dir_index.unwrap());
+            base_names.push(entry.base_name.clone().unwrap());
+        }
+
+        let mut provide_names = Vec::new();
+        let mut provide_flags = Vec::new();
+        let mut provide_versions = Vec::new();
+
+        for d in provides.drain(0..) {
+            provide_names.push(d.dep_name);
+            provide_flags.push(d.sense as i32);
+            provide_versions.push(d.version);
+        }
+
+        let mut obsolete_names = Vec::new();
+        let mut obsolete_flags = Vec::new();
+        let mut obsolete_versions = Vec::new();
+
+        for d in obsoletes {
+            obsolete_names.push(d.dep_name);
+            obsolete_flags.push(d.sense as i32);
+            obsolete_versions.push(d.version);
+        }
+
+        let mut require_names = Vec::new();
+        let mut require_flags = Vec::new();
+        let mut require_versions = Vec::new();
+
+        for d in requires {
+            require_names.push(d.dep_name);
+            require_flags.push(d.sense as i32);
+            require_versions.push(d.version);
+        }
+
+        let mut conflicts_names = Vec::new();
+        let mut conflicts_flags = Vec::new();
+        let mut conflicts_versions = Vec::new();
+
+        for d in conflicts {
+            conflicts_names.push(d.dep_name);
+            conflicts_flags.push(d.sense as i32);
+            conflicts_versions.push(d.version);
+        }
+
+        let mut offset = 0;
+        let mut actual_records = vec![
+            IndexEntry::new(
+                IndexTag::RPMTAG_HEADERI18NTABLE,
+                offset,
+                IndexData::StringTag("C".to_string()),
+            ),
+            IndexEntry::new(IndexTag::RPMTAG_NAME, offset, IndexData::StringTag(name)),
+            IndexEntry::new(
+                IndexTag::RPMTAG_VERSION,
+                offset,
+                IndexData::StringTag(version),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_RELEASE,
+                offset,
+                IndexData::StringTag(release),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DESCRIPTION,
+                offset,
+                IndexData::StringTag(desc),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SUMMARY,
+                offset,
+                IndexData::StringTag(summary),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SIZE,
+                offset,
+                IndexData::Int32(vec![combined_file_sizes]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_LICENSE,
+                offset,
+                IndexData::StringTag(license),
+            ),
+            // https://fedoraproject.org/wiki/RPMGroups
+            // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
+            IndexEntry::new(
+                IndexTag::RPMTAG_OS,
+                offset,
+                IndexData::StringTag("linux".to_string()),
+            ),
+            IndexEntry::new(IndexTag::RPMTAG_ARCH, offset, IndexData::StringTag(arch)),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFORMAT,
+                offset,
+                IndexData::StringTag("cpio".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
+                offset,
+                IndexData::StringTag("gz".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFLAGS,
+                offset,
+                IndexData::StringTag("9".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILESIZES,
+                offset,
+                IndexData::Int32(file_sizes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEMODES,
+                offset,
+                IndexData::Int16(file_modes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILERDEVS,
+                offset,
+                IndexData::Int16(file_rdevs),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEMTIMES,
+                offset,
+                IndexData::Int32(file_mtimes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDIGESTS,
+                offset,
+                IndexData::StringArray(file_md5s),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILELINKTOS,
+                offset,
+                IndexData::StringArray(file_linktos),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEFLAGS,
+                offset,
+                IndexData::Int32(file_flags),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEUSERNAME,
+                offset,
+                IndexData::StringArray(file_usernames),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEGROUPNAME,
+                offset,
+                IndexData::StringArray(file_groupnames),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDEVICES,
+                offset,
+                IndexData::Int32(file_devices),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEINODES,
+                offset,
+                IndexData::Int32(file_inodes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DIRINDEXES,
+                offset,
+                IndexData::Int32(dir_indixes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILELANGS,
+                offset,
+                IndexData::StringArray(file_langs),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_BASENAMES,
+                offset,
+                IndexData::StringArray(base_names),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DIRNAMES,
+                offset,
+                IndexData::StringArray(directories),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDENAME,
+                offset,
+                IndexData::StringArray(provide_names),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEVERSION,
+                offset,
+                IndexData::StringArray(provide_versions),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEFLAGS,
+                offset,
+                IndexData::Int32(provide_flags),
+            ),
+        ];
+
+        if !obsolete_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETENAME,
+                offset,
+                IndexData::StringArray(obsolete_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETEVERSION,
+                offset,
+                IndexData::StringArray(obsolete_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETEFLAGS,
+                offset,
+                IndexData::Int32(obsolete_flags),
+            ));
+        }
+
+        if !require_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIRENAME,
+                offset,
+                IndexData::StringArray(require_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIREVERSION,
+                offset,
+                IndexData::StringArray(require_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIREFLAGS,
+                offset,
+                IndexData::Int32(require_flags),
+            ));
+        }
+
+        if !conflicts_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTNAME,
+                offset,
+                IndexData::StringArray(conflicts_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTVERSION,
+                offset,
+                IndexData::StringArray(conflicts_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTFLAGS,
+                offset,
+                IndexData::Int32(conflicts_flags),
+            ));
+        }
+
+        for record in &mut actual_records {
+            record.offset = offset;
+            offset += record.data.byte_size() as i32;
+        }
+
+        let mut header_immutable_index_data = vec![];
+        let mut hie = IndexEntry::new(
+            IndexTag::RPMTAG_HEADERIMMUTABLE,
+            (actual_records.len() as i32 + 1) * -16,
+            IndexData::Bin(Vec::new()),
+        );
+        hie.num_items = 16;
+        hie.write_index(&mut header_immutable_index_data);
+
+        let mut all_records = vec![IndexEntry::new(
+            IndexTag::RPMTAG_HEADERIMMUTABLE,
+            offset,
+            IndexData::Bin(header_immutable_index_data),
+        )];
+        for r in actual_records.drain(1..) {
+            all_records.push(r);
+        }
+        let mut store_size = offset + 16;
+        dbg!(store_size);
+
+        dbg!(store_size % 8);
+        if store_size % 8 > 0 {
+            store_size += 8 - (store_size % 8);
+        }
+
+        dbg!(store_size);
+        let index_header = IndexHeader::new(all_records.len() as u32, store_size as u32);
+        Header {
+            index_entries: all_records,
+            index_header: index_header,
+        }
+    }
+    pub fn get_payload_format(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADFORMAT)
     }
 
-    fn get_payload_compressor(&self) -> Result<&str, RPMError> {
+    pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
     }
 
-    fn get_file_checksums(&self) -> Result<&[String], RPMError> {
+    pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
         self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)
     }
 }
@@ -415,17 +828,26 @@ impl IndexHeader {
         out.write_all(&self.header_size.to_be_bytes())?;
         Ok(())
     }
+
+    fn new(num_entries: u32, header_size: u32) -> Self {
+        IndexHeader {
+            magic: HEADER_MAGIC.clone(),
+            version: 1,
+            num_entries: num_entries,
+            header_size: header_size,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
 struct IndexEntry<T: num::FromPrimitive> {
     tag: T,
     data: IndexData,
-    offset: u32,
+    offset: i32,
     num_items: u32,
 }
 
-impl<T: num::FromPrimitive + num::ToPrimitive> IndexEntry<T> {
+impl<T: num::FromPrimitive + num::ToPrimitive + std::fmt::Debug> IndexEntry<T> {
     // 16 bytes
     fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
         //first 4 bytes are the tag.
@@ -439,9 +861,12 @@ impl<T: num::FromPrimitive + num::ToPrimitive> IndexEntry<T> {
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
         let data = IndexData::from_u32(raw_tag_type)
             .ok_or(RPMError::new(&format!("invalid tag_type {}", raw_tag_type)))?;
+        dbg!(&tag);
+        dbg!(&data);
+        dbg!(&raw_tag_type);
 
         //  next 4 bytes is the offset relative to the beginning of the store
-        let (input, offset) = be_u32(input)?;
+        let (input, offset) = be_i32(input)?;
 
         // last 4 bytes are the count that contains the number of data items pointed to by the index entry
         let (rest, num_items) = be_u32(input)?;
@@ -457,80 +882,33 @@ impl<T: num::FromPrimitive + num::ToPrimitive> IndexEntry<T> {
         ))
     }
 
-    fn write<W: std::io::Write>(&self, out: &mut W, store: &mut [u8]) -> Result<(), RPMError> {
-        // write index into the writer direct and the data into the store. the store will be flushed after it has been finalized
+    fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes())?;
-        let mut raw_datatype: u32 = 0;
-        match &self.data {
-            IndexData::Null => {}
-            IndexData::Char(d) => {
-                raw_datatype = 1;
-                for i in 0..d.len() {
-                    store[self.offset as usize + i] = d[i];
-                }
-            }
-            IndexData::Int8(d) => {
-                raw_datatype = 2;
-                for i in 0..d.len() {
-                    store[self.offset as usize + i] = d[i].to_be_bytes()[0];
-                }
-            }
-            IndexData::Int16(d) => {
-                raw_datatype = 3;
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[self.offset as usize + i] = byte;
-                }
-            }
-            IndexData::Int32(d) => {
-                raw_datatype = 4;
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[self.offset as usize + i] = byte;
-                }
-            }
-            IndexData::Int64(d) => {
-                raw_datatype = 5;
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[self.offset as usize + i] = byte;
-                }
-            }
-            IndexData::StringTag(d) => {
-                raw_datatype = 6;
-                append_string(d, self.offset as usize, store);
-            }
-            IndexData::Bin(d) => {
-                raw_datatype = 7;
-                for i in 0..d.len() {
-                    store[self.offset as usize + i] = d[i];
-                }
-            }
-            IndexData::StringArray(d) => {
-                raw_datatype = 8;
-                let mut offset = self.offset;
-
-                for item in d {
-                    append_string(item, offset as usize, store);
-                    offset = offset + item.len() as u32 + 1;
-                }
-            }
-            IndexData::I18NString(d) => {
-                raw_datatype = 9;
-
-                let mut offset = self.offset;
-
-                for item in d {
-                    append_string(item, offset as usize, store);
-                    offset = offset + item.len() as u32 + 1;
-                }
-            }
-        }
-        written += out.write(&raw_datatype.to_be_bytes())?;
+        written += out.write(&self.data.to_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
         written += out.write(&self.num_items.to_be_bytes())?;
         assert_eq!(16, written, "there should be 16 bytes written");
         Ok(())
+    }
+
+    fn write_store(&self, store: &mut [u8]) {
+        self.data.write(store, self.offset);
+    }
+
+    fn write<W: std::io::Write>(&self, out: &mut W, store: &mut [u8]) -> Result<(), RPMError> {
+        // write index into the writer direct and the data into the store. the store will be flushed after it has been finalized
+        self.write_index(out)?;
+        self.write_store(store);
+        Ok(())
+    }
+
+    fn new(tag: T, offset: i32, data: IndexData) -> IndexEntry<T> {
+        IndexEntry {
+            tag: tag,
+            offset: offset,
+            num_items: data.num_items(),
+            data: data,
+        }
     }
 }
 
@@ -577,6 +955,93 @@ impl Display for IndexData {
 }
 
 impl IndexData {
+    fn write(&self, store: &mut [u8], offset: i32) {
+        dbg!(offset);
+        match &self {
+            IndexData::Null => {}
+            IndexData::Char(d) => {
+                for i in 0..d.len() {
+                    store[offset as usize + i] = d[i];
+                }
+            }
+            IndexData::Int8(d) => {
+                for i in 0..d.len() {
+                    store[offset as usize + i] = d[i].to_be_bytes()[0];
+                }
+            }
+            IndexData::Int16(d) => {
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                for (i, byte) in iter.enumerate() {
+                    store[offset as usize + i] = byte;
+                }
+            }
+            IndexData::Int32(d) => {
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                for (i, byte) in iter.enumerate() {
+                    store[offset as usize + i] = byte;
+                }
+            }
+            IndexData::Int64(d) => {
+                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
+                for (i, byte) in iter.enumerate() {
+                    store[offset as usize + i] = byte;
+                }
+            }
+            IndexData::StringTag(d) => {
+                append_string(d, offset as usize, store);
+            }
+            IndexData::Bin(d) => {
+                for i in 0..d.len() {
+                    store[offset as usize + i] = d[i];
+                }
+            }
+            IndexData::StringArray(d) => {
+                let mut offset = offset;
+                for item in d {
+                    dbg!(offset);
+                    dbg!(item);
+                    append_string(item, offset as usize, store);
+                    offset = offset + item.len() as i32 + 1;
+                }
+            }
+            IndexData::I18NString(d) => {
+                let mut offset = offset;
+                for item in d {
+                    append_string(item, offset as usize, store);
+                    offset = offset + item.len() as i32 + 1;
+                }
+            }
+        }
+    }
+
+    fn byte_size(&self) -> u32 {
+        match self {
+            IndexData::Null => 0,
+            IndexData::Bin(items) => items.len() as u32,
+            IndexData::Char(items) => items.len() as u32,
+            IndexData::I18NString(items) => items.iter().map(|item| (item.len() + 1) as u32).sum(),
+            IndexData::StringTag(item) => (item.len() + 1) as u32,
+            IndexData::StringArray(items) => items.iter().map(|item| (item.len() + 1) as u32).sum(),
+            IndexData::Int8(items) => items.len() as u32,
+            IndexData::Int16(items) => (items.len() * 2) as u32,
+            IndexData::Int32(items) => (items.len() * 4) as u32,
+            IndexData::Int64(items) => (items.len() * 8) as u32,
+        }
+    }
+    fn num_items(&self) -> u32 {
+        match self {
+            IndexData::Null => 0,
+            IndexData::Bin(items) => items.len() as u32,
+            IndexData::Char(items) => items.len() as u32,
+            IndexData::I18NString(items) => items.len() as u32,
+            IndexData::StringTag(items) => 1,
+            IndexData::StringArray(items) => items.len() as u32,
+            IndexData::Int8(items) => items.len() as u32,
+            IndexData::Int16(items) => items.len() as u32,
+            IndexData::Int32(items) => items.len() as u32,
+            IndexData::Int64(items) => items.len() as u32,
+        }
+    }
     fn from_u32(i: u32) -> Option<Self> {
         match i {
             0 => Some(IndexData::Null),
@@ -592,6 +1057,22 @@ impl IndexData {
             _ => None,
         }
     }
+    fn to_u32(&self) -> u32 {
+        match self {
+            IndexData::Null => 0,
+            IndexData::Char(items) => 1,
+            IndexData::Int8(items) => 2,
+            IndexData::Int16(items) => 3,
+            IndexData::Int32(items) => 4,
+            IndexData::Int64(items) => 5,
+            IndexData::StringTag(items) => 6,
+            IndexData::Bin(items) => 7,
+
+            IndexData::StringArray(items) => 8,
+            IndexData::I18NString(items) => 9,
+        }
+    }
+
     fn string(&self) -> Option<&str> {
         match self {
             IndexData::StringTag(s) => Some(&s),
@@ -621,9 +1102,12 @@ const RPMTAG_SIG_BASE: isize = HEADER_SIGBASE;
     num_derive::ToPrimitive,
     Debug,
     PartialEq,
+    Copy,
+    Clone,
     enum_display_derive::Display,
 )]
-enum IndexTag {
+#[allow(non_camel_case_types)]
+pub enum IndexTag {
     RPMTAG_HEADERIMAGE = HEADER_IMAGE,
     RPMTAG_HEADERSIGNATURES = HEADER_SIGNATURES,
     RPMTAG_HEADERIMMUTABLE = HEADER_IMMUTABLE,
@@ -960,9 +1444,12 @@ enum IndexTag {
     num_derive::ToPrimitive,
     Debug,
     PartialEq,
+    Copy,
+    Clone,
     enum_display_derive::Display,
 )]
-enum IndexSignatureTag {
+#[allow(non_camel_case_types)]
+pub enum IndexSignatureTag {
     HEADER_SIGNATURES = HEADER_SIGNATURES,
     // This tag specifies the combined size of the Header and Payload sections.
     RPMSIGTAG_SIZE = HEADER_TAGBASE,
@@ -1015,7 +1502,105 @@ where
     Ok((input, ()))
 }
 
-struct RPMError {
+pub struct Dependency {
+    dep_name: String,
+    sense: u32,
+    version: String,
+}
+
+impl Dependency {
+    pub fn less(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_LESS, version)
+    }
+
+    pub fn less_eq(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_LESS | RPMSENSE_EQUAL, version)
+    }
+
+    pub fn eq(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_EQUAL, version)
+    }
+
+    pub fn greater(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_GREATER, version)
+    }
+
+    pub fn greater_eq(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_GREATER | RPMSENSE_EQUAL, version)
+    }
+
+    pub fn any(dep_name: String) -> Self {
+        Self::new(dep_name, RPMSENSE_ANY, "".to_string())
+    }
+
+    fn new(dep_name: String, sense: u32, version: String) -> Self {
+        Dependency {
+            dep_name: dep_name,
+            sense: sense,
+            version: version,
+        }
+    }
+}
+
+const RPMSENSE_ANY: u32 = 0;
+const RPMSENSE_LESS: u32 = (1 << 1);
+const RPMSENSE_GREATER: u32 = (1 << 2);
+const RPMSENSE_EQUAL: u32 = (1 << 3);
+const RPMSENSE_POSTTRANS: u32 = (1 << 5);
+const RPMSENSE_PREREQ: u32 = (1 << 6);
+const RPMSENSE_PRETRANS: u32 = (1 << 7);
+const RPMSENSE_INTERP: u32 = (1 << 8);
+const RPMSENSE_SCRIPT_PRE: u32 = (1 << 9);
+const RPMSENSE_SCRIPT_POST: u32 = (1 << 10);
+const RPMSENSE_SCRIPT_PREUN: u32 = (1 << 11);
+const RPMSENSE_SCRIPT_POSTUN: u32 = (1 << 12);
+const RPMSENSE_SCRIPT_VERIFY: u32 = (1 << 13);
+const RPMSENSE_FIND_REQUIRES: u32 = (1 << 14);
+const RPMSENSE_FIND_PROVIDES: u32 = (1 << 15);
+const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
+const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
+const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
+const RPMSENSE_MISSINGOK: u32 = (1 << 19);
+const RPMSENSE_RPMLIB: u32 = (1 << 24);
+const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
+const RPMSENSE_KEYRING: u32 = (1 << 26);
+const RPMSENSE_CONFIG: u32 = (1 << 28);
+
+const RPMFILE_CONFIG: i32 = 1 << 0;
+const RPMFILE_DOC: i32 = 1 << 1;
+const RPMFILE_DONOTUSE: i32 = (1 << 2);
+const RPMFILE_MISSINGOK: i32 = (1 << 3);
+const RPMFILE_NOREPLACE: i32 = (1 << 4);
+const RPMFILE_SPECFILE: i32 = (1 << 5);
+const RPMFILE_GHOST: i32 = (1 << 6);
+const RPMFILE_LICENSE: i32 = (1 << 7);
+const RPMFILE_README: i32 = (1 << 8);
+const RPMFILE_EXCLUDE: i32 = (1 << 9);
+
+pub struct RPMFileEntry {
+    size: i32,
+    mode: i16,
+
+    // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
+    // Who knows, who cares.
+    file_device: i32,
+    file_rdevice: i16,
+
+    inode: i32,
+    modified_at: i32,
+    md5_checksum: String,
+    link: String,
+    flag: i32,
+    user: String,
+    group: String,
+    lang: String,
+
+    old_name: Option<String>,
+    dir_index: Option<i32>,
+    base_name: Option<String>,
+}
+
+pub struct RPMError {
     message: String,
 }
 
@@ -1067,6 +1652,267 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
     }
 }
 
+pub struct RPMBuilder {
+    name: String,
+    version: String,
+    license: String,
+    arch: String,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    desc: String,
+    release: String,
+    file_content: std::collections::HashMap<String, std::fs::File>,
+    byte_content: std::collections::HashMap<String, Vec<u8>>,
+
+    requires: Vec<Dependency>,
+    obsoletes: Vec<Dependency>,
+    provides: Vec<Dependency>,
+    conflicts: Vec<Dependency>,
+}
+
+trait Compressor: io::Write {
+    fn finish(&mut self) -> Result<(), RPMError>;
+}
+
+impl Compressor for libflate::gzip::Encoder<&mut Vec<u8>> {
+    fn finish(&mut self) -> Result<(), RPMError> {
+        let result = self.finish();
+        if result.is_err() {
+            Err(RPMError::new("unable to create gzip compressor"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Compressor for lzma::LzmaWriter<&mut Vec<u8>> {
+    fn finish(&mut self) -> Result<(), RPMError> {
+        let result = self.finish();
+        if result.is_err() {
+            Err(RPMError::new("unable to create gzip compressor"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl RPMBuilder {
+    pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
+        RPMBuilder {
+            name: name.to_string(),
+            version: version.to_string(),
+            license: license.to_string(),
+            arch: arch.to_string(),
+            desc: desc.to_string(),
+            //TODO make release configurable
+            release: "1".to_string(),
+            file_content: collections::HashMap::new(),
+            byte_content: collections::HashMap::new(),
+            uid: None,
+            gid: None,
+            conflicts: Vec::new(),
+            provides: Vec::new(),
+            obsoletes: Vec::new(),
+            requires: Vec::new(),
+        }
+    }
+    pub fn with_file(mut self, source: &str, dest: &str) -> Result<Self, RPMError> {
+        let input = std::fs::File::open(source)?;
+        let size = input.metadata()?.len();
+        self.file_content.insert(dest.to_string(), input);
+        Ok(self)
+    }
+
+    pub fn with_content(mut self, content: Vec<u8>, dest: &str) -> Result<Self, RPMError> {
+        self.byte_content.insert(dest.to_string(), content);
+        Ok(self)
+    }
+
+    pub fn requires(mut self, dep: Dependency) -> Self {
+        self.requires.push(dep);
+        self
+    }
+
+    pub fn obsoletes(mut self, dep: Dependency) -> Self {
+        self.obsoletes.push(dep);
+        self
+    }
+
+    pub fn conflicts(mut self, dep: Dependency) -> Self {
+        self.conflicts.push(dep);
+        self
+    }
+
+    pub fn provides(mut self, dep: Dependency) -> Self {
+        self.provides.push(dep);
+        self
+    }
+
+    pub fn build(mut self) -> Result<Vec<u8>, RPMError> {
+        // signature depends on header and payload. So we build these two first.
+        // then the signature. Then we stitch all toghether.
+        // Lead is not important. just build it here
+
+        let lead = Lead::new(&self.name);
+
+        let mut out: Vec<u8> = Vec::new();
+
+        let mut compressor = libflate::gzip::Encoder::new(&mut out)?;
+
+        let mut ino_index = 1;
+
+        let mut rpm_file_entries = Vec::new();
+
+        let mut directories = Vec::new();
+
+        let mut payload_size = 0;
+
+        for (dest, mut f) in &self.file_content {
+            let mut hasher = Md5::default();
+            io::copy(&mut f, &mut hasher)?;
+            let hash_result = hasher.result();
+            let md5 = format!("{:x}", hash_result);
+            let metadata = f.metadata()?;
+            let mut writer = cpio::newc::Builder::new(&dest)
+                .mode(metadata.permissions().mode())
+                .ino(ino_index)
+                .uid(self.uid.unwrap_or(0))
+                .gid(self.gid.unwrap_or(0))
+                .write(compressor, metadata.len() as u32);
+            let p = std::path::Path::new(dest);
+
+            let dir_index = if p.parent().is_some() {
+                let parent_dir_path = p.parent().unwrap();
+                let parent_dir = parent_dir_path.to_str().ok_or(RPMError::new(&format!(
+                    "invalid path: {}",
+                    p.to_string_lossy()
+                )))?;
+
+                let possible_index = directories.iter().position(|item| item == &parent_dir);
+                if possible_index.is_none() {
+                    let mut dir = parent_dir.to_string();
+                    dir.remove(0);
+                    directories.push(dir);
+                    directories.len() - 1
+                } else {
+                    possible_index.unwrap()
+                }
+            } else {
+                return Err(RPMError::new("root path can not be added"));
+            };
+
+            rpm_file_entries.push(RPMFileEntry {
+                size: metadata.len() as i32,
+                old_name: None,
+                modified_at: metadata
+                    .modified()?
+                    .duration_since(UNIX_EPOCH)
+                    .expect("something really wrong with your time")
+                    .as_secs() as i32,
+                md5_checksum: md5.to_string(),
+                //TODO enable links
+                link: "".to_string(),
+                lang: "".to_string(),
+                inode: ino_index as i32,
+                user: "root".to_string(),
+                group: "root".to_string(),
+                //TODO add correct flag here.
+                flag: 0,
+                file_device: 1,
+                file_rdevice: 0,
+                mode: metadata.permissions().mode() as i16,
+                dir_index: Some(dir_index as i32),
+                base_name: p
+                    .file_name()
+                    .ok_or(RPMError::new("invalid file name"))?
+                    .to_str()
+                    .map(|i| i.to_string()),
+            });
+            payload_size += io::copy(&mut f, &mut writer)?;
+            compressor = writer.finish()?;
+            ino_index += 1;
+        }
+
+        self.requires.push(Dependency::eq(
+            "rpmlib(VersionedDependencies)".to_string(),
+            "3.0.3-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::eq(
+            "rpmlib(PayloadFilesHavePrefix)".to_string(),
+            "4.0-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::eq(
+            "rpmlib(CompressedFileNames)".to_string(),
+            "3.0.4-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::any("/bin/sh".to_string()));
+
+        self.provides
+            .push(Dependency::eq(self.name.clone(), self.version.clone()));
+        self.provides.push(Dependency::eq(
+            format!("{}({})", self.name.clone(), self.arch.clone()),
+            self.version.clone(),
+        ));
+
+        let header = Header::new_header(
+            self.name,
+            self.version,
+            self.release,
+            self.desc.clone(),
+            // TODO get extra field for summary
+            self.desc,
+            self.arch,
+            self.license,
+            rpm_file_entries,
+            directories,
+            self.requires,
+            self.provides,
+            self.obsoletes,
+            self.conflicts,
+        );
+
+        let mut header_bytes = Vec::new();
+        header.write(&mut header_bytes);
+
+        // A Header structure shall be aligned to an 8 byte boundary. 22.2.2. Header Structure
+        align_to_8_bytes(&mut header_bytes);
+        compressor = cpio::newc::trailer(compressor)?;
+        let result = compressor.finish();
+        if result.as_result().is_err() {
+            return Err(RPMError::new("unable to finalize compression"));
+        }
+
+        let signature_size = header_bytes.len() + out.len();
+        let mut hasher = Md5::default();
+
+        hasher.input(&header_bytes);
+        hasher.input(&out);
+
+        let hash_result = hasher.result();
+
+        let signature_md5 = hash_result.as_slice();
+
+        let signature_header = Header::new_signature_header(signature_size as i32, signature_md5);
+
+        let mut result = Vec::new();
+
+        lead.write(&mut result)?;
+        signature_header.write_signature(&mut result)?;
+        result.append(&mut header_bytes);
+        result.append(&mut out);
+        Ok(result)
+    }
+}
+
+fn align_to_8_bytes(input: &mut Vec<u8>) {
+    while input.len() % 8 > 0 {
+        input.push(0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -1078,8 +1924,7 @@ mod tests {
         let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut rpm_file_path = d.clone();
         rpm_file_path.push("389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
-        let rpm_file =
-            std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
+        let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(rpm_file);
 
         let package = RPMPackage::parse(&mut buf_reader)?;
@@ -1294,7 +2139,22 @@ mod tests {
         buf = Vec::new();
         package.metadata.signature.write_signature(&mut buf)?;
         let signature = Header::parse_signature(&mut buf.as_ref())?;
-        assert_eq!(package.metadata.signature, signature);
+
+        assert_eq!(
+            package.metadata.signature.index_header,
+            signature.index_header
+        );
+
+        for i in 0..signature.index_entries.len() {
+            assert_eq!(
+                signature.index_entries[i],
+                package.metadata.signature.index_entries[i]
+            );
+        }
+        assert_eq!(
+            package.metadata.signature.index_entries,
+            signature.index_entries
+        );
 
         buf = Vec::new();
         package.metadata.header.write(&mut buf)?;
@@ -1309,4 +2169,62 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_builder() -> Result<(), Box<std::error::Error>> {
+        let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut cargo_lock_file = d.clone();
+        let mut cargo_file = d.clone();
+        cargo_lock_file.push("Cargo.lock");
+        cargo_file.push("Cargo.toml");
+
+        let mut out_file = d.clone();
+        out_file.push("out/test.rpm");
+        let mut f = std::fs::File::create(out_file)?;
+        let buf = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
+            .with_file(cargo_lock_file.to_str().unwrap(), "./etc/foobar/Cargo.lock")?
+            .with_file(cargo_file.to_str().unwrap(), "./etc/Cargo.toml")?
+            .build()?;
+        f.write(&buf)?;
+        Ok(())
+    }
+
+    #[test]
+
+    fn test_region_tag() -> Result<(), Box<std::error::Error>> {
+        let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
+
+        let data = match region_entry.data {
+            IndexData::Bin(d) => d,
+            _ => return Err(Box::new(RPMError::new("should be bin"))),
+        };
+
+        let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(&data)?;
+
+        assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
+        assert_eq!(entry.data.to_u32(), IndexData::Bin(Vec::new()).to_u32());
+        assert_eq!(-48, entry.offset);
+
+        Ok(())
+    }
+
+    #[test]
+
+    fn nonsense() -> Result<(), Box<std::error::Error>> {
+        let bytes = vec![
+            0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x00, 0x07, 0xff, 0xff, 0xff, 0x90, 0x00, 0x00,
+            0x00, 0x10,
+        ];
+
+        let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(&bytes)?;
+
+        let mut actual = Vec::new();
+        entry.write_index(&mut actual)?;
+
+        assert_eq!(bytes, actual);
+
+        // assert!(false);
+        Ok(())
+    }
+
 }
