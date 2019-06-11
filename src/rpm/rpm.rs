@@ -9,6 +9,7 @@ use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
 use num;
 use num_derive;
+use sha1;
 use sha2;
 use sha2::{Digest, Sha256};
 use std::collections;
@@ -394,7 +395,7 @@ where
 }
 
 impl Header<IndexSignatureTag> {
-    fn new_signature_header(size: i32, md5: &[u8]) -> Self {
+    fn new_signature_header(size: i32, md5: &[u8], sha1: String) -> Self {
         let mut offset = 0;
         let mut entries = vec![
             IndexEntry::new(
@@ -406,6 +407,11 @@ impl Header<IndexSignatureTag> {
                 IndexSignatureTag::RPMSIGTAG_MD5,
                 offset,
                 IndexData::Bin(md5.to_vec()),
+            ),
+            IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_SHA1,
+                offset,
+                IndexData::StringTag(sha1),
             ),
         ];
         Self::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
@@ -2006,8 +2012,6 @@ impl RPMBuilder {
         let mut header_bytes = Vec::new();
         header.write(&mut header_bytes);
 
-        align_to_8_bytes(&mut header_bytes);
-
         compressor = cpio::newc::trailer(compressor)?;
         compressor.finish_compression()?;
 
@@ -2021,7 +2025,13 @@ impl RPMBuilder {
 
         let signature_md5 = hash_result.as_slice();
 
-        let signature_header = Header::new_signature_header(signature_size as i32, signature_md5);
+        let header_sha1 = sha1::Sha1::from(&header_bytes);
+
+        let signature_header = Header::new_signature_header(
+            signature_size as i32,
+            signature_md5,
+            header_sha1.digest().to_string(),
+        );
 
         let metadata = RPMPackageMetadata {
             lead: lead,
