@@ -2120,7 +2120,7 @@ mod tests {
     use super::*;
     use std::io::prelude::*;
 
-    #[test]
+
     fn test_header() -> Result<(), Box<std::error::Error>> {
         let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut rpm_file_path = d.clone();
@@ -2373,9 +2373,9 @@ mod tests {
 
     #[test]
     fn test_builder() -> Result<(), Box<std::error::Error>> {
-        let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut cargo_file = d.clone();
-        cargo_file.push("rpmbuild/BUILD/Cargo.toml");
+        cargo_file.push("Cargo.toml");
 
         let mut out_file = d.clone();
         out_file.push("out/test.rpm");
@@ -2410,7 +2410,31 @@ mod tests {
             .unwrap();
 
         //    assert_eq!(24086, entry.data.int32_array().unwrap()[0]);
+        let mut handles = Vec::new();
+        for image in vec!["fedora:30", "centos:7"] {
+            let mut docker_cmd = std::process::Command::new("docker");
+            let mut out_path = d.clone();
+            out_path.push("out");
+            docker_cmd.args(vec![
+                "run",
+                "--rm",
+                "-v",
+                &format!("{}:/out", out_path.to_string_lossy().to_string()),
+                image,
+                "yum",
+                "--disablerepo=*",
+                "localinstall",
+                "-y",
+                "/out/test.rpm",
+            ]);
+            let handle = docker_cmd.spawn()?;
+            handles.push(handle);
+        }
 
+        for mut handle in  handles {
+            let status = handle.wait()?;
+            assert!(status.success());
+        }
         Ok(())
     }
 
