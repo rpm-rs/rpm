@@ -5,11 +5,12 @@ use enum_display_derive;
 use libflate;
 use lzma;
 use md5;
-use md5::{Digest, Md5};
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
 use num;
 use num_derive;
+use sha2;
+use sha2::{Digest, Sha256};
 use std::collections;
 use std::convert::TryInto;
 use std::fmt;
@@ -17,6 +18,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::Seek;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 const LEAD_SIZE: usize = 96;
@@ -312,11 +314,8 @@ where
     fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.index_header.write(out)?;
         for entry in &self.index_entries {
-            dbg!(entry.tag);
-            dbg!(entry.offset);
             entry.write_index(out)?;
         }
-        dbg!(self.store.len());
         out.write_all(&self.store)?;
         Ok(())
     }
@@ -449,7 +448,6 @@ impl Header<IndexTag> {
         license: String,
         entries: Vec<RPMFileEntry>,
         directories: Vec<String>,
-
         mut requires: Vec<Dependency>,
         mut provides: Vec<Dependency>,
         obsoletes: Vec<Dependency>,
@@ -467,6 +465,7 @@ impl Header<IndexTag> {
         let mut file_devices = Vec::new();
         let mut file_inodes = Vec::new();
         let mut file_langs = Vec::new();
+        let mut file_verify_flags = Vec::new();
         let mut dir_indixes = Vec::new();
         let mut base_names = Vec::new();
 
@@ -487,6 +486,7 @@ impl Header<IndexTag> {
             file_langs.push(entry.lang.clone());
             dir_indixes.push(entry.dir_index.unwrap());
             base_names.push(entry.base_name.clone().unwrap());
+            file_verify_flags.push(-1);
         }
 
         let mut provide_names = Vec::new();
@@ -574,6 +574,11 @@ impl Header<IndexTag> {
                 offset,
                 IndexData::StringTag("linux".to_string()),
             ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_GROUP,
+                offset,
+                IndexData::I18NString(vec!["Unspecified".to_string()]),
+            ),
             IndexEntry::new(IndexTag::RPMTAG_ARCH, offset, IndexData::StringTag(arch)),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFORMAT,
@@ -583,12 +588,12 @@ impl Header<IndexTag> {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
-                IndexData::StringTag("gzip".to_string()),
+                IndexData::StringTag("xz".to_string()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFLAGS,
                 offset,
-                IndexData::StringTag("9".to_string()),
+                IndexData::StringTag("2".to_string()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_FILESIZES,
@@ -654,6 +659,16 @@ impl Header<IndexTag> {
                 IndexTag::RPMTAG_FILELANGS,
                 offset,
                 IndexData::StringArray(file_langs),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDIGESTALGO,
+                offset,
+                IndexData::Int32(vec![8]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEVERIFYFLAGS,
+                offset,
+                IndexData::Int32(file_verify_flags),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_BASENAMES,
@@ -929,7 +944,6 @@ impl Display for IndexData {
 
 impl IndexData {
     fn write(&self, store: &mut [u8], offset: i32) {
-        dbg!(offset);
         match &self {
             IndexData::Null => {}
             IndexData::Char(d) => {
@@ -971,8 +985,6 @@ impl IndexData {
             IndexData::StringArray(d) => {
                 let mut offset = offset;
                 for item in d {
-                    dbg!(offset);
-                    dbg!(item);
                     append_string(item, offset as usize, store);
                     offset = offset + item.len() as i32 + 1;
                 }
@@ -1016,9 +1028,7 @@ impl IndexData {
             IndexData::Int32(d) => {
                 // align to 4 bytes
                 let mut alignment = 0;
-                dbg!(store.len());
                 while store.len() % 4 > 0 {
-                    println!("pushing alignment...");
                     store.push(0);
                     alignment += 1;
                 }
@@ -1594,6 +1604,10 @@ impl Dependency {
         Self::new(dep_name, RPMSENSE_ANY, "".to_string())
     }
 
+    fn rpm_lib(dep_name: String, version: String) -> Self {
+        Self::new(dep_name, RPMSENSE_RPMLIB, version)
+    }
+
     fn new(dep_name: String, sense: u32, version: String) -> Self {
         Dependency {
             dep_name: dep_name,
@@ -1622,7 +1636,9 @@ const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
 const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
 const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
 const RPMSENSE_MISSINGOK: u32 = (1 << 19);
-const RPMSENSE_RPMLIB: u32 = (1 << 24);
+
+// for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
+const RPMSENSE_RPMLIB: u32 = (1 << 24); //0o100000012;
 const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
 const RPMSENSE_KEYRING: u32 = (1 << 26);
 const RPMSENSE_CONFIG: u32 = (1 << 28);
@@ -1713,6 +1729,14 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
     }
 }
 
+impl From<lzma::LzmaError> for RPMError {
+    fn from(error: lzma::LzmaError) -> Self {
+        match error {
+            _ => RPMError::new(&format!("lzma error occured: {}", error)),
+        }
+    }
+}
+
 pub struct RPMBuilder {
     name: String,
     version: String,
@@ -1722,9 +1746,10 @@ pub struct RPMBuilder {
     gid: Option<u32>,
     desc: String,
     release: String,
-    file_content: std::collections::HashMap<String, std::fs::File>,
-    dirs: Vec<String>,
-    byte_content: std::collections::HashMap<String, Vec<u8>>,
+    // File entries need to be sorted. The entries need to be in the same order as they come
+    // in the cpio payload. Otherwise rpm will not be able to resolve those paths.
+    file_content: std::collections::BTreeMap<String, std::fs::File>,
+    byte_content: std::collections::BTreeMap<String, Vec<u8>>,
 
     requires: Vec<Dependency>,
     obsoletes: Vec<Dependency>,
@@ -1733,13 +1758,13 @@ pub struct RPMBuilder {
 }
 
 trait Compressor: io::Write {
-    fn finish(&mut self) -> Result<(), RPMError>;
+    fn finish_compression(self) -> Result<(), RPMError>;
 }
 
 impl Compressor for libflate::gzip::Encoder<&mut Vec<u8>> {
-    fn finish(&mut self) -> Result<(), RPMError> {
+    fn finish_compression(self) -> Result<(), RPMError> {
         let result = self.finish();
-        if result.is_err() {
+        if result.as_result().is_err() {
             Err(RPMError::new("unable to create gzip compressor"))
         } else {
             Ok(())
@@ -1748,7 +1773,7 @@ impl Compressor for libflate::gzip::Encoder<&mut Vec<u8>> {
 }
 
 impl Compressor for lzma::LzmaWriter<&mut Vec<u8>> {
-    fn finish(&mut self) -> Result<(), RPMError> {
+    fn finish_compression(self) -> Result<(), RPMError> {
         let result = self.finish();
         if result.is_err() {
             Err(RPMError::new("unable to create gzip compressor"))
@@ -1757,6 +1782,21 @@ impl Compressor for lzma::LzmaWriter<&mut Vec<u8>> {
         }
     }
 }
+
+const known_dirs: [&'static str; 12] = [
+    "/etc/",
+    "/bin/",
+    "/sbin/",
+    "/usr/bin/",
+    "/usr/sbin/",
+    "/lib/",
+    "/usr/lib/",
+    "/usr/lib64/",
+    "/usr/share/",
+    "/usr/include/",
+    "/opt/",
+    "/var/",
+];
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
@@ -1768,15 +1808,14 @@ impl RPMBuilder {
             desc: desc.to_string(),
             //TODO make release configurable
             release: "1".to_string(),
-            file_content: collections::HashMap::new(),
-            byte_content: collections::HashMap::new(),
+            file_content: collections::BTreeMap::new(),
+            byte_content: collections::BTreeMap::new(),
             uid: None,
             gid: None,
             conflicts: Vec::new(),
             provides: Vec::new(),
             obsoletes: Vec::new(),
             requires: Vec::new(),
-            dirs: Vec::new(),
         }
     }
     pub fn with_file(mut self, source: &str, dest: &str) -> Result<Self, RPMError> {
@@ -1784,11 +1823,6 @@ impl RPMBuilder {
         let size = input.metadata()?.len();
         self.file_content.insert(dest.to_string(), input);
         Ok(self)
-    }
-
-    pub fn with_dir(mut self, dest: &str) -> Self {
-        self.dirs.push(dest.to_string());
-        self
     }
 
     pub fn with_content(mut self, content: Vec<u8>, dest: &str) -> Result<Self, RPMError> {
@@ -1825,7 +1859,9 @@ impl RPMBuilder {
 
         let mut out: Vec<u8> = Vec::new();
 
-        let mut compressor = libflate::gzip::Encoder::new(&mut out)?;
+        let mut compressor = lzma::LzmaWriter::new_compressor(&mut out, 2)?;
+
+        let mut comp_ref = &mut compressor;
 
         let mut ino_index = 1;
 
@@ -1835,13 +1871,16 @@ impl RPMBuilder {
 
         let mut payload_size = 0;
 
-        for dir in &self.dirs {}
+        for (dest, _) in &self.file_content {
+            append_dir_entry(dest, &mut directories)?;
+        }
+        directories.sort();
 
         for (dest, mut f) in &self.file_content {
-            let mut hasher = Md5::default();
+            let mut hasher = sha2::Sha256::default();
             io::copy(&mut f, &mut hasher)?;
             let hash_result = hasher.result();
-            let md5 = format!("{:x}", hash_result);
+            let sha_hash = format!("{:x}", hash_result);
             let metadata = f.metadata()?;
             f.seek(io::SeekFrom::Start(0))?;
             let mut writer = cpio::newc::Builder::new(&dest)
@@ -1864,12 +1903,12 @@ impl RPMBuilder {
                     )))?
                 );
 
-                let possible_index = directories.iter().position(|item| item == &parent_dir);
+                let possible_index = directories.iter().position(|item| item == &parent_dir[1..]);
                 if possible_index.is_none() {
-                    let mut dir = parent_dir.to_string();
-                    dir.remove(0);
-                    directories.push(dir);
-                    directories.len() - 1
+                    return Err(RPMError::new(&format!(
+                        "unable to find directory for {}",
+                        p.to_string_lossy(),
+                    )));
                 } else {
                     possible_index.unwrap()
                 }
@@ -1885,7 +1924,8 @@ impl RPMBuilder {
                     .duration_since(UNIX_EPOCH)
                     .expect("something really wrong with your time")
                     .as_secs() as i32,
-                md5_checksum: md5.to_string(),
+                //TODO rename md5_checksum to something more generic
+                md5_checksum: sha_hash.to_string(),
                 //TODO enable links
                 link: "".to_string(),
                 lang: "".to_string(),
@@ -1910,20 +1950,32 @@ impl RPMBuilder {
             ino_index += 1;
         }
 
-        self.requires.push(Dependency::eq(
-            "rpmlib(VersionedDependencies)".to_string(),
-            "3.0.3-1".to_string(),
-        ));
+        //those parts seem to break on fedora installations, but it does not seem to matter for centos.
+        // if it turns out that those parts are not really required, we will delete the following comments
 
-        self.requires.push(Dependency::eq(
-            "rpmlib(PayloadFilesHavePrefix)".to_string(),
-            "4.0-1".to_string(),
-        ));
+        // self.requires.push(Dependency::rpm_lib(
+        //     "rpmlib(VersionedDependencies)".to_string(),
+        //     "3.0.3-1".to_string(),
+        // ));
 
-        self.requires.push(Dependency::eq(
-            "rpmlib(CompressedFileNames)".to_string(),
-            "3.0.4-1".to_string(),
-        ));
+        // self.requires.push(Dependency::rpm_lib(
+        //     "rpmlib(PayloadFilesHavePrefix)".to_string(),
+        //     "4.0-1".to_string(),
+        // ));
+
+        // self.requires.push(Dependency::rpm_lib(
+        //     "rpmlib(CompressedFileNames)".to_string(),
+        //     "3.0.4-1".to_string(),
+        // ));
+
+        // self.requires.push(Dependency::rpm_lib(
+        //     "rpmlib(PayloadIsXz)".to_string(),
+        //     "5.2-1".to_string(),
+        // ));
+        // self.requires.push(Dependency::rpm_lib(
+        //     "rpmlib(FileDigests)".to_string(),
+        //     "4.6.0-1".to_string(),
+        // ));
 
         self.requires.push(Dependency::any("/bin/sh".to_string()));
 
@@ -1954,14 +2006,13 @@ impl RPMBuilder {
         let mut header_bytes = Vec::new();
         header.write(&mut header_bytes);
 
+        align_to_8_bytes(&mut header_bytes);
+
         compressor = cpio::newc::trailer(compressor)?;
-        let result = compressor.finish();
-        if result.as_result().is_err() {
-            return Err(RPMError::new("unable to finalize compression"));
-        }
+        compressor.finish_compression()?;
 
         let signature_size = header_bytes.len() + out.len();
-        let mut hasher = Md5::default();
+        let mut hasher = md5::Md5::default();
 
         hasher.input(&header_bytes);
         hasher.input(&out);
@@ -1983,6 +2034,68 @@ impl RPMBuilder {
         };
         Ok(pkg)
     }
+}
+
+#[derive(Eq)]
+struct DirEntry {
+    cpio_dir_entry: String,
+    rpm_header_path: String,
+    rpm_header_base: String,
+}
+
+impl Ord for DirEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.rpm_header_path.cmp(&other.rpm_header_path)
+    }
+}
+
+impl PartialOrd for DirEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for DirEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.rpm_header_path == other.rpm_header_path
+    }
+}
+
+fn append_dir_entry(raw_path: &str, directories: &mut Vec<String>) -> Result<(), RPMError> {
+    let mut path = Path::new(raw_path);
+    let sanitized_path_string = if path.starts_with(".") {
+        if !path.ends_with("/") {
+            format!("{}/", &path.to_string_lossy()[1..])
+        } else {
+            path.to_string_lossy()[1..].to_string()
+        }
+    } else {
+        if !path.ends_with("/") {
+            format!("{}/", path.to_string_lossy())
+        } else {
+            path.to_string_lossy().to_string()
+        }
+    };
+
+    let sanitized_path = std::path::Path::new(&sanitized_path_string);
+    let parent = match sanitized_path.parent() {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+
+    if parent.to_string_lossy() == "/" {
+        return Ok(());
+    }
+
+    let full_path = format!("{}/", parent.to_string_lossy().to_owned().to_string());
+
+    let already_present = directories.iter().any(|entry| entry == &full_path);
+
+    if !already_present {
+        directories.push(full_path.clone());
+    }
+
+    Ok(())
 }
 
 fn align_to_8_bytes(input: &mut Vec<u8>) {
@@ -2251,17 +2364,19 @@ mod tests {
     #[test]
     fn test_builder() -> Result<(), Box<std::error::Error>> {
         let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let mut cargo_lock_file = d.clone();
         let mut cargo_file = d.clone();
-        cargo_lock_file.push("Cargo.lock");
-        cargo_file.push("Cargo.toml");
+        cargo_file.push("rpmbuild/BUILD/Cargo.toml");
 
         let mut out_file = d.clone();
         out_file.push("out/test.rpm");
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .with_file(cargo_lock_file.to_str().unwrap(), "./etc/foobar/Cargo.lock")?
+            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/foo.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/bazz.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/hugo/bazz.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "./var/honollulu/bazz.toml")?
             .with_file(cargo_file.to_str().unwrap(), "./etc/Cargo.toml")?
+            // .requires(Dependency::any("wget".to_string()))
             .build()?;
 
         let entry = pkg
@@ -2307,23 +2422,55 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+}
 
-    fn nonsense() -> Result<(), Box<std::error::Error>> {
-        let bytes = vec![
-            0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x00, 0x07, 0xff, 0xff, 0xff, 0x90, 0x00, 0x00,
-            0x00, 0x10,
-        ];
+struct MultiWriter<C, W>
+where
+    C: Compressor,
+    W: io::Write,
+{
+    comp: C,
+    other: W,
+}
 
-        let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(&bytes)?;
-
-        let mut actual = Vec::new();
-        entry.write_index(&mut actual)?;
-
-        assert_eq!(bytes, actual);
-
-        // assert!(false);
-        Ok(())
+impl<C, W> io::Write for MultiWriter<C, W>
+where
+    C: Compressor,
+    W: io::Write,
+{
+    fn write(&mut self, content: &[u8]) -> io::Result<usize> {
+        self.comp.write(content)?;
+        self.other.write(content)?;
+        Ok(content.len())
     }
 
+    fn flush(&mut self) -> io::Result<()> {
+        self.comp.flush()?;
+        self.other.flush()?;
+        Ok(())
+    }
+}
+
+impl<C, W> Compressor for MultiWriter<C, W>
+where
+    C: Compressor,
+    W: io::Write,
+{
+    fn finish_compression(self) -> Result<(), RPMError> {
+        self.comp.finish_compression()?;
+        Ok(())
+    }
+}
+
+impl<C, W> MultiWriter<C, W>
+where
+    C: Compressor,
+    W: io::Write,
+{
+    fn new(compressor: C, other: W) -> Self {
+        MultiWriter {
+            comp: compressor,
+            other: other,
+        }
+    }
 }
