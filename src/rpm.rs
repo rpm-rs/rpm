@@ -1815,8 +1815,13 @@ impl RPMBuilder {
         }
     }
     pub fn with_file(mut self, source: &str, dest: &str) -> Result<Self, RPMError> {
+        let sanitized_destination = if dest.starts_with(".") {
+            dest.to_string()
+        } else {
+            format!(".{}",dest)
+        };
         let input = std::fs::File::open(source)?;
-        self.file_content.insert(dest.to_string(), input);
+        self.file_content.insert(sanitized_destination, input);
         Ok(self)
     }
 
@@ -2366,11 +2371,11 @@ mod tests {
         out_file.push("out/test.rpm");
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/foo.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/hugo/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "./var/honollulu/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "./etc/Cargo.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/foo.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/bazz.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/hugo/bazz.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "/var/honollulu/bazz.toml")?
+            .with_file(cargo_file.to_str().unwrap(), "/etc/Cargo.toml")?
             .pre_install_script("echo preinst".to_string())
             // .requires(Dependency::any("wget".to_string()))
             .build()?;
