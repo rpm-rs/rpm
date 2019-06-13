@@ -2387,7 +2387,7 @@ mod tests {
                 "run",
                 "--rm",
                 "-v",
-                &format!("{}:/out", out_path.to_string_lossy().to_string()),
+                &format!("{}:/out:z", out_path.to_string_lossy().to_string()),
                 image,
                 "yum",
                 "--disablerepo=*",
