@@ -1,12 +1,12 @@
 [package]
-name = "createrepo-rs"
+name = "rpm-rs"
 version = "0.1.0"
 authors = ["René Richter <richterrettich@gmail.com>"]
 edition = "2018"
 
 [lib]
 name="rpm"
-path="src/rpm/rpm.rs"
+path="src/rpm.rs"
 
 [dependencies]
 quick-xml = "0.14.0"
