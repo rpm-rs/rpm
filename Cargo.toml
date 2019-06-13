@@ -9,7 +9,6 @@ name="rpm"
 path="src/rpm.rs"
 
 [dependencies]
-quick-xml = "0.14.0"
 nom = "5.0.0-beta2"
 num-traits = "0.2"
 num-derive = "0.2"
