@@ -2,7 +2,7 @@ use nom;
 
 use cpio;
 use enum_display_derive;
-use libflate;
+
 use md5;
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
@@ -11,15 +11,14 @@ use num_derive;
 use sha1;
 use sha2;
 use sha2::Digest;
-use std::collections;
+use std::os::unix::fs::PermissionsExt;
+use std::collections:: BTreeMap;
 use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Display;
-use std::io;
-use std::io::Seek;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::io::{self,Write, Read};
 use std::time::UNIX_EPOCH;
+
 
 const LEAD_SIZE: usize = 96;
 const RPM_MAGIC: [u8; 4] = [0xed, 0xab, 0xee, 0xdb];
@@ -315,14 +314,6 @@ where
         Ok(())
     }
 
-    fn find_entry(&self, tag: T) -> Option<&IndexEntry<T>> {
-        for entry in &self.index_entries {
-            if entry.tag == tag {
-                return Some(entry);
-            }
-        }
-        None
-    }
 
     fn find_entry_or_err(&self, tag: &T) -> Result<&IndexEntry<T>, RPMError> {
         for entry in &self.index_entries {
@@ -335,18 +326,19 @@ where
 
     fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.string().ok_or_else(||RPMError::new(&format!(
-            "tag {} has datatype {}, not string",
-            entry.tag, entry.data,
-        )))
+        entry.data.string().ok_or_else(|| {
+            RPMError::new(&format!(
+                "tag {} has datatype {}, not string",
+                entry.tag, entry.data,
+            ))
+        })
     }
 
     fn get_entry_string_array_data(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.string_array().ok_or_else(||RPMError::new(&format!(
-            "tag {} does not provide string array",
-            entry.tag,
-        )))
+        entry.data.string_array().ok_or_else(|| {
+            RPMError::new(&format!("tag {} does not provide string array", entry.tag,))
+        })
     }
 
     fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
@@ -438,356 +430,7 @@ impl Header<IndexSignatureTag> {
 }
 
 impl Header<IndexTag> {
-    fn new_header(
-        name: String,
-        version: String,
-        release: String,
-        desc: String,
-        summary: String,
-        arch: String,
-        license: String,
-        entries: Vec<RPMFileEntry>,
-        directories: Vec<String>,
-        requires: Vec<Dependency>,
-        mut provides: Vec<Dependency>,
-        obsoletes: Vec<Dependency>,
-        conflicts: Vec<Dependency>,
-        pre_inst_script: Option<String>,
-        post_inst_script: Option<String>,
-        pre_uninst_script: Option<String>,
-        post_uninst_script: Option<String>,
-    ) -> Self {
-        let mut file_sizes = Vec::new();
-        let mut file_modes = Vec::new();
-        let mut file_rdevs = Vec::new();
-        let mut file_mtimes = Vec::new();
-        let mut file_md5s = Vec::new();
-        let mut file_linktos = Vec::new();
-        let mut file_flags = Vec::new();
-        let mut file_usernames = Vec::new();
-        let mut file_groupnames = Vec::new();
-        let mut file_devices = Vec::new();
-        let mut file_inodes = Vec::new();
-        let mut file_langs = Vec::new();
-        let mut file_verify_flags = Vec::new();
-        let mut dir_indixes = Vec::new();
-        let mut base_names = Vec::new();
 
-        let mut combined_file_sizes = 0;
-        for entry in &entries {
-            combined_file_sizes += entry.size;
-            file_sizes.push(entry.size);
-            file_modes.push(entry.mode);
-            file_rdevs.push(entry.file_rdevice);
-            file_mtimes.push(entry.modified_at);
-            file_md5s.push(entry.md5_checksum.clone());
-            file_linktos.push(entry.link.clone());
-            file_flags.push(entry.flag);
-            file_usernames.push(entry.user.clone());
-            file_groupnames.push(entry.group.clone());
-            file_devices.push(entry.file_device);
-            file_inodes.push(entry.inode);
-            file_langs.push(entry.lang.clone());
-            dir_indixes.push(entry.dir_index.unwrap());
-            base_names.push(entry.base_name.clone().unwrap());
-            file_verify_flags.push(-1);
-        }
-
-        let mut provide_names = Vec::new();
-        let mut provide_flags = Vec::new();
-        let mut provide_versions = Vec::new();
-
-        for d in provides.drain(0..) {
-            provide_names.push(d.dep_name);
-            provide_flags.push(d.sense as i32);
-            provide_versions.push(d.version);
-        }
-
-        let mut obsolete_names = Vec::new();
-        let mut obsolete_flags = Vec::new();
-        let mut obsolete_versions = Vec::new();
-
-        for d in obsoletes {
-            obsolete_names.push(d.dep_name);
-            obsolete_flags.push(d.sense as i32);
-            obsolete_versions.push(d.version);
-        }
-
-        let mut require_names = Vec::new();
-        let mut require_flags = Vec::new();
-        let mut require_versions = Vec::new();
-
-        for d in requires {
-            require_names.push(d.dep_name);
-            require_flags.push(d.sense as i32);
-            require_versions.push(d.version);
-        }
-
-        let mut conflicts_names = Vec::new();
-        let mut conflicts_flags = Vec::new();
-        let mut conflicts_versions = Vec::new();
-
-        for d in conflicts {
-            conflicts_names.push(d.dep_name);
-            conflicts_flags.push(d.sense as i32);
-            conflicts_versions.push(d.version);
-        }
-
-        let offset = 0;
-        let mut actual_records = vec![
-            IndexEntry::new(
-                IndexTag::RPMTAG_HEADERI18NTABLE,
-                offset,
-                IndexData::StringTag("C".to_string()),
-            ),
-            IndexEntry::new(IndexTag::RPMTAG_NAME, offset, IndexData::StringTag(name)),
-            IndexEntry::new(
-                IndexTag::RPMTAG_VERSION,
-                offset,
-                IndexData::StringTag(version),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_RELEASE,
-                offset,
-                IndexData::StringTag(release),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_DESCRIPTION,
-                offset,
-                IndexData::StringTag(desc),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_SUMMARY,
-                offset,
-                IndexData::StringTag(summary),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_SIZE,
-                offset,
-                IndexData::Int32(vec![combined_file_sizes]),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_LICENSE,
-                offset,
-                IndexData::StringTag(license),
-            ),
-            // https://fedoraproject.org/wiki/RPMGroups
-            // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
-            IndexEntry::new(
-                IndexTag::RPMTAG_OS,
-                offset,
-                IndexData::StringTag("linux".to_string()),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_GROUP,
-                offset,
-                IndexData::I18NString(vec!["Unspecified".to_string()]),
-            ),
-            IndexEntry::new(IndexTag::RPMTAG_ARCH, offset, IndexData::StringTag(arch)),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADFORMAT,
-                offset,
-                IndexData::StringTag("cpio".to_string()),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
-                offset,
-                IndexData::StringTag("gzip".to_string()),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADFLAGS,
-                offset,
-                IndexData::StringTag("2".to_string()),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILESIZES,
-                offset,
-                IndexData::Int32(file_sizes),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEMODES,
-                offset,
-                IndexData::Int16(file_modes),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILERDEVS,
-                offset,
-                IndexData::Int16(file_rdevs),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEMTIMES,
-                offset,
-                IndexData::Int32(file_mtimes),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEDIGESTS,
-                offset,
-                IndexData::StringArray(file_md5s),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILELINKTOS,
-                offset,
-                IndexData::StringArray(file_linktos),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEFLAGS,
-                offset,
-                IndexData::Int32(file_flags),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEUSERNAME,
-                offset,
-                IndexData::StringArray(file_usernames),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEGROUPNAME,
-                offset,
-                IndexData::StringArray(file_groupnames),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEDEVICES,
-                offset,
-                IndexData::Int32(file_devices),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEINODES,
-                offset,
-                IndexData::Int32(file_inodes),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_DIRINDEXES,
-                offset,
-                IndexData::Int32(dir_indixes),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILELANGS,
-                offset,
-                IndexData::StringArray(file_langs),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEDIGESTALGO,
-                offset,
-                IndexData::Int32(vec![8]),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_FILEVERIFYFLAGS,
-                offset,
-                IndexData::Int32(file_verify_flags),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_BASENAMES,
-                offset,
-                IndexData::StringArray(base_names),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_DIRNAMES,
-                offset,
-                IndexData::StringArray(directories),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PROVIDENAME,
-                offset,
-                IndexData::StringArray(provide_names),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PROVIDEVERSION,
-                offset,
-                IndexData::StringArray(provide_versions),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PROVIDEFLAGS,
-                offset,
-                IndexData::Int32(provide_flags),
-            ),
-        ];
-
-        if !obsolete_flags.is_empty() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_OBSOLETENAME,
-                offset,
-                IndexData::StringArray(obsolete_names),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_OBSOLETEVERSION,
-                offset,
-                IndexData::StringArray(obsolete_versions),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_OBSOLETEFLAGS,
-                offset,
-                IndexData::Int32(obsolete_flags),
-            ));
-        }
-
-        if !require_flags.is_empty() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_REQUIRENAME,
-                offset,
-                IndexData::StringArray(require_names),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_REQUIREVERSION,
-                offset,
-                IndexData::StringArray(require_versions),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_REQUIREFLAGS,
-                offset,
-                IndexData::Int32(require_flags),
-            ));
-        }
-
-        if !conflicts_flags.is_empty() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_CONFLICTNAME,
-                offset,
-                IndexData::StringArray(conflicts_names),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_CONFLICTVERSION,
-                offset,
-                IndexData::StringArray(conflicts_versions),
-            ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_CONFLICTFLAGS,
-                offset,
-                IndexData::Int32(conflicts_flags),
-            ));
-        }
-
-        if pre_inst_script.is_some() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PREIN,
-                offset,
-                IndexData::StringTag(pre_inst_script.unwrap())
-            ));
-        }
-        if post_inst_script.is_some() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_POSTIN,
-                offset,
-                IndexData::StringTag(post_inst_script.unwrap())
-            ));
-        }
-
-        if pre_uninst_script.is_some() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PREUN,
-                offset,
-                IndexData::StringTag(pre_uninst_script.unwrap())
-            ));
-        }
-
-        if post_uninst_script.is_some() {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_POSTUN,
-                offset,
-                IndexData::StringTag(post_uninst_script.unwrap())
-            ));
-        }
-        
-        Self::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE)
-    }
     pub fn get_payload_format(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADFORMAT)
     }
@@ -915,17 +558,6 @@ impl<T: num::FromPrimitive + num::ToPrimitive + std::fmt::Debug> IndexEntry<T> {
         Ok(())
     }
 
-    fn write_store(&self, store: &mut [u8]) {
-        self.data.write(store, self.offset);
-    }
-
-    fn write<W: std::io::Write>(&self, out: &mut W, store: &mut [u8]) -> Result<(), RPMError> {
-        // write index into the writer direct and the data into the store. the store will be flushed after it has been finalized
-        self.write_index(out)?;
-        self.write_store(store);
-        Ok(())
-    }
-
     fn new(tag: T, offset: i32, data: IndexData) -> IndexEntry<T> {
         IndexEntry {
             tag,
@@ -936,15 +568,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + std::fmt::Debug> IndexEntry<T> {
     }
 }
 
-fn append_string(data: &str, offset: usize, store: &mut [u8]) {
-    let iter = data.bytes();
-    let mut index = 0;
-    for byte in iter {
-        store[offset + index] = byte;
-        index += 1;
-    }
-    store[offset + index] = 0;
-}
+
 
 #[derive(Debug, PartialEq, Eq)]
 enum IndexData {
@@ -979,61 +603,7 @@ impl Display for IndexData {
 }
 
 impl IndexData {
-    fn write(&self, store: &mut [u8], offset: i32) {
-        match &self {
-            IndexData::Null => {}
-            IndexData::Char(d) => {
-                for i in 0..d.len() {
-                    store[offset as usize + i] = d[i];
-                }
-            }
-            IndexData::Int8(d) => {
-                for i in 0..d.len() {
-                    store[offset as usize + i] = d[i].to_be_bytes()[0];
-                }
-            }
-            IndexData::Int16(d) => {
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[offset as usize + i] = byte;
-                }
-            }
-            IndexData::Int32(d) => {
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[offset as usize + i] = byte;
-                }
-            }
-            IndexData::Int64(d) => {
-                let iter = d.iter().flat_map(|item| item.to_be_bytes().to_vec());
-                for (i, byte) in iter.enumerate() {
-                    store[offset as usize + i] = byte;
-                }
-            }
-            IndexData::StringTag(d) => {
-                append_string(d, offset as usize, store);
-            }
-            IndexData::Bin(d) => {
-                for i in 0..d.len() {
-                    store[offset as usize + i] = d[i];
-                }
-            }
-            IndexData::StringArray(d) => {
-                let mut offset = offset;
-                for item in d {
-                    append_string(item, offset as usize, store);
-                    offset = offset + item.len() as i32 + 1;
-                }
-            }
-            IndexData::I18NString(d) => {
-                let mut offset = offset;
-                for item in d {
-                    append_string(item, offset as usize, store);
-                    offset = offset + item.len() as i32 + 1;
-                }
-            }
-        }
-    }
+
 
     fn append(&self, store: &mut Vec<u8>) -> u32 {
         match &self {
@@ -1115,20 +685,7 @@ impl IndexData {
         }
     }
 
-    fn byte_size(&self) -> u32 {
-        match self {
-            IndexData::Null => 0,
-            IndexData::Bin(items) => items.len() as u32,
-            IndexData::Char(items) => items.len() as u32,
-            IndexData::I18NString(items) => items.iter().map(|item| (item.len() + 1) as u32).sum(),
-            IndexData::StringTag(item) => (item.len() + 1) as u32,
-            IndexData::StringArray(items) => items.iter().map(|item| (item.len() + 1) as u32).sum(),
-            IndexData::Int8(items) => items.len() as u32,
-            IndexData::Int16(items) => (items.len() * 2) as u32,
-            IndexData::Int32(items) => (items.len() * 4) as u32,
-            IndexData::Int64(items) => (items.len() * 8) as u32,
-        }
-    }
+
 
     fn num_items(&self) -> u32 {
         match self {
@@ -1185,13 +742,6 @@ impl IndexData {
     fn string_array(&self) -> Option<&[String]> {
         match self {
             IndexData::StringArray(d) | IndexData::I18NString(d) => Some(&d),
-            _ => None,
-        }
-    }
-
-    fn int32_array(&self) -> Option<&[i32]> {
-        match self {
-            IndexData::Int32(d) => Some(&d),
             _ => None,
         }
     }
@@ -1642,10 +1192,6 @@ impl Dependency {
         Self::new(dep_name, RPMSENSE_ANY, "".to_string())
     }
 
-    fn rpm_lib(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_RPMLIB, version)
-    }
-
     fn new(dep_name: String, sense: u32, version: String) -> Self {
         Dependency {
             dep_name,
@@ -1659,60 +1205,58 @@ const RPMSENSE_ANY: u32 = 0;
 const RPMSENSE_LESS: u32 = (1 << 1);
 const RPMSENSE_GREATER: u32 = (1 << 2);
 const RPMSENSE_EQUAL: u32 = (1 << 3);
-const RPMSENSE_POSTTRANS: u32 = (1 << 5);
-const RPMSENSE_PREREQ: u32 = (1 << 6);
-const RPMSENSE_PRETRANS: u32 = (1 << 7);
-const RPMSENSE_INTERP: u32 = (1 << 8);
-const RPMSENSE_SCRIPT_PRE: u32 = (1 << 9);
-const RPMSENSE_SCRIPT_POST: u32 = (1 << 10);
-const RPMSENSE_SCRIPT_PREUN: u32 = (1 << 11);
-const RPMSENSE_SCRIPT_POSTUN: u32 = (1 << 12);
-const RPMSENSE_SCRIPT_VERIFY: u32 = (1 << 13);
-const RPMSENSE_FIND_REQUIRES: u32 = (1 << 14);
-const RPMSENSE_FIND_PROVIDES: u32 = (1 << 15);
-const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
-const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
-const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
-const RPMSENSE_MISSINGOK: u32 = (1 << 19);
 
-// for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
-const RPMSENSE_RPMLIB: u32 = (1 << 24); //0o100000012;
-const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
-const RPMSENSE_KEYRING: u32 = (1 << 26);
-const RPMSENSE_CONFIG: u32 = (1 << 28);
+// there is no use yet for those constants. But they are part of the official package
+// so I will leave them in in case we need them later.
+
+// const RPMSENSE_POSTTRANS: u32 = (1 << 5);
+// const RPMSENSE_PREREQ: u32 = (1 << 6);
+// const RPMSENSE_PRETRANS: u32 = (1 << 7);
+// const RPMSENSE_INTERP: u32 = (1 << 8);
+// const RPMSENSE_SCRIPT_PRE: u32 = (1 << 9);
+// const RPMSENSE_SCRIPT_POST: u32 = (1 << 10);
+// const RPMSENSE_SCRIPT_PREUN: u32 = (1 << 11);
+// const RPMSENSE_SCRIPT_POSTUN: u32 = (1 << 12);
+// const RPMSENSE_SCRIPT_VERIFY: u32 = (1 << 13);
+// const RPMSENSE_FIND_REQUIRES: u32 = (1 << 14);
+// const RPMSENSE_FIND_PROVIDES: u32 = (1 << 15);
+// const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
+// const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
+// const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
+// const RPMSENSE_MISSINGOK: u32 = (1 << 19);
+
+// // for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
+// const RPMSENSE_RPMLIB: u32 = (1 << 24); //0o100000012;
+// const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
+// const RPMSENSE_KEYRING: u32 = (1 << 26);
+// const RPMSENSE_CONFIG: u32 = (1 << 28);
 
 const RPMFILE_CONFIG: i32 = 1;
 const RPMFILE_DOC: i32 = 1 << 1;
-const RPMFILE_DONOTUSE: i32 = (1 << 2);
-const RPMFILE_MISSINGOK: i32 = (1 << 3);
-const RPMFILE_NOREPLACE: i32 = (1 << 4);
-const RPMFILE_SPECFILE: i32 = (1 << 5);
-const RPMFILE_GHOST: i32 = (1 << 6);
-const RPMFILE_LICENSE: i32 = (1 << 7);
-const RPMFILE_README: i32 = (1 << 8);
-const RPMFILE_EXCLUDE: i32 = (1 << 9);
+// const RPMFILE_DONOTUSE: i32 = (1 << 2);
+// const RPMFILE_MISSINGOK: i32 = (1 << 3);
+// const RPMFILE_NOREPLACE: i32 = (1 << 4);
+// const RPMFILE_SPECFILE: i32 = (1 << 5);
+// const RPMFILE_GHOST: i32 = (1 << 6);
+// const RPMFILE_LICENSE: i32 = (1 << 7);
+// const RPMFILE_README: i32 = (1 << 8);
+// const RPMFILE_EXCLUDE: i32 = (1 << 9);
 
 pub struct RPMFileEntry {
     size: i32,
     mode: i16,
 
-    // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
-    // Who knows, who cares.
-    file_device: i32,
-    file_rdevice: i16,
 
-    inode: i32,
     modified_at: i32,
-    md5_checksum: String,
+    sha_checksum: String,
     link: String,
     flag: i32,
     user: String,
     group: String,
-    lang: String,
+    base_name: String,
+    cpio_path: String,
 
-    old_name: Option<String>,
-    dir_index: Option<i32>,
-    base_name: Option<String>,
+    content: Option<Vec<u8>>,
 }
 
 pub struct RPMError {
@@ -1763,6 +1307,73 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
 }
 
 
+pub struct RPMFileOptions {
+    destination: String,
+    user: String,
+    group: String,
+    symlink: String,
+    mode: i32,
+    flag: i32,
+    inherit_permissions: bool,
+}
+
+impl RPMFileOptions {
+    pub fn new<T: Into<String>>(dest: T) -> RPMFileOptionsBuilder {
+        RPMFileOptionsBuilder {
+            inner: RPMFileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: "".to_string(),
+                mode: 0o100664,
+                flag: 0,
+                inherit_permissions: true,
+            },
+        }
+    }
+}
+
+pub struct RPMFileOptionsBuilder {
+    inner: RPMFileOptions,
+}
+
+impl RPMFileOptionsBuilder {
+    pub fn user<T: Into<String>>(mut self, user: T) -> Self {
+        self.inner.user = user.into();
+        self
+    }
+    pub fn group<T: Into<String>>(mut self, group: T) -> Self {
+        self.inner.group = group.into();
+        self
+    }
+
+    pub fn symlink<T: Into<String>>(mut self, symlink: T) -> Self {
+        self.inner.symlink = symlink.into();
+        self
+    }
+    pub fn mode(mut self, mode: i32) -> Self {
+        self.inner.mode = mode;
+        self.inner.inherit_permissions = false;
+        self
+    }
+    pub fn is_doc(mut self) -> Self {
+        self.inner.flag = RPMFILE_DOC;
+        self
+    }
+
+    pub fn is_config(mut self) -> Self {
+        self.inner.flag = RPMFILE_CONFIG;
+        self
+    }
+}
+
+
+impl Into<RPMFileOptions> for RPMFileOptionsBuilder {
+    fn into(self) -> RPMFileOptions {
+        self.inner
+    }
+}
+
 
 pub struct RPMBuilder {
     name: String,
@@ -1773,10 +1384,10 @@ pub struct RPMBuilder {
     gid: Option<u32>,
     desc: String,
     release: String,
+
     // File entries need to be sorted. The entries need to be in the same order as they come
     // in the cpio payload. Otherwise rpm will not be able to resolve those paths.
-    file_content: std::collections::BTreeMap<String, std::fs::File>,
-    byte_content: std::collections::BTreeMap<String, Vec<u8>>,
+    files: std::collections::BTreeMap<String, BTreeMap<String, RPMFileEntry>>,
 
     requires: Vec<Dependency>,
     obsoletes: Vec<Dependency>,
@@ -1790,7 +1401,6 @@ pub struct RPMBuilder {
 }
 
 
-
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
         RPMBuilder {
@@ -1800,8 +1410,6 @@ impl RPMBuilder {
             arch: arch.to_string(),
             desc: desc.to_string(),
             release: "1".to_string(),
-            file_content: collections::BTreeMap::new(),
-            byte_content: collections::BTreeMap::new(),
             uid: None,
             gid: None,
             conflicts: Vec::new(),
@@ -1812,23 +1420,90 @@ impl RPMBuilder {
             post_inst_script: None,
             pre_uninst_script: None,
             post_uninst_script: None,
+            files: std::collections::BTreeMap::new(),
         }
     }
-    pub fn with_file(mut self, source: &str, dest: &str) -> Result<Self, RPMError> {
-        let sanitized_destination = if dest.starts_with(".") {
-            dest.to_string()
-        } else {
-            format!(".{}",dest)
-        };
-        let input = std::fs::File::open(source)?;
-        self.file_content.insert(sanitized_destination, input);
+
+    pub fn with_file<T: Into<RPMFileOptions>>(
+        mut self,
+        source: &str,
+        options: T,
+    ) -> Result<Self, RPMError> {
+        let mut input = std::fs::File::open(source)?;
+        let mut content = Vec::new();
+        input.read_to_end(&mut content)?;
+        let mut options = options.into();
+        if options.inherit_permissions {
+        options.mode = input.metadata()?.permissions().mode() as i32;
+        }
+        self.add_data(
+            content,
+            input
+                .metadata()?
+                .modified()?
+                .duration_since(UNIX_EPOCH)
+                .expect("something really wrong with your time")
+                .as_secs() as i32,
+            options,
+        )?;
         Ok(self)
     }
 
-    //TODO redesign api
-    pub fn with_content(mut self, content: Vec<u8>, dest: &str) -> Result<Self, RPMError> {
-        self.byte_content.insert(dest.to_string(), content);
-        Ok(self)
+    fn add_data(
+        &mut self,
+        content: Vec<u8>,
+        modified_at: i32,
+        options: RPMFileOptions,
+    ) -> Result<(), RPMError> {
+        let dest = options.destination;
+        if !dest.starts_with("./") && !dest.starts_with("/") {
+            return Err(RPMError::new(&format!(
+                "invalid path {} - needs to start with / or ./",
+                dest
+            )));
+        }
+
+        let pb = std::path::PathBuf::from(dest.clone());
+
+        let parent = pb
+            .parent()
+            .ok_or_else(|| RPMError::new(&format!("invalid destination path {}", dest)))?;
+        let (cpio_path, dir) = if dest.starts_with(".") {
+            (
+                dest.to_string(),
+                format!("/{}/", parent.strip_prefix(".").unwrap().to_string_lossy()),
+            )
+        } else {
+            (
+                format!(".{}", dest),
+                format!("{}/", parent.to_string_lossy()),
+            )
+        };
+
+        let mut hasher = sha2::Sha256::default();
+        hasher.input(&content);
+        let hash_result = hasher.result();
+        let sha_checksum = format!("{:x}", hash_result);
+        let entry = RPMFileEntry {
+            base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
+            size: content.len() as i32,
+            content: Some(content),
+            cpio_path: cpio_path.clone(),
+            flag: options.flag,
+            user: options.user,
+            group: options.group,
+            mode: options.mode as i16,
+            link: options.symlink,
+            modified_at,
+
+            sha_checksum,
+        };
+
+        self.files
+            .entry(dir)
+            .or_insert(BTreeMap::new())
+            .insert(cpio_path, entry);
+        Ok(())
     }
 
     pub fn pre_install_script(mut self, content: String) -> Self {
@@ -1851,10 +1526,8 @@ impl RPMBuilder {
         self
     }
 
-    
-
-    pub fn release(mut self,release: u16) -> Self {
-        self.release = format!("{}",release);
+    pub fn release(mut self, release: u16) -> Self {
+        self.release = format!("{}", release);
         self
     }
 
@@ -1887,94 +1560,382 @@ impl RPMBuilder {
 
         let mut content: Vec<u8> = Vec::new();
 
-        let mut compressor =libflate::gzip::Encoder::new(&mut content)?;
+        let mut compressor = libflate::gzip::Encoder::new(&mut content)?;
 
         let mut ino_index = 1;
 
-        let mut rpm_file_entries = Vec::new();
 
         let mut directories = Vec::new();
 
+        let mut file_sizes = Vec::new();
+        let mut file_modes = Vec::new();
+        let mut file_rdevs = Vec::new();
+        let mut file_mtimes = Vec::new();
+        let mut file_hashes = Vec::new();
+        let mut file_linktos = Vec::new();
+        let mut file_flags = Vec::new();
+        let mut file_usernames = Vec::new();
+        let mut file_groupnames = Vec::new();
+        let mut file_devices = Vec::new();
+        let mut file_inodes = Vec::new();
+        let mut file_langs = Vec::new();
+        let mut file_verify_flags = Vec::new();
+        let mut dir_indixes = Vec::new();
+        let mut base_names = Vec::new();
 
-        for dest in self.file_content.keys() {
-            append_dir_entry(dest, &mut directories)?;
+        let mut combined_file_sizes = 0;
+
+
+        for (index, (dir, entries)) in self.files.iter().enumerate() {
+            directories.push(dir.to_owned());
+            for entry in entries.values() {
+                combined_file_sizes += entry.size;
+                file_sizes.push(entry.size);
+                file_modes.push(entry.mode);
+                // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
+                // Who knows, who cares.
+                file_rdevs.push(0);
+                file_devices.push(1);
+                file_mtimes.push(entry.modified_at);
+                file_hashes.push(entry.sha_checksum.to_owned());
+                file_linktos.push(entry.link.to_owned());
+                file_flags.push(entry.flag);
+                file_usernames.push(entry.user.to_owned());
+                file_groupnames.push(entry.group.to_owned());
+                file_inodes.push(ino_index as i32);
+                file_langs.push("".to_string());
+                dir_indixes.push(index as i32);
+                base_names.push(entry.base_name.to_owned());
+                file_verify_flags.push(-1);
+                let content = entry.content.to_owned().unwrap();
+                let mut writer = cpio::newc::Builder::new(&entry.cpio_path)
+                    .mode(entry.mode as u32)
+                    .ino(ino_index as u32)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write(&mut compressor, content.len() as u32);
+
+                writer.write_all(&content)?;
+                writer.finish()?;
+
+                ino_index += 1;
+            }
         }
-        directories.sort();
 
-        for (dest, mut f) in &self.file_content {
-            let mut hasher = sha2::Sha256::default();
-            io::copy(&mut f, &mut hasher)?;
-            let hash_result = hasher.result();
-            let sha_hash = format!("{:x}", hash_result);
-            let metadata = f.metadata()?;
-            f.seek(io::SeekFrom::Start(0))?;
-            let mut writer = cpio::newc::Builder::new(&dest)
-                .mode(metadata.permissions().mode())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut compressor, metadata.len() as u32);
+        self.requires.push(Dependency::any("/bin/sh".to_string()));
 
-            io::copy(&mut f, &mut writer)?;
-            let p = std::path::Path::new(dest);
+        self.provides
+            .push(Dependency::eq(self.name.clone(), self.version.clone()));
+        self.provides.push(Dependency::eq(
+            format!("{}({})", self.name.clone(), self.arch.clone()),
+            self.version.clone(),
+        ));
 
-            let dir_index = if p.parent().is_some() {
-                let parent_dir_path = p.parent().unwrap();
-                let parent_dir = format!(
-                    "{}/",
-                    parent_dir_path
-                        .to_str()
-                        .ok_or_else(|| RPMError::new(&format!(
-                            "invalid path: {}",
-                            p.to_string_lossy()
-                        )))?
-                );
 
-                let possible_index = directories.iter().position(|item| item == &parent_dir[1..]);
-                if possible_index.is_none() {
-                    return Err(RPMError::new(&format!(
-                        "unable to find directory for {}",
-                        p.to_string_lossy(),
-                    )));
-                } else {
-                    possible_index.unwrap()
-                }
-            } else {
-                return Err(RPMError::new("root path can not be added"));
-            };
+        let mut provide_names = Vec::new();
+        let mut provide_flags = Vec::new();
+        let mut provide_versions = Vec::new();
 
-            rpm_file_entries.push(RPMFileEntry {
-                size: metadata.len() as i32,
-                old_name: None,
-                modified_at: metadata
-                    .modified()?
-                    .duration_since(UNIX_EPOCH)
-                    .expect("something really wrong with your time")
-                    .as_secs() as i32,
-                //TODO rename md5_checksum to something more generic
-                md5_checksum: sha_hash.to_string(),
-                //TODO enable links
-                link: "".to_string(),
-                lang: "".to_string(),
-                inode: ino_index as i32,
-                user: "root".to_string(),
-                group: "root".to_string(),
-                //TODO add correct flag here.
-                flag: 0,
-                file_device: 1,
-                file_rdevice: 0,
-                mode: metadata.permissions().mode() as i16,
-                dir_index: Some(dir_index as i32),
-                base_name: p
-                    .file_name()
-                    .ok_or_else(|| RPMError::new("invalid file name"))?
-                    .to_str()
-                    .map(|i| i.to_string()),
-            });
-            io::copy(&mut f, &mut writer)?;
-            writer.finish()?;
-            ino_index += 1;
+        for d in self.provides.drain(0..) {
+            provide_names.push(d.dep_name);
+            provide_flags.push(d.sense as i32);
+            provide_versions.push(d.version);
         }
+
+        let mut obsolete_names = Vec::new();
+        let mut obsolete_flags = Vec::new();
+        let mut obsolete_versions = Vec::new();
+
+        for d in self.obsoletes.drain(0..) {
+            obsolete_names.push(d.dep_name);
+            obsolete_flags.push(d.sense as i32);
+            obsolete_versions.push(d.version);
+        }
+
+        let mut require_names = Vec::new();
+        let mut require_flags = Vec::new();
+        let mut require_versions = Vec::new();
+
+        for d in self.requires.drain(0..) {
+            require_names.push(d.dep_name);
+            require_flags.push(d.sense as i32);
+            require_versions.push(d.version);
+        }
+
+        let mut conflicts_names = Vec::new();
+        let mut conflicts_flags = Vec::new();
+        let mut conflicts_versions = Vec::new();
+
+        for d in self.conflicts.drain(0..) {
+            conflicts_names.push(d.dep_name);
+            conflicts_flags.push(d.sense as i32);
+            conflicts_versions.push(d.version);
+        }
+
+        let offset = 0;
+        let mut actual_records = vec![
+            IndexEntry::new(
+                IndexTag::RPMTAG_HEADERI18NTABLE,
+                offset,
+                IndexData::StringTag("C".to_string()),
+            ),
+
+            IndexEntry::new(
+                IndexTag::RPMTAG_NAME,
+                offset,
+                IndexData::StringTag(self.name),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_VERSION,
+                offset,
+                IndexData::StringTag(self.version),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_RELEASE,
+                offset,
+                IndexData::StringTag(self.release),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DESCRIPTION,
+                offset,
+                IndexData::StringTag(self.desc.clone()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SUMMARY,
+                offset,
+                IndexData::StringTag(self.desc),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SIZE,
+                offset,
+                IndexData::Int32(vec![combined_file_sizes]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_LICENSE,
+                offset,
+                IndexData::StringTag(self.license),
+            ),
+            // https://fedoraproject.org/wiki/RPMGroups
+            // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
+            IndexEntry::new(
+                IndexTag::RPMTAG_OS,
+                offset,
+                IndexData::StringTag("linux".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_GROUP,
+                offset,
+                IndexData::I18NString(vec!["Unspecified".to_string()]),
+            ),
+
+            IndexEntry::new(
+                IndexTag::RPMTAG_ARCH,
+                offset,
+                IndexData::StringTag(self.arch),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFORMAT,
+                offset,
+                IndexData::StringTag("cpio".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
+                offset,
+                IndexData::StringTag("gzip".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFLAGS,
+                offset,
+                IndexData::StringTag("2".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILESIZES,
+                offset,
+                IndexData::Int32(file_sizes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEMODES,
+                offset,
+                IndexData::Int16(file_modes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILERDEVS,
+                offset,
+                IndexData::Int16(file_rdevs),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEMTIMES,
+                offset,
+                IndexData::Int32(file_mtimes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDIGESTS,
+                offset,
+                IndexData::StringArray(file_hashes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILELINKTOS,
+                offset,
+                IndexData::StringArray(file_linktos),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEFLAGS,
+                offset,
+                IndexData::Int32(file_flags),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEUSERNAME,
+                offset,
+                IndexData::StringArray(file_usernames),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEGROUPNAME,
+                offset,
+                IndexData::StringArray(file_groupnames),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDEVICES,
+                offset,
+                IndexData::Int32(file_devices),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEINODES,
+                offset,
+                IndexData::Int32(file_inodes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DIRINDEXES,
+                offset,
+                IndexData::Int32(dir_indixes),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILELANGS,
+                offset,
+                IndexData::StringArray(file_langs),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEDIGESTALGO,
+                offset,
+                IndexData::Int32(vec![8]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_FILEVERIFYFLAGS,
+                offset,
+                IndexData::Int32(file_verify_flags),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_BASENAMES,
+                offset,
+                IndexData::StringArray(base_names),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DIRNAMES,
+                offset,
+                IndexData::StringArray(directories),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDENAME,
+                offset,
+                IndexData::StringArray(provide_names),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEVERSION,
+                offset,
+                IndexData::StringArray(provide_versions),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEFLAGS,
+                offset,
+                IndexData::Int32(provide_flags),
+            ),
+        ];
+
+        if !obsolete_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETENAME,
+                offset,
+                IndexData::StringArray(obsolete_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETEVERSION,
+                offset,
+                IndexData::StringArray(obsolete_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_OBSOLETEFLAGS,
+                offset,
+                IndexData::Int32(obsolete_flags),
+            ));
+        }
+
+        if !require_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIRENAME,
+                offset,
+                IndexData::StringArray(require_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIREVERSION,
+                offset,
+                IndexData::StringArray(require_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_REQUIREFLAGS,
+                offset,
+                IndexData::Int32(require_flags),
+            ));
+        }
+
+        if !conflicts_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTNAME,
+                offset,
+                IndexData::StringArray(conflicts_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTVERSION,
+                offset,
+                IndexData::StringArray(conflicts_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CONFLICTFLAGS,
+                offset,
+                IndexData::Int32(conflicts_flags),
+            ));
+        }
+
+        if self.pre_inst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PREIN,
+                offset,
+                IndexData::StringTag(self.pre_inst_script.unwrap()),
+            ));
+        }
+        if self.post_inst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_POSTIN,
+                offset,
+                IndexData::StringTag(self.post_inst_script.unwrap()),
+            ));
+        }
+
+        if self.pre_uninst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PREUN,
+                offset,
+                IndexData::StringTag(self.pre_uninst_script.unwrap()),
+            ));
+        }
+
+        if self.post_uninst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_POSTUN,
+                offset,
+                IndexData::StringTag(self.post_uninst_script.unwrap()),
+            ));
+        }
+
+        let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
 
         //those parts seem to break on fedora installations, but it does not seem to matter for centos.
         // if it turns out that those parts are not really required, we will delete the following comments
@@ -2002,36 +1963,6 @@ impl RPMBuilder {
         //     "rpmlib(FileDigests)".to_string(),
         //     "4.6.0-1".to_string(),
         // ));
-
-        self.requires.push(Dependency::any("/bin/sh".to_string()));
-
-        self.provides
-            .push(Dependency::eq(self.name.clone(), self.version.clone()));
-        self.provides.push(Dependency::eq(
-            format!("{}({})", self.name.clone(), self.arch.clone()),
-            self.version.clone(),
-        ));
-
-        let header = Header::new_header(
-            self.name,
-            self.version,
-            self.release,
-            self.desc.clone(),
-            // TODO get extra field for summary
-            self.desc,
-            self.arch,
-            self.license,
-            rpm_file_entries,
-            directories,
-            self.requires,
-            self.provides,
-            self.obsoletes,
-            self.conflicts,
-            self.pre_inst_script,
-            self.post_inst_script,
-            self.pre_uninst_script,
-            self.post_uninst_script,
-        );
 
         let mut header_bytes = Vec::new();
         header.write(&mut header_bytes)?;
@@ -2068,53 +1999,16 @@ impl RPMBuilder {
 }
 
 
-fn append_dir_entry(raw_path: &str, directories: &mut Vec<String>) -> Result<(), RPMError> {
-    let path = Path::new(raw_path);
-    let sanitized_path_string = if path.starts_with(".") {
-        if !path.ends_with("/") {
-            format!("{}/", &path.to_string_lossy()[1..])
-        } else {
-            path.to_string_lossy()[1..].to_string()
-        }
-    } else if !path.ends_with("/") {
-        format!("{}/", path.to_string_lossy())
-    } else {
-        path.to_string_lossy().to_string()
-    };
-
-    let sanitized_path = std::path::Path::new(&sanitized_path_string);
-    let parent = match sanitized_path.parent() {
-        Some(p) => p,
-        None => return Ok(()),
-    };
-
-    if parent.to_string_lossy() == "/" {
-        return Ok(());
-    }
-
-    let full_path = format!("{}/", parent.to_string_lossy().to_owned().to_string());
-
-    let already_present = directories.iter().any(|entry| entry == &full_path);
-
-    if !already_present {
-        directories.push(full_path.clone());
-    }
-
-    Ok(())
-}
-
-
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use std::io::prelude::*;
 
-
+    #[test]
     fn test_header() -> Result<(), Box<std::error::Error>> {
         let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut rpm_file_path = d.clone();
-        rpm_file_path.push("389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
+        rpm_file_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
         let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(rpm_file);
 
@@ -2371,11 +2265,31 @@ mod tests {
         out_file.push("out/test.rpm");
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/foo.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "/etc/foobar/hugo/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "/var/honollulu/bazz.toml")?
-            .with_file(cargo_file.to_str().unwrap(), "/etc/Cargo.toml")?
+
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/foo.toml"),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/bazz.toml"),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml").mode(0o100777).is_config(),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/hugo/aa.toml"),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/var/honollulu/bazz.toml"),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/Cargo.toml"),
+            )?
             .pre_install_script("echo preinst".to_string())
             // .requires(Dependency::any("wget".to_string()))
             .build()?;
