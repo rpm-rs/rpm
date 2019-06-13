@@ -3,7 +3,6 @@ use nom;
 use cpio;
 use enum_display_derive;
 use libflate;
-use lzma;
 use md5;
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
@@ -453,6 +452,10 @@ impl Header<IndexTag> {
         mut provides: Vec<Dependency>,
         obsoletes: Vec<Dependency>,
         conflicts: Vec<Dependency>,
+        pre_inst_script: Option<String>,
+        post_inst_script: Option<String>,
+        pre_uninst_script: Option<String>,
+        post_uninst_script: Option<String>,
     ) -> Self {
         let mut file_sizes = Vec::new();
         let mut file_modes = Vec::new();
@@ -589,7 +592,7 @@ impl Header<IndexTag> {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
-                IndexData::StringTag("xz".to_string()),
+                IndexData::StringTag("gzip".to_string()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFLAGS,
@@ -751,6 +754,38 @@ impl Header<IndexTag> {
                 IndexData::Int32(conflicts_flags),
             ));
         }
+
+        if pre_inst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PREIN,
+                offset,
+                IndexData::StringTag(pre_inst_script.unwrap())
+            ));
+        }
+        if post_inst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_POSTIN,
+                offset,
+                IndexData::StringTag(post_inst_script.unwrap())
+            ));
+        }
+
+        if pre_uninst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PREUN,
+                offset,
+                IndexData::StringTag(pre_uninst_script.unwrap())
+            ));
+        }
+
+        if post_uninst_script.is_some() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_POSTUN,
+                offset,
+                IndexData::StringTag(post_uninst_script.unwrap())
+            ));
+        }
+        
         Self::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE)
     }
     pub fn get_payload_format(&self) -> Result<&str, RPMError> {
@@ -1727,13 +1762,7 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
     }
 }
 
-impl From<lzma::LzmaError> for RPMError {
-    fn from(error: lzma::LzmaError) -> Self {
-        match error {
-            _ => RPMError::new(&format!("lzma error occured: {}", error)),
-        }
-    }
-}
+
 
 pub struct RPMBuilder {
     name: String,
@@ -1753,33 +1782,13 @@ pub struct RPMBuilder {
     obsoletes: Vec<Dependency>,
     provides: Vec<Dependency>,
     conflicts: Vec<Dependency>,
+
+    pre_inst_script: Option<String>,
+    post_inst_script: Option<String>,
+    pre_uninst_script: Option<String>,
+    post_uninst_script: Option<String>,
 }
 
-trait Compressor: io::Write {
-    fn finish_compression(self) -> Result<(), RPMError>;
-}
-
-impl Compressor for libflate::gzip::Encoder<&mut Vec<u8>> {
-    fn finish_compression(self) -> Result<(), RPMError> {
-        let result = self.finish();
-        if result.as_result().is_err() {
-            Err(RPMError::new("unable to create gzip compressor"))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl Compressor for lzma::LzmaWriter<&mut Vec<u8>> {
-    fn finish_compression(self) -> Result<(), RPMError> {
-        let result = self.finish();
-        if result.is_err() {
-            Err(RPMError::new("unable to create gzip compressor"))
-        } else {
-            Ok(())
-        }
-    }
-}
 
 
 impl RPMBuilder {
@@ -1790,7 +1799,6 @@ impl RPMBuilder {
             license: license.to_string(),
             arch: arch.to_string(),
             desc: desc.to_string(),
-            //TODO make release configurable
             release: "1".to_string(),
             file_content: collections::BTreeMap::new(),
             byte_content: collections::BTreeMap::new(),
@@ -1800,6 +1808,10 @@ impl RPMBuilder {
             provides: Vec::new(),
             obsoletes: Vec::new(),
             requires: Vec::new(),
+            pre_inst_script: None,
+            post_inst_script: None,
+            pre_uninst_script: None,
+            post_uninst_script: None,
         }
     }
     pub fn with_file(mut self, source: &str, dest: &str) -> Result<Self, RPMError> {
@@ -1808,9 +1820,37 @@ impl RPMBuilder {
         Ok(self)
     }
 
+    //TODO redesign api
     pub fn with_content(mut self, content: Vec<u8>, dest: &str) -> Result<Self, RPMError> {
         self.byte_content.insert(dest.to_string(), content);
         Ok(self)
+    }
+
+    pub fn pre_install_script(mut self, content: String) -> Self {
+        self.pre_inst_script = Some(content);
+        self
+    }
+
+    pub fn post_install_script(mut self, content: String) -> Self {
+        self.post_inst_script = Some(content);
+        self
+    }
+
+    pub fn pre_uninstall_script(mut self, content: String) -> Self {
+        self.pre_uninst_script = Some(content);
+        self
+    }
+
+    pub fn post_uninstall_script(mut self, content: String) -> Self {
+        self.post_uninst_script = Some(content);
+        self
+    }
+
+    
+
+    pub fn release(mut self,release: u16) -> Self {
+        self.release = format!("{}",release);
+        self
     }
 
     pub fn requires(mut self, dep: Dependency) -> Self {
@@ -1842,7 +1882,7 @@ impl RPMBuilder {
 
         let mut content: Vec<u8> = Vec::new();
 
-        let mut compressor = lzma::LzmaWriter::new_compressor(&mut content, 2)?;
+        let mut compressor =libflate::gzip::Encoder::new(&mut content)?;
 
         let mut ino_index = 1;
 
@@ -1982,13 +2022,17 @@ impl RPMBuilder {
             self.provides,
             self.obsoletes,
             self.conflicts,
+            self.pre_inst_script,
+            self.post_inst_script,
+            self.pre_uninst_script,
+            self.post_uninst_script,
         );
 
         let mut header_bytes = Vec::new();
         header.write(&mut header_bytes)?;
 
         compressor = cpio::newc::trailer(compressor)?;
-        compressor.finish_compression()?;
+        compressor.finish().into_result()?;
 
         let signature_size = header_bytes.len() + content.len();
         let mut hasher = md5::Md5::default();
@@ -2327,6 +2371,7 @@ mod tests {
             .with_file(cargo_file.to_str().unwrap(), "./etc/foobar/hugo/bazz.toml")?
             .with_file(cargo_file.to_str().unwrap(), "./var/honollulu/bazz.toml")?
             .with_file(cargo_file.to_str().unwrap(), "./etc/Cargo.toml")?
+            .pre_install_script("echo preinst".to_string())
             // .requires(Dependency::any("wget".to_string()))
             .build()?;
 
