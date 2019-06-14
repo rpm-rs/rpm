@@ -1168,28 +1168,28 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    pub fn less(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_LESS, version)
+    pub fn less<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+        Self::new(dep_name.into(), RPMSENSE_LESS, version.into())
     }
 
-    pub fn less_eq(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_LESS | RPMSENSE_EQUAL, version)
+    pub fn less_eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+        Self::new(dep_name.into(), RPMSENSE_LESS | RPMSENSE_EQUAL, version.into())
     }
 
-    pub fn eq(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_EQUAL, version)
+    pub fn eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+        Self::new(dep_name.into(), RPMSENSE_EQUAL, version.into())
     }
 
-    pub fn greater(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_GREATER, version)
+    pub fn greater<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String>{
+        Self::new(dep_name.into(), RPMSENSE_GREATER, version.into())
     }
 
-    pub fn greater_eq(dep_name: String, version: String) -> Self {
-        Self::new(dep_name, RPMSENSE_GREATER | RPMSENSE_EQUAL, version)
+    pub fn greater_eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+        Self::new(dep_name.into(), RPMSENSE_GREATER | RPMSENSE_EQUAL, version.into())
     }
 
-    pub fn any(dep_name: String) -> Self {
-        Self::new(dep_name, RPMSENSE_ANY, "".to_string())
+    pub fn any<T>(dep_name: T) -> Self where T: Into<String> {
+        Self::new(dep_name.into(), RPMSENSE_ANY, "".to_string())
     }
 
     fn new(dep_name: String, sense: u32, version: String) -> Self {
@@ -1521,23 +1521,23 @@ impl RPMBuilder {
         Ok(())
     }
 
-    pub fn pre_install_script(mut self, content: String) -> Self {
-        self.pre_inst_script = Some(content);
+    pub fn pre_install_script<T: Into<String>>(mut self, content: T) -> Self {
+        self.pre_inst_script = Some(content.into());
         self
     }
 
-    pub fn post_install_script(mut self, content: String) -> Self {
-        self.post_inst_script = Some(content);
+    pub fn post_install_script<T: Into<String>>(mut self, content: T) -> Self {
+        self.post_inst_script = Some(content.into());
         self
     }
 
-    pub fn pre_uninstall_script(mut self, content: String) -> Self {
-        self.pre_uninst_script = Some(content);
+    pub fn pre_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+        self.pre_uninst_script = Some(content.into());
         self
     }
 
-    pub fn post_uninstall_script(mut self, content: String) -> Self {
-        self.post_uninst_script = Some(content);
+    pub fn post_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+        self.post_uninst_script = Some(content.into());
         self
     }
 
@@ -2329,7 +2329,7 @@ mod tests {
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/Cargo.toml"),
             )?
-            .pre_install_script("echo preinst".to_string())
+            .pre_install_script("echo preinst")
             .add_changelog_entry("me", "was awesome, eh?", 123123123)
             .add_changelog_entry("you", "yeah, it was", 12312312)
             // .requires(Dependency::any("wget".to_string()))
