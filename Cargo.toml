@@ -1,10 +1,19 @@
 [package]
 name = "rpm-rs"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["René Richter <richterrettich@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPM's"
+
+homepage = "https://github.com/Richterrettich/rpm-rs"
+repository = "https://github.com/Richterrettich/rpm-rs"
+
+readme = "README.md"
+
+keywords = ["RPM", "packaging"]
+
+categories = ["parsing", "development-tools"]
 
 [lib]
 name="rpm"
