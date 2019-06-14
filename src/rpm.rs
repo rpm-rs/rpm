@@ -1398,6 +1398,10 @@ pub struct RPMBuilder {
     post_inst_script: Option<String>,
     pre_uninst_script: Option<String>,
     post_uninst_script: Option<String>,
+
+    changelog_authors: Vec<String>,
+    changelog_entries: Vec<String>,
+    changelog_times: Vec<i32>,
 }
 
 
@@ -1421,8 +1425,19 @@ impl RPMBuilder {
             pre_uninst_script: None,
             post_uninst_script: None,
             files: std::collections::BTreeMap::new(),
+            changelog_authors: Vec::new(),
+            changelog_entries: Vec::new(),
+            changelog_times: Vec::new(),
         }
     }
+
+    pub fn add_changelog_entry<E,F>(mut self,author:E,entry: F, time: i32)-> Self where E: Into<String>,F: Into<String>  {
+        self.changelog_authors.push(author.into());
+        self.changelog_entries.push(entry.into());
+        self.changelog_times.push(time);
+        self
+    }
+
 
     pub fn with_file<T: Into<RPMFileOptions>>(
         mut self,
@@ -1849,6 +1864,30 @@ impl RPMBuilder {
                 IndexData::Int32(provide_flags),
             ),
         ];
+
+        if !self.changelog_authors.is_empty() {
+            actual_records.push(
+                IndexEntry::new(
+                    IndexTag::RPMTAG_CHANGELOGNAME,
+                    offset,
+                    IndexData::StringArray(self.changelog_authors),
+                )
+            );
+            actual_records.push(
+                IndexEntry::new(
+                    IndexTag::RPMTAG_CHANGELOGTEXT,
+                    offset,
+                    IndexData::StringArray(self.changelog_entries),
+                )
+            );
+            actual_records.push(
+                IndexEntry::new(
+                    IndexTag::RPMTAG_CHANGELOGTIME,
+                    offset,
+                    IndexData::Int32(self.changelog_times),
+                )
+            );
+        }
 
         if !obsolete_flags.is_empty() {
             actual_records.push(IndexEntry::new(
@@ -2291,6 +2330,8 @@ mod tests {
                 RPMFileOptions::new("/etc/Cargo.toml"),
             )?
             .pre_install_script("echo preinst".to_string())
+            .add_changelog_entry("me", "was awesome, eh?", 123123123)
+            .add_changelog_entry("you", "yeah, it was", 12312312)
             // .requires(Dependency::any("wget".to_string()))
             .build()?;
 
