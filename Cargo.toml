@@ -3,6 +3,7 @@ name = "rpm-rs"
 version = "0.1.0"
 authors = ["René Richter <richterrettich@gmail.com>"]
 edition = "2018"
+license = "Apache-2.0"
 
 [lib]
 name="rpm"
