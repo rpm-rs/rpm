@@ -1449,7 +1449,9 @@ impl RPMBuilder {
         input.read_to_end(&mut content)?;
         let mut options = options.into();
         if options.inherit_permissions {
-        options.mode = input.metadata()?.permissions().mode() as i32;
+            if cfg!(unix) {
+                options.mode = input.metadata()?.permissions().mode() as i32;
+            }
         }
         self.add_data(
             content,
