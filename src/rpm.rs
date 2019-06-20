@@ -444,6 +444,22 @@ impl Header<IndexTag> {
     pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
         self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)
     }
+
+    pub fn get_name(&self) -> Result<&str, RPMError> {
+        self.get_entry_string_data(IndexTag::RPMTAG_NAME)
+    }
+
+    pub fn get_version(&self) -> Result<&str,RPMError>  {
+        self.get_entry_string_data(IndexTag::RPMTAG_VERSION)
+    }
+
+     pub fn get_release(&self) -> Result<&str,RPMError>  {
+        self.get_entry_string_data(IndexTag::RPMTAG_RELEASE)
+    }
+
+     pub fn get_arch(&self) -> Result<&str,RPMError>  {
+        self.get_entry_string_data(IndexTag::RPMTAG_ARCH)
+    }
 }
 
 #[derive(Debug, PartialEq)]
