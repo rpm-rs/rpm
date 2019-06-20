@@ -29,6 +29,7 @@ This library does not build software like rpmbuild. It is meant for finished art
 ```rust
 use rpm;
 let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+            .compression(rpm::Compressor::from_str("gzip")?)
             .with_file(
                 "./awesome-config.toml",
                 RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
