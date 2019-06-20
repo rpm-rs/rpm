@@ -11,12 +11,14 @@ use num_derive;
 use sha1;
 use sha2;
 use sha2::Digest;
-use std::os::unix::fs::PermissionsExt;
-use std::collections:: BTreeMap;
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Display;
-use std::io::{self,Write, Read};
+use std::io::{self, Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use std::time::UNIX_EPOCH;
 
 
@@ -569,7 +571,6 @@ impl<T: num::FromPrimitive + num::ToPrimitive + std::fmt::Debug> IndexEntry<T> {
 }
 
 
-
 #[derive(Debug, PartialEq, Eq)]
 enum IndexData {
     Null,
@@ -603,7 +604,6 @@ impl Display for IndexData {
 }
 
 impl IndexData {
-
 
     fn append(&self, store: &mut Vec<u8>) -> u32 {
         match &self {
@@ -684,7 +684,6 @@ impl IndexData {
             }
         }
     }
-
 
 
     fn num_items(&self) -> u32 {
@@ -1168,27 +1167,58 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    pub fn less<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+    pub fn less<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
         Self::new(dep_name.into(), RPMSENSE_LESS, version.into())
     }
 
-    pub fn less_eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
-        Self::new(dep_name.into(), RPMSENSE_LESS | RPMSENSE_EQUAL, version.into())
+    pub fn less_eq<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
+        Self::new(
+            dep_name.into(),
+            RPMSENSE_LESS | RPMSENSE_EQUAL,
+            version.into(),
+        )
     }
 
-    pub fn eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
+    pub fn eq<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
         Self::new(dep_name.into(), RPMSENSE_EQUAL, version.into())
     }
 
-    pub fn greater<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String>{
+    pub fn greater<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
         Self::new(dep_name.into(), RPMSENSE_GREATER, version.into())
     }
 
-    pub fn greater_eq<E,T>(dep_name: T, version: E) -> Self where T: Into<String>, E: Into<String> {
-        Self::new(dep_name.into(), RPMSENSE_GREATER | RPMSENSE_EQUAL, version.into())
+    pub fn greater_eq<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
+        Self::new(
+            dep_name.into(),
+            RPMSENSE_GREATER | RPMSENSE_EQUAL,
+            version.into(),
+        )
     }
 
-    pub fn any<T>(dep_name: T) -> Self where T: Into<String> {
+    pub fn any<T>(dep_name: T) -> Self
+    where
+        T: Into<String>,
+    {
         Self::new(dep_name.into(), RPMSENSE_ANY, "".to_string())
     }
 
@@ -1402,8 +1432,60 @@ pub struct RPMBuilder {
     changelog_authors: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<i32>,
+    compressor: Compressor,
 }
 
+
+pub enum Compressor {
+    None(Vec<u8>),
+    Gzip(libflate::gzip::Encoder<Vec<u8>>),
+}
+
+impl Write for Compressor {
+    fn write(&mut self, content: &[u8]) -> Result<usize, std::io::Error> {
+        match self {
+            Compressor::None(data) => data.write(content),
+            Compressor::Gzip(encoder) => encoder.write(content),
+        }
+    }
+    fn flush(&mut self) -> Result<(), std::io::Error> {
+        match self {
+            Compressor::None(data) => data.flush(),
+            Compressor::Gzip(encoder) => encoder.flush(),
+        }
+    }
+}
+
+impl Compressor {
+    pub fn from_str(raw: &str) -> Result<Self, RPMError> {
+        match raw {
+            "none" => Ok(Compressor::None(Vec::new())),
+            "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
+            _ => Err(RPMError::new(&format!("unknown compressor type {}", raw))),
+        }
+    }
+    fn finish_compression(self) -> Result<Vec<u8>, RPMError> {
+        match self {
+            Compressor::None(data) => Ok(data),
+            Compressor::Gzip(encoder) => Ok(encoder.finish().into_result()?),
+        }
+    }
+
+    fn get_details(&self) -> Option<CompressionDetails> {
+        match self {
+            Compressor::None(_) => None,
+            Compressor::Gzip(_) => Some(CompressionDetails {
+                compression_level: "9",
+                compression_name: "gzip",
+            }),
+        }
+    }
+}
+
+struct CompressionDetails {
+    compression_level: &'static str,
+    compression_name: &'static str,
+}
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
@@ -1428,10 +1510,21 @@ impl RPMBuilder {
             changelog_authors: Vec::new(),
             changelog_entries: Vec::new(),
             changelog_times: Vec::new(),
+            compressor: Compressor::None(Vec::new()),
         }
     }
 
-    pub fn add_changelog_entry<E,F>(mut self,author:E,entry: F, time: i32)-> Self where E: Into<String>,F: Into<String>  {
+    pub fn compression(mut self, comp: Compressor) -> Self {
+        self.compressor = comp;
+        self
+    }
+
+
+    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: i32) -> Self
+    where
+        E: Into<String>,
+        F: Into<String>,
+    {
         self.changelog_authors.push(author.into());
         self.changelog_entries.push(entry.into());
         self.changelog_times.push(time);
@@ -1575,9 +1668,6 @@ impl RPMBuilder {
 
         let lead = Lead::new(&self.name);
 
-        let mut content: Vec<u8> = Vec::new();
-
-        let mut compressor = libflate::gzip::Encoder::new(&mut content)?;
 
         let mut ino_index = 1;
 
@@ -1630,7 +1720,7 @@ impl RPMBuilder {
                     .ino(ino_index as u32)
                     .uid(self.uid.unwrap_or(0))
                     .gid(self.gid.unwrap_or(0))
-                    .write(&mut compressor, content.len() as u32);
+                    .write(&mut self.compressor, content.len() as u32);
 
                 writer.write_all(&content)?;
                 writer.finish()?;
@@ -1756,16 +1846,6 @@ impl RPMBuilder {
                 IndexData::StringTag("cpio".to_string()),
             ),
             IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
-                offset,
-                IndexData::StringTag("gzip".to_string()),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADFLAGS,
-                offset,
-                IndexData::StringTag("2".to_string()),
-            ),
-            IndexEntry::new(
                 IndexTag::RPMTAG_FILESIZES,
                 offset,
                 IndexData::Int32(file_sizes),
@@ -1867,28 +1947,38 @@ impl RPMBuilder {
             ),
         ];
 
+        let possible_compression_details = self.compressor.get_details();
+
+        if possible_compression_details.is_some() {
+            let details = possible_compression_details.unwrap();
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
+                offset,
+                IndexData::StringTag(details.compression_name.to_string()),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFLAGS,
+                offset,
+                IndexData::StringTag(details.compression_level.to_string()),
+            ));
+        }
+
         if !self.changelog_authors.is_empty() {
-            actual_records.push(
-                IndexEntry::new(
-                    IndexTag::RPMTAG_CHANGELOGNAME,
-                    offset,
-                    IndexData::StringArray(self.changelog_authors),
-                )
-            );
-            actual_records.push(
-                IndexEntry::new(
-                    IndexTag::RPMTAG_CHANGELOGTEXT,
-                    offset,
-                    IndexData::StringArray(self.changelog_entries),
-                )
-            );
-            actual_records.push(
-                IndexEntry::new(
-                    IndexTag::RPMTAG_CHANGELOGTIME,
-                    offset,
-                    IndexData::Int32(self.changelog_times),
-                )
-            );
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CHANGELOGNAME,
+                offset,
+                IndexData::StringArray(self.changelog_authors),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CHANGELOGTEXT,
+                offset,
+                IndexData::StringArray(self.changelog_entries),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_CHANGELOGTIME,
+                offset,
+                IndexData::Int32(self.changelog_times),
+            ));
         }
 
         if !obsolete_flags.is_empty() {
@@ -2008,8 +2098,8 @@ impl RPMBuilder {
         let mut header_bytes = Vec::new();
         header.write(&mut header_bytes)?;
 
-        compressor = cpio::newc::trailer(compressor)?;
-        compressor.finish().into_result()?;
+        self.compressor = cpio::newc::trailer(self.compressor)?;
+        let content = self.compressor.finish_compression()?;
 
         let signature_size = header_bytes.len() + content.len();
         let mut hasher = md5::Md5::default();
@@ -2306,7 +2396,7 @@ mod tests {
         out_file.push("out/test.rpm");
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-
+            .compression(Compressor::from_str("gzip")?)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/foo.toml"),
@@ -2317,7 +2407,9 @@ mod tests {
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml").mode(0o100777).is_config(),
+                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                    .mode(0o100777)
+                    .is_config(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
@@ -2336,6 +2428,7 @@ mod tests {
             .add_changelog_entry("you", "yeah, it was", 12312312)
             // .requires(Dependency::any("wget".to_string()))
             .build()?;
+
 
         pkg.write(&mut f)?;
 
