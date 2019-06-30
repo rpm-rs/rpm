@@ -11,7 +11,7 @@ use num_derive;
 use sha1;
 use sha2;
 use sha2::Digest;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Display;
@@ -449,15 +449,15 @@ impl Header<IndexTag> {
         self.get_entry_string_data(IndexTag::RPMTAG_NAME)
     }
 
-    pub fn get_version(&self) -> Result<&str,RPMError>  {
+    pub fn get_version(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_VERSION)
     }
 
-     pub fn get_release(&self) -> Result<&str,RPMError>  {
+    pub fn get_release(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_RELEASE)
     }
 
-     pub fn get_arch(&self) -> Result<&str,RPMError>  {
+    pub fn get_arch(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_ARCH)
     }
 }
@@ -1291,8 +1291,6 @@ const RPMFILE_DOC: i32 = 1 << 1;
 pub struct RPMFileEntry {
     size: i32,
     mode: i16,
-
-
     modified_at: i32,
     sha_checksum: String,
     link: String,
@@ -1300,8 +1298,7 @@ pub struct RPMFileEntry {
     user: String,
     group: String,
     base_name: String,
-    cpio_path: String,
-
+    dir: String,
     content: Option<Vec<u8>>,
 }
 
@@ -1433,8 +1430,9 @@ pub struct RPMBuilder {
 
     // File entries need to be sorted. The entries need to be in the same order as they come
     // in the cpio payload. Otherwise rpm will not be able to resolve those paths.
-    files: std::collections::BTreeMap<String, BTreeMap<String, RPMFileEntry>>,
-
+    // key is the directory, values are complete paths
+    files: std::collections::BTreeMap<String, RPMFileEntry>,
+    directories: std::collections::BTreeSet<String>,
     requires: Vec<Dependency>,
     obsoletes: Vec<Dependency>,
     provides: Vec<Dependency>,
@@ -1522,11 +1520,12 @@ impl RPMBuilder {
             post_inst_script: None,
             pre_uninst_script: None,
             post_uninst_script: None,
-            files: std::collections::BTreeMap::new(),
+            files: BTreeMap::new(),
             changelog_authors: Vec::new(),
             changelog_entries: Vec::new(),
             changelog_times: Vec::new(),
             compressor: Compressor::None(Vec::new()),
+            directories: BTreeSet::new(),
         }
     }
 
@@ -1614,21 +1613,18 @@ impl RPMBuilder {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             size: content.len() as i32,
             content: Some(content),
-            cpio_path: cpio_path.clone(),
             flag: options.flag,
             user: options.user,
             group: options.group,
             mode: options.mode as i16,
             link: options.symlink,
             modified_at,
-
+            dir: dir.clone(),
             sha_checksum,
         };
 
-        self.files
-            .entry(dir)
-            .or_insert(BTreeMap::new())
-            .insert(cpio_path, entry);
+        self.directories.insert(dir);
+        self.files.entry(cpio_path).or_insert(entry);
         Ok(())
     }
 
@@ -1688,8 +1684,6 @@ impl RPMBuilder {
         let mut ino_index = 1;
 
 
-        let mut directories = Vec::new();
-
         let mut file_sizes = Vec::new();
         let mut file_modes = Vec::new();
         let mut file_rdevs = Vec::new();
@@ -1709,40 +1703,43 @@ impl RPMBuilder {
         let mut combined_file_sizes = 0;
 
 
-        for (index, (dir, entries)) in self.files.iter().enumerate() {
-            directories.push(dir.to_owned());
-            for entry in entries.values() {
-                combined_file_sizes += entry.size;
-                file_sizes.push(entry.size);
-                file_modes.push(entry.mode);
-                // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
-                // Who knows, who cares.
-                file_rdevs.push(0);
-                file_devices.push(1);
-                file_mtimes.push(entry.modified_at);
-                file_hashes.push(entry.sha_checksum.to_owned());
-                file_linktos.push(entry.link.to_owned());
-                file_flags.push(entry.flag);
-                file_usernames.push(entry.user.to_owned());
-                file_groupnames.push(entry.group.to_owned());
-                file_inodes.push(ino_index as i32);
-                file_langs.push("".to_string());
-                dir_indixes.push(index as i32);
-                base_names.push(entry.base_name.to_owned());
-                file_verify_flags.push(-1);
-                let content = entry.content.to_owned().unwrap();
-                let mut writer = cpio::newc::Builder::new(&entry.cpio_path)
-                    .mode(entry.mode as u32)
-                    .ino(ino_index as u32)
-                    .uid(self.uid.unwrap_or(0))
-                    .gid(self.gid.unwrap_or(0))
-                    .write(&mut self.compressor, content.len() as u32);
+        for (cpio_path, entry) in self.files.iter() {
+            combined_file_sizes += entry.size;
+            file_sizes.push(entry.size);
+            file_modes.push(entry.mode);
+            // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
+            // Who knows, who cares.
+            file_rdevs.push(0);
+            file_devices.push(1);
+            file_mtimes.push(entry.modified_at);
+            file_hashes.push(entry.sha_checksum.to_owned());
+            file_linktos.push(entry.link.to_owned());
+            file_flags.push(entry.flag);
+            file_usernames.push(entry.user.to_owned());
+            file_groupnames.push(entry.group.to_owned());
+            file_inodes.push(ino_index as i32);
+            file_langs.push("".to_string());
+            let index = self
+                .directories
+                .iter()
+                .position(|d| d == &entry.dir)
+                .unwrap();
+            dir_indixes.push(index as i32);
+            base_names.push(entry.base_name.to_owned());
+            file_verify_flags.push(-1);
+            let content = entry.content.to_owned().unwrap();
+            let mut writer = cpio::newc::Builder::new(&cpio_path)
+                .mode(entry.mode as u32)
+                .ino(ino_index as u32)
+                .uid(self.uid.unwrap_or(0))
+                .gid(self.gid.unwrap_or(0))
+                .write(&mut self.compressor, content.len() as u32);
 
-                writer.write_all(&content)?;
-                writer.finish()?;
+            writer.write_all(&content)?;
+            writer.finish()?;
 
-                ino_index += 1;
-            }
+            ino_index += 1;
+
         }
 
         self.requires.push(Dependency::any("/bin/sh".to_string()));
@@ -1944,7 +1941,7 @@ impl RPMBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_DIRNAMES,
                 offset,
-                IndexData::StringArray(directories),
+                IndexData::StringArray(self.directories.into_iter().collect()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PROVIDENAME,
@@ -2419,13 +2416,17 @@ mod tests {
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/bazz.toml"),
+                RPMFileOptions::new("/etc/foobar/zazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .mode(0o100777)
                     .is_config(),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
