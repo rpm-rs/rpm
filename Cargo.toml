@@ -28,7 +28,28 @@ num-derive = "0.3"
 num = "0.2"
 enum-display-derive = "0.1"
 cpio = "0.2"
+# consider migrating to flate2
 libflate = "0.1"
 sha2 = "0.8"
+# madness
 md-5 = "0.8"
 sha1 = "0.6"
+# this tripplet avoids openssl dependencies
+pem = { version = "0.7", optional = true }
+rsa = { version = "^0.2.0", optional = true }
+rsa-der = { version = "^0.2.1", optional = true }
+num-bigint-dig =  { version = "0.6", optional = true }
+sloppy-rfc4880 = { version = "^0.1.5", optional = true }
+# compat only
+simple_asn1 = { version = "0.4", optional = true }
+rand = { version = "0.7" }
+
+[features]
+default = ["signing"]
+signing = ["rsa","pem","sloppy-rfc4880","rsa-der","num-bigint-dig","simple_asn1"]
+
+test_with_podman = []
+
+[patch.crates-io]
+rsa-der = { git = "https://github.com/drahnr/rsa-der.git" }
+simple_asn1 = { git = "https://github.com/drahnr/simple_asn1.git" }

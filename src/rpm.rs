@@ -26,6 +26,16 @@ pub use crate::errors::*;
 mod constants;
 pub use crate::constants::*;
 
+#[cfg(feature = "signing")]
+mod signature;
+#[cfg(feature = "signing")]
+mod signature_builder;
+
+#[cfg(feature = "signing")]
+pub use crate::signature::*;
+#[cfg(feature = "signing")]
+pub use crate::signature_builder::*;
+
 pub struct RPMPackage {
     pub metadata: RPMPackageMetadata,
     pub content: Vec<u8>,
@@ -44,7 +54,70 @@ impl RPMPackage {
         out.write_all(&self.content)?;
         Ok(())
     }
+
+    /// sign all headers (except for the lead) using an external key and store it as the initial header
+    #[cfg(feature = "signing")]
+    pub fn sign(&mut self, secret_key: &[u8]) -> Result<(), RPMError> {
+        // create a temporary byte repr of the header
+        // and re-create all hashes
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        self.metadata.header.write(&mut header_bytes)?;
+
+        let _signature_size = header_bytes.len() + self.content.len();
+        let mut hasher = md5::Md5::default();
+
+        hasher.input(&header_bytes);
+        hasher.input(&self.content);
+
+        let hash_result = hasher.result();
+
+        let signature_md5 = hash_result.as_slice();
+
+        let header_sha1 = sha1::Sha1::from(&header_bytes);
+
+        let signer = Signer::load_secret_key(secret_key)?;
+
+        // TODO verify the byte range is correct!
+        let digest_header = signer.sign(self.content.as_slice())?;
+        let _size = self.content.len();
+
+        let rsa_spanning_header_only = raw_signature_to_rfc4880(&digest_header[..])?;
+
+        let digest_header_and_archive = signer.sign(self.content.as_slice())?;
+        let size = self.content.len();
+
+        let rsa_spanning_header_and_archive =
+            raw_signature_to_rfc4880(&digest_header_and_archive[..])?;
+
+        // TODO FIXME verify this is the size we want, I don't think it is
+        // TODO maybe use signature_size instead of size
+        self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
+            size as i32,
+            signature_md5,
+            header_sha1.digest().to_string(),
+            rsa_spanning_header_only.as_slice(),
+            rsa_spanning_header_and_archive.as_slice(),
+        );
+
+        Ok(())
+    }
+
+    /// verify the signature as present
+    #[cfg(feature = "signing")]
+    pub fn verify_signature(&mut self, public_key: &[u8]) -> Result<(), RPMError> {
+        // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
+        // find metadata signature
+        let signature_header = &self.metadata.signature;
+        let signature_header = raw_signature_from_rfc4880(signature_header.store.as_slice())
+            .map_err(|_e| RPMError::new("Failed to parse rfc4880 signature"))?;
+
+        let verifier = Verifier::load_public_key(public_key)?;
+        // FIXME verify the byte range is correct!
+
+        verifier.verify(self.content.as_slice(), signature_header.as_slice())
+    }
 }
+
 #[derive(PartialEq)]
 pub struct RPMPackageMetadata {
     pub lead: Lead,
@@ -177,15 +250,11 @@ impl Lead {
     }
 
     fn new(name: &str) -> Self {
-        let mut name_size = name.len();
-
-        // the last byte needs to be the null terminator
-        if name_size > 65 {
-            name_size = 65;
-        }
-
         let mut name_arr = [0; 66];
-        name_arr[..name_size - 1].clone_from_slice(&name.as_bytes()[..name_size - 1]);
+        // the last byte needs to be the null terminator
+        let name_size = std::cmp::min(name_arr.len() - 1, name.len());
+
+        name_arr[..=name_size].clone_from_slice(&name.as_bytes()[..=name_size]);
         Lead {
             magic: RPM_MAGIC,
             major: 3,
@@ -216,6 +285,13 @@ impl PartialEq for Lead {
             && self.signature_type == other.signature_type
             && self.reserved == other.reserved
     }
+}
+
+pub trait Tag {}
+
+impl<T> Tag for T where
+    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy
+{
 }
 
 #[derive(Debug, PartialEq)]
@@ -316,12 +392,10 @@ where
     }
 
     fn find_entry_or_err(&self, tag: &T) -> Result<&IndexEntry<T>, RPMError> {
-        for entry in &self.index_entries {
-            if &entry.tag == tag {
-                return Ok(entry);
-            }
-        }
-        Err(RPMError::new(&format!("unable to find Tag {}", tag)))
+        self.index_entries
+            .iter()
+            .find(|entry| &entry.tag == tag)
+            .ok_or_else(|| RPMError::new(&format!("unable to find Tag {}", tag)))
     }
 
     fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
@@ -360,7 +434,7 @@ where
         IndexEntry::new(tag, offset, IndexData::Bin(header_immutable_index_data))
     }
 
-    fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
+    pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
         let mut store = Vec::new();
         for record in &mut actual_records {
             record.offset = store.len() as i32;
@@ -391,7 +465,18 @@ where
 }
 
 impl Header<IndexSignatureTag> {
-    fn new_signature_header(size: i32, md5: &[u8], sha1: String) -> Self {
+    /// creates a new full signature header
+    ///
+    /// `size` is combined size of header, header store and the payload
+    ///
+    /// PGP and RSA tags expect signatures according to [RFC2440](https://tools.ietf.org/html/rfc2440)
+    fn new_signature_header(
+        size: i32,
+        md5sum: &[u8],
+        sha1: String,
+        rsa_spanning_header: &[u8],
+        rsa_spanning_header_and_archive: &[u8],
+    ) -> Self {
         let offset = 0;
         let entries = vec![
             IndexEntry::new(
@@ -399,18 +484,33 @@ impl Header<IndexSignatureTag> {
                 offset,
                 IndexData::Int32(vec![size]),
             ),
+            // TODO consider dropping md5 in favour of sha256
             IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_MD5,
                 offset,
-                IndexData::Bin(md5.to_vec()),
+                IndexData::Bin(md5sum.to_vec()),
             ),
             IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA1,
                 offset,
                 IndexData::StringTag(sha1),
             ),
+            IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_RSA,
+                offset,
+                IndexData::Bin(rsa_spanning_header.to_vec()),
+            ),
+            IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_PGP,
+                offset,
+                IndexData::Bin(rsa_spanning_header_and_archive.to_vec()),
+            ),
         ];
         Self::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
+    }
+
+    pub fn builder() -> SignatureHeaderBuilder<Empty> {
+        SignatureHeaderBuilder::<Empty>::new()
     }
 
     fn parse_signature<I: std::io::BufRead>(
@@ -475,9 +575,13 @@ impl Header<IndexTag> {
 
 #[derive(Debug, PartialEq)]
 struct IndexHeader {
+    /// rpm specific magic header
     magic: [u8; 3],
+    /// rpm version number, always 1
     version: u8,
+    /// number of header entries
     num_entries: u32,
+    /// total header size excluding the fixed part ( I think )
     header_size: u32,
 }
 
@@ -500,7 +604,7 @@ impl IndexHeader {
 
         if version != 1 {
             return Err(RPMError::new(&format!(
-                "unsupported Versionv {} - only header version 1 is supported",
+                "unsupported Version {} - only header version 1 is supported",
                 version,
             )));
         }
@@ -1704,11 +1808,10 @@ impl RPMBuilder {
 
         let header_sha1 = sha1::Sha1::from(&header_bytes);
 
-        let signature_header = Header::new_signature_header(
-            signature_size as i32,
-            signature_md5,
-            header_sha1.digest().to_string(),
-        );
+        let signature_header = Header::<IndexSignatureTag>::builder()
+            .add_digest(header_sha1.digest().to_string().as_str(), signature_md5)
+            // TODO .add_signature()
+            .build(signature_size as i32);
 
         let metadata = RPMPackageMetadata {
             lead,
