@@ -1,7 +1,9 @@
 [package]
 name = "rpm-rs"
-version = "0.2.1"
-authors = ["René Richter <richterrettich@gmail.com>"]
+version = "0.2.2-alpha0"
+authors = [
+    "René Richter <richterrettich@gmail.com>",
+    "Bernhard Schuster <bernhard@ahoi.io>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPM's"
@@ -20,13 +22,13 @@ name="rpm"
 path="src/rpm.rs"
 
 [dependencies]
-nom = "5.0.0"
+nom = "5.0"
 num-traits = "0.2"
-num-derive = "0.2"
-num = "0.2.0"
-enum-display-derive = "0.1.0"
-cpio = "0.2.0"
-libflate = "0.1.23"
-sha2 = "0.8.0"
-md-5 = "0.8.0"
-sha1 = "0.6.0"
+num-derive = "0.3"
+num = "0.2"
+enum-display-derive = "0.1"
+cpio = "0.2"
+libflate = "0.1"
+sha2 = "0.8"
+md-5 = "0.8"
+sha1 = "0.6"
