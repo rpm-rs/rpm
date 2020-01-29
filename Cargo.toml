@@ -43,6 +43,7 @@ sloppy-rfc4880 = { version = "^0.1.5", optional = true }
 # compat only
 simple_asn1 = { version = "0.4", optional = true }
 rand = { version = "0.7" }
+lazy_static = "1"
 
 [features]
 default = ["signing"]
