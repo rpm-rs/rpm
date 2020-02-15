@@ -11,8 +11,6 @@ use pem;
 use rsa_der;
 use sha2;
 
-use std::io::Read;
-
 pub struct Signer {
     secret_key: rsa::RSAPrivateKey,
 }
@@ -83,6 +81,7 @@ impl Verifier {
 }
 
 /// signature bytes with signature type annotation
+#[non_exhaustive]
 pub(crate) enum SignatureDigest {
     Sha256(Vec<u8>),
     MD5(Vec<u8>),
@@ -91,6 +90,7 @@ pub(crate) enum SignatureDigest {
 
 impl SignatureDigest {
     pub fn as_slice(&self) -> &[u8] {
+        #[allow(unreachable_code, unreachable_patterns)]
         match self {
             Self::Sha256(x) => x.as_slice(),
             Self::MD5(x) => x.as_slice(),
@@ -198,12 +198,11 @@ pub(crate) fn raw_signature_from_rfc4880(rfc4880_data: &[u8]) -> Result<Signatur
                 ASN1Block::ObjectIdentifier(_, oid) => {
                     // utilize rsa::hash::Hash::SHA256.asn1_prefix()
                     return match oid {
-                        x if x == md5_oid() => { Ok(SignatureDigest::MD5(octets)) },
-                        x if x == sha1_oid() => { Ok(SignatureDigest::Sha1(octets)) },
-                        x if x == sha256_oid() => { Ok(SignatureDigest::Sha256(octets)) },
+                        x if x == md5_oid() => Ok(SignatureDigest::MD5(octets)),
+                        x if x == sha1_oid() => Ok(SignatureDigest::Sha1(octets)),
+                        x if x == sha256_oid() => Ok(SignatureDigest::Sha256(octets)),
                         _ => return Err(RPMError::new("Unknown OID")),
-
-                    }
+                    };
                 }
                 _ => return Err(RPMError::new("Failed")),
             };
@@ -215,22 +214,22 @@ pub(crate) fn raw_signature_from_rfc4880(rfc4880_data: &[u8]) -> Result<Signatur
 use lazy_static::lazy_static;
 
 pub(crate) fn md5_oid() -> &'static simple_asn1::OID {
-    lazy_static!{
-        static ref MD5_OID : simple_asn1::OID = oid!(1, 2, 840, 113549, 2, 5);
+    lazy_static! {
+        static ref MD5_OID: simple_asn1::OID = oid!(1, 2, 840, 113549, 2, 5);
     }
-   & MD5_OID
+    &MD5_OID
 }
 
-pub(crate) fn sha1_oid() ->&'static  simple_asn1::OID {
-    lazy_static!{
-        static ref SHA1_OID : simple_asn1::OID = oid!(1, 3, 14, 3, 2, 26);
+pub(crate) fn sha1_oid() -> &'static simple_asn1::OID {
+    lazy_static! {
+        static ref SHA1_OID: simple_asn1::OID = oid!(1, 3, 14, 3, 2, 26);
     }
     &SHA1_OID
 }
 
 pub(crate) fn sha256_oid() -> &'static simple_asn1::OID {
-    lazy_static!{
-         static ref SHA256_OID : simple_asn1::OID = oid!(2, 16, 840, 1, 101, 3, 4, 2, 1);
+    lazy_static! {
+        static ref SHA256_OID: simple_asn1::OID = oid!(2, 16, 840, 1, 101, 3, 4, 2, 1);
     }
     &SHA256_OID
 }

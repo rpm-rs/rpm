@@ -1128,6 +1128,8 @@ pub struct RPMBuilder {
     changelog_entries: Vec<String>,
     changelog_times: Vec<i32>,
     compressor: Compressor,
+
+    gpg_signing_key: Option<Vec<u8>>,
 }
 
 pub enum Compressor {
@@ -1207,6 +1209,7 @@ impl RPMBuilder {
             changelog_times: Vec::new(),
             compressor: Compressor::None(Vec::new()),
             directories: BTreeSet::new(),
+            gpg_signing_key: None,
         }
     }
 
@@ -1354,6 +1357,14 @@ impl RPMBuilder {
 
     pub fn provides(mut self, dep: Dependency) -> Self {
         self.provides.push(dep);
+        self
+    }
+
+    pub fn sign_with<K>(mut self, gpg_signing_key: K) -> Self
+    where
+        K: AsRef<[u8]>,
+    {
+        self.gpg_signing_key = Some(gpg_signing_key.as_ref().to_vec());
         self
     }
 
@@ -1804,14 +1815,25 @@ impl RPMBuilder {
 
         let hash_result = hasher.result();
 
-        let signature_md5 = hash_result.as_slice();
+        let digest_md5 = hash_result.as_slice();
 
         let header_sha1 = sha1::Sha1::from(&header_bytes);
 
-        let signature_header = Header::<IndexSignatureTag>::builder()
-            .add_digest(header_sha1.digest().to_string().as_str(), signature_md5)
-            // TODO .add_signature()
-            .build(signature_size as i32);
+        let builder = Header::<IndexSignatureTag>::builder()
+            .add_digest(header_sha1.digest().to_string().as_str(), digest_md5);
+
+        let signature_header = if let Some(gpg_signing_key) = self.gpg_signing_key {
+            let rsa_sig_header_only = Vec::new(); // TODO
+            let rsa_sig_header_and_archive = Vec::new(); // TODO
+            builder
+                .add_signature(
+                    rsa_sig_header_only.as_slice(),
+                    rsa_sig_header_and_archive.as_slice(),
+                )
+                .build(signature_size as i32) // TODO calculate properly
+        } else {
+            builder.build(signature_size as i32) // TODO calculate properly
+        };
 
         let metadata = RPMPackageMetadata {
             lead,
