@@ -250,7 +250,7 @@ fn test_header() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "test_with_podman")]
 #[test]
 fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
-    let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut cargo_file = d.clone();
     cargo_file.push("Cargo.toml");
 
@@ -300,32 +300,52 @@ fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
     let epoch = pkg.metadata.header.get_epoch()?;
     assert_eq!(1, epoch);
 
-    let mut handles = Vec::new();
-    for image in vec!["fedora:30", "centos:7"] {
-        let mut docker_cmd = std::process::Command::new("podman");
-        let mut out_path = d.clone();
-        out_path.push("out");
-        docker_cmd.args(vec![
-            "run",
-            "--rm",
-            "-v",
-            &format!("{}:/out:z", out_path.to_string_lossy().to_string()),
-            image,
+    let yum_cmd = || -> Vec<&'static str> {
+        vec![
             "yum",
             "--disablerepo=*",
             "localinstall",
             "-y",
             "/out/test.rpm",
-        ]);
-        let handle = docker_cmd.spawn()?;
-        handles.push(handle);
-    }
+        ]
+    };
 
-    for mut handle in handles {
-        let status = handle.wait()?;
-        assert!(status.success());
-    }
-    Ok(())
+    let dnf_cmd = || -> Vec<&'static str> {
+        vec![
+            "dnf",
+            "--disablerepo=*",
+            "localinstall",
+            "-y",
+            "/out/test.rpm",
+        ]
+    };
+
+    d.push("out");
+    let mapping = format!("{}:/out:z", d.to_str().unwrap());
+
+    [("fedora:30", &yum_cmd as &dyn Fn() -> Vec<&'static str>), ("fedora:31", &dnf_cmd as &dyn Fn() -> Vec<&'static str>), ("centos:7",  &yum_cmd as &dyn Fn() -> Vec<&'static str>)]
+    .into_iter().map(|(image, cmd)| {
+        let mut docker_cmd = std::process::Command::new("podman");
+
+        let mut args = vec![
+            "run",
+            "--rm",
+            "-v",
+            &mapping,
+            image,
+        ];
+        args.append(&mut cmd());
+        docker_cmd.args(args);
+        let handle = docker_cmd.spawn()?;
+        Ok(handle)
+    }).try_for_each(|handle| {
+        handle.and_then(|mut handle| {
+            let status = handle.wait()?;
+            assert!(status.success());
+            Ok(())
+        })
+    })
+
 }
 
 #[test]
