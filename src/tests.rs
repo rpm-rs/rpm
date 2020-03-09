@@ -247,7 +247,7 @@ fn test_header() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(test_with_podman)]
+#[cfg(feature = "test_with_podman")]
 #[test]
 fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
     let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

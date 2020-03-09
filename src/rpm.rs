@@ -254,7 +254,7 @@ impl Lead {
         // the last byte needs to be the null terminator
         let name_size = std::cmp::min(name_arr.len() - 1, name.len());
 
-        name_arr[..=name_size].clone_from_slice(&name.as_bytes()[..=name_size]);
+        name_arr[..name_size].clone_from_slice(&name.as_bytes()[..name_size]);
         Lead {
             magic: RPM_MAGIC,
             major: 3,
