@@ -44,12 +44,13 @@ sloppy-rfc4880 = { version = "^0.1.5", optional = true }
 simple_asn1 = { version = "0.4", optional = true }
 rand = { version = "0.7" }
 lazy_static = "1"
+ring = { version = "0.16", optional = true}
 
 [features]
 default = ["signing"]
 signing = ["rsa","pem","sloppy-rfc4880","rsa-der","num-bigint-dig","simple_asn1"]
 
-test_with_podman = []
+test_with_podman = ["ring"]
 
 [patch.crates-io]
 rsa-der = { git = "https://github.com/drahnr/rsa-der.git" }

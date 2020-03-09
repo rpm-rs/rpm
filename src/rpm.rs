@@ -71,30 +71,31 @@ impl RPMPackage {
 
         let hash_result = hasher.result();
 
-        let signature_md5 = hash_result.as_slice();
+        let digest_md5 = hash_result.as_slice();
 
-        let header_sha1 = sha1::Sha1::from(&header_bytes);
+        let digest_sha1 = sha1::Sha1::from(&header_bytes);
+        let digest_sha1 = digest_sha1.digest();
 
         let signer = Signer::load_secret_key(secret_key)?;
 
         // TODO verify the byte range is correct!
-        let digest_header = signer.sign(self.content.as_slice())?;
+        let signature_header = signer.sign(self.content.as_slice())?;
         let _size = self.content.len();
 
-        let rsa_spanning_header_only = raw_signature_to_rfc4880(&digest_header[..])?;
+        let rsa_spanning_header_only = raw_signature_to_rfc4880(&signature_header[..])?;
 
-        let digest_header_and_archive = signer.sign(self.content.as_slice())?;
+        let signature_header_and_archive = signer.sign(self.content.as_slice())?;
         let size = self.content.len();
 
         let rsa_spanning_header_and_archive =
-            raw_signature_to_rfc4880(&digest_header_and_archive[..])?;
+            raw_signature_to_rfc4880(&signature_header_and_archive[..])?;
 
         // TODO FIXME verify this is the size we want, I don't think it is
         // TODO maybe use signature_size instead of size
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
             size as i32,
-            signature_md5,
-            header_sha1.digest().to_string(),
+            digest_md5,
+            digest_sha1.to_string(),
             rsa_spanning_header_only.as_slice(),
             rsa_spanning_header_and_archive.as_slice(),
         );
@@ -1129,6 +1130,7 @@ pub struct RPMBuilder {
     changelog_times: Vec<i32>,
     compressor: Compressor,
 
+    // GPG signing key in DER / PKCS8 format
     gpg_signing_key: Option<Vec<u8>>,
 }
 
@@ -1360,6 +1362,7 @@ impl RPMBuilder {
         self
     }
 
+    /// sign with a raw private key
     pub fn sign_with<K>(mut self, gpg_signing_key: K) -> Self
     where
         K: AsRef<[u8]>,
@@ -1817,14 +1820,23 @@ impl RPMBuilder {
 
         let digest_md5 = hash_result.as_slice();
 
-        let header_sha1 = sha1::Sha1::from(&header_bytes);
+        let digest_sha1 = sha1::Sha1::from(&header_bytes);
+        let digest_sha1 = digest_sha1.digest();
 
         let builder = Header::<IndexSignatureTag>::builder()
-            .add_digest(header_sha1.digest().to_string().as_str(), digest_md5);
+            .add_digest(digest_sha1.to_string().as_str(), digest_md5);
 
-        let signature_header = if let Some(gpg_signing_key) = self.gpg_signing_key {
-            let rsa_sig_header_only = Vec::new(); // TODO
-            let rsa_sig_header_and_archive = Vec::new(); // TODO
+        let signature_header = if let Some(ref gpg_signing_key) = self.gpg_signing_key {
+
+            let signer = Signer::load_secret_key(gpg_signing_key)?;
+
+            let rsa_sig_header_only = signer.sign(dbg!(&digest_sha1.bytes()[..]))
+                .map_err(|_e| { dbg!(_e); RPMError::new("Failed to create signature based on header sha1") } )?;
+
+            let rsa_sig_header_and_archive = signer.sign( dbg!(&digest_md5))
+                .map_err(|_e| { dbg!(_e); RPMError::new("Failed to create signature based on header md5") } )?;
+
+
             builder
                 .add_signature(
                     rsa_sig_header_only.as_slice(),

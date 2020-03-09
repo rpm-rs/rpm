@@ -17,11 +17,11 @@ pub struct Signer {
 
 impl Signer {
     /// load the private key for signing
-    pub fn load_secret_key(secret_key_pem: &[u8]) -> Result<Self, RPMError> {
-        let secret_key_der = pem::parse(secret_key_pem)
-            .map_err(|_e| RPMError::new("Failed to parse secret pem key"))?;
+    pub fn load_secret_key(secret_key_der: &[u8]) -> Result<Self, RPMError> {
+        // let secret_key_der = pem::parse(secret_key_pem)
+        //     .map_err(|_e| RPMError::new("Failed to parse secret pem key"))?;
 
-        let (n, e, d, p, q) = rsa_der::private_key_from_der(secret_key_der.contents.as_slice())
+        let (n, e, d, p, q) = rsa_der::private_key_from_der(secret_key_der)
             .map_err(|_e| RPMError::new("Failed to parse secret inner der formatted key"))?;
         let secret_key = rsa::RSAPrivateKey::from_components(
             num_bigint_dig::BigUint::from_bytes_be(n.as_slice()),
@@ -43,7 +43,7 @@ impl Signer {
         let signature = self
             .secret_key
             .sign::<rsa::hash::Hashes>(rsa::PaddingScheme::PKCS1v15, None, &digest[..])
-            .map_err(|_e| RPMError::new("signing shall not fail"))?;
+            .map_err(|_e| { dbg!(_e); RPMError::new("signing shall not fail") } )?;
 
         Ok(signature)
     }
@@ -55,10 +55,10 @@ pub struct Verifier {
 
 impl Verifier {
     /// load the public key for authenticity
-    pub fn load_public_key(public_key: &[u8]) -> Result<Self, RPMError> {
-        let public_key =
-            pem::parse(public_key).map_err(|_e| RPMError::new("failed to parse pem public key"))?;
-        let (n, e) = rsa_der::public_key_from_der(public_key.contents.as_slice())
+    pub fn load_public_key(public_key_der: &[u8]) -> Result<Self, RPMError> {
+        // let public_key =
+        //     pem::parse(public_key).map_err(|_e| RPMError::new("failed to parse pem public key"))?;
+        let (n, e) = rsa_der::public_key_from_der(public_key_der)
             .map_err(|_e| RPMError::new("failed to parse from der"))?;
         let n = num_bigint_dig::BigUint::from_bytes_be(n.as_slice());
         let e = num_bigint_dig::BigUint::from_bytes_be(e.as_slice());
