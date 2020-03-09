@@ -132,9 +132,14 @@ mod test {
         let _digest_header_only = [0u8; 64];
         let digest_header_and_archive = [0u8; 64];
 
-        let _header = builder
+        let header = builder
             .add_digest("", &digest_header_and_archive[..])
             .add_signature(&rsa_sig_header_only[..], &rsa_sig_header_and_archive[..])
             .build(32i32);
+
+        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_RSA).is_ok());
+        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_PGP).is_ok());
+        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_MD5).is_ok());
+        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_SHA1).is_ok());
     }
 }
