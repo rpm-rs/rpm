@@ -298,4 +298,43 @@ mod test {
         // println!("recov digest {:#X?}", &recovered_digest[..]);
         assert_eq!(recovered_digest.as_slice(), digest.as_slice());
     }
+
+
+
+    #[test]
+    fn sign_verify_round() -> Result<(), Box<dyn std::error::Error>> {
+        use std::convert::From;
+        use rand::rngs::OsRng;
+        use rsa::{PaddingScheme, RSAPublicKey, RSAPrivateKey};
+        use rsa_der;
+
+        let mut rng = OsRng;
+        let bits = 2048;
+        let gpg_signing_key = RSAPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+        let gpg_signing_key2 = rsa_der::private_key_to_der(
+            gpg_signing_key.n().to_bytes_be().as_slice(),
+            gpg_signing_key.e().to_bytes_be().as_slice(),
+            gpg_signing_key.d().to_bytes_be().as_slice(),
+            gpg_signing_key.primes()[0].to_bytes_be().as_slice(),
+            gpg_signing_key.primes()[1].to_bytes_be().as_slice(),
+        );
+
+
+        let verification_key = RSAPublicKey::from(gpg_signing_key);
+        let gpg_signing_key = rsa_der::public_key_to_der(verification_key.n().to_bytes_be().as_slice(), verification_key.e().to_bytes_be().as_slice());
+
+
+        let data = b"dfsdfjsd9ivnq320348934752312308205723900000580134850sdf";
+        let digest_sha1 = sha1::Sha1::from(&data[..]);
+        let digest_sha1 = digest_sha1.digest();
+
+        let signer = Signer::load_secret_key(&gpg_signing_key2[..]).unwrap();
+        let signature =  signer.sign(&digest_sha1.bytes()[..]).unwrap();
+
+
+        let verifyer = Verifier::load_public_key(&gpg_signing_key[..]).unwrap();
+
+        verifyer.verify(&digest_sha1.bytes()[..], &signature[..])?;
+        Ok(())
+    }
 }
