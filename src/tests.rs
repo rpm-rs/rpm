@@ -250,6 +250,22 @@ fn test_header() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "test_with_podman")]
 #[test]
 fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
+    use rand::rngs::OsRng;
+    use rsa::{PaddingScheme, PublicKey, RSAPrivateKey};
+    use rsa_der;
+
+    let mut rng = OsRng;
+    let bits = 2048;
+    let gpg_signing_key = RSAPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+
+    let gpg_signing_key = rsa_der::private_key_to_der(
+        gpg_signing_key.n().to_bytes_be().as_slice(),
+        gpg_signing_key.e().to_bytes_be().as_slice(),
+        gpg_signing_key.d().to_bytes_be().as_slice(),
+        gpg_signing_key.primes()[0].to_bytes_be().as_slice(),
+        gpg_signing_key.primes()[1].to_bytes_be().as_slice(),
+    );
+
     let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut cargo_file = d.clone();
     cargo_file.push("Cargo.toml");
@@ -294,6 +310,7 @@ fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
         .add_changelog_entry("me", "was awesome, eh?", 123123123)
         .add_changelog_entry("you", "yeah, it was", 12312312)
         // .requires(Dependency::any("wget".to_string()))
+        .sign_with(&gpg_signing_key[..])
         .build()?;
 
     pkg.write(&mut f)?;
@@ -320,32 +337,34 @@ fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
         ]
     };
 
+    let rpm_sig_check =
+        || -> Vec<&'static str> { "rpm --checksig out/test.rpm".split_whitespace().collect() };
+
     d.push("out");
     let mapping = format!("{}:/out:z", d.to_str().unwrap());
 
-    [("fedora:30", &yum_cmd as &dyn Fn() -> Vec<&'static str>), ("fedora:31", &dnf_cmd as &dyn Fn() -> Vec<&'static str>), ("centos:7",  &yum_cmd as &dyn Fn() -> Vec<&'static str>)]
-    .into_iter().map(|(image, cmd)| {
+    [
+        ("scratch", &rpm_sig_check as &dyn Fn() -> Vec<&'static str>),
+        ("fedora:30", &yum_cmd as &dyn Fn() -> Vec<&'static str>),
+        ("fedora:31", &dnf_cmd as &dyn Fn() -> Vec<&'static str>),
+        ("centos:7", &yum_cmd as &dyn Fn() -> Vec<&'static str>),
+    ]
+    .iter()
+    .map(|(image, cmd)| {
         let mut docker_cmd = std::process::Command::new("podman");
-
-        let mut args = vec![
-            "run",
-            "--rm",
-            "-v",
-            &mapping,
-            image,
-        ];
+        let mut args = vec!["run", "--rm", "-v", &mapping, image];
         args.append(&mut cmd());
         docker_cmd.args(args);
         let handle = docker_cmd.spawn()?;
         Ok(handle)
-    }).try_for_each(|handle| {
+    })
+    .try_for_each(|handle| {
         handle.and_then(|mut handle| {
             let status = handle.wait()?;
             assert!(status.success());
             Ok(())
         })
     })
-
 }
 
 #[test]
