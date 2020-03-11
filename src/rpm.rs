@@ -2,7 +2,6 @@ use nom;
 
 use cpio;
 
-
 use md5;
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
@@ -335,6 +334,16 @@ where
         })
     }
 
+    fn get_entry_int_data(&self, tag: T) -> Result<i32, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry.data.int().ok_or_else(|| {
+            RPMError::new(&format!(
+                "tag {} has datatype {}, not i32",
+                entry.tag, entry.data,
+            ))
+        })
+    }
+
     fn get_entry_string_array_data(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry.data.string_array().ok_or_else(|| {
@@ -431,7 +440,6 @@ impl Header<IndexSignatureTag> {
 }
 
 impl Header<IndexTag> {
-
     pub fn get_payload_format(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADFORMAT)
     }
@@ -446,6 +454,10 @@ impl Header<IndexTag> {
 
     pub fn get_name(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_NAME)
+    }
+
+    pub fn get_epoch(&self) -> Result<i32, RPMError> {
+        self.get_entry_int_data(IndexTag::RPMTAG_EPOCH)
     }
 
     pub fn get_version(&self) -> Result<&str, RPMError> {
@@ -585,7 +597,6 @@ impl<T: num::FromPrimitive + num::ToPrimitive + std::fmt::Debug> IndexEntry<T> {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq)]
 enum IndexData {
     Null,
@@ -619,7 +630,6 @@ impl Display for IndexData {
 }
 
 impl IndexData {
-
     fn append(&self, store: &mut Vec<u8>) -> u32 {
         match &self {
             IndexData::Null => 0,
@@ -700,7 +710,6 @@ impl IndexData {
         }
     }
 
-
     fn num_items(&self) -> u32 {
         match self {
             IndexData::Null => 0,
@@ -749,6 +758,19 @@ impl IndexData {
     fn string(&self) -> Option<&str> {
         match self {
             IndexData::StringTag(s) => Some(&s),
+            _ => None,
+        }
+    }
+
+    fn int(&self) -> Option<i32> {
+        match self {
+            IndexData::Int32(s) => {
+                if s.len() > 0 {
+                    Some(s[0])
+                } else {
+                    None
+                }
+            },
             _ => None,
         }
     }
@@ -966,16 +988,15 @@ impl RPMFileOptionsBuilder {
     }
 }
 
-
 impl Into<RPMFileOptions> for RPMFileOptionsBuilder {
     fn into(self) -> RPMFileOptions {
         self.inner
     }
 }
 
-
 pub struct RPMBuilder {
     name: String,
+    epoch: i32,
     version: String,
     license: String,
     arch: String,
@@ -1004,7 +1025,6 @@ pub struct RPMBuilder {
     changelog_times: Vec<i32>,
     compressor: Compressor,
 }
-
 
 pub enum Compressor {
     None(Vec<u8>),
@@ -1061,6 +1081,7 @@ impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
         RPMBuilder {
             name: name.to_string(),
+            epoch: 0,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
@@ -1085,11 +1106,15 @@ impl RPMBuilder {
         }
     }
 
+    pub fn epoch(mut self, epoch: i32) -> Self {
+        self.epoch = epoch;
+        self
+    }
+
     pub fn compression(mut self, comp: Compressor) -> Self {
         self.compressor = comp;
         self
     }
-
 
     pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: i32) -> Self
     where
@@ -1101,7 +1126,6 @@ impl RPMBuilder {
         self.changelog_times.push(time);
         self
     }
-
 
     pub fn with_file<T: Into<RPMFileOptions>>(
         mut self,
@@ -1236,9 +1260,7 @@ impl RPMBuilder {
 
         let lead = Lead::new(&self.name);
 
-
         let mut ino_index = 1;
-
 
         let mut file_sizes = Vec::new();
         let mut file_modes = Vec::new();
@@ -1257,7 +1279,6 @@ impl RPMBuilder {
         let mut base_names = Vec::new();
 
         let mut combined_file_sizes = 0;
-
 
         for (cpio_path, entry) in self.files.iter() {
             combined_file_sizes += entry.size;
@@ -1295,7 +1316,6 @@ impl RPMBuilder {
             writer.finish()?;
 
             ino_index += 1;
-
         }
 
         self.requires.push(Dependency::any("/bin/sh".to_string()));
@@ -1306,7 +1326,6 @@ impl RPMBuilder {
             format!("{}({})", self.name.clone(), self.arch.clone()),
             self.version.clone(),
         ));
-
 
         let mut provide_names = Vec::new();
         let mut provide_flags = Vec::new();
@@ -1355,11 +1374,15 @@ impl RPMBuilder {
                 offset,
                 IndexData::StringTag("C".to_string()),
             ),
-
             IndexEntry::new(
                 IndexTag::RPMTAG_NAME,
                 offset,
                 IndexData::StringTag(self.name),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_EPOCH,
+                offset,
+                IndexData::Int32(vec![self.epoch]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_VERSION,
@@ -1403,7 +1426,6 @@ impl RPMBuilder {
                 offset,
                 IndexData::I18NString(vec!["Unspecified".to_string()]),
             ),
-
             IndexEntry::new(
                 IndexTag::RPMTAG_ARCH,
                 offset,
