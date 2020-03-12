@@ -1,6 +1,6 @@
 [package]
 name = "rpm-rs"
-version = "0.2.2-alpha0"
+version = "0.3.0"
 authors = [
     "René Richter <richterrettich@gmail.com>",
     "Bernhard Schuster <bernhard@ahoi.io>"]
