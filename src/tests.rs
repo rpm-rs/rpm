@@ -296,6 +296,7 @@ fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
             cargo_file.to_str().unwrap(),
             RPMFileOptions::new("/etc/Cargo.toml"),
         )?
+        .epoch(1)
         .pre_install_script("echo preinst")
         .add_changelog_entry("me", "was awesome, eh?", 123123123)
         .add_changelog_entry("you", "yeah, it was", 12312312)
@@ -303,6 +304,8 @@ fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     pkg.write(&mut f)?;
+    let epoch = pkg.metadata.header.get_epoch()?;
+    assert_eq!(1, epoch);
 
     let mut handles = Vec::new();
     for image in vec!["fedora:30", "centos:7"] {
