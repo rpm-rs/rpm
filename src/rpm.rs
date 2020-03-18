@@ -67,7 +67,6 @@ impl RPMPackage {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
 
-        let _signature_size = header_bytes.len() + self.content.len();
         let mut hasher = md5::Md5::default();
 
         hasher.input(&header_bytes);
@@ -89,7 +88,7 @@ impl RPMPackage {
         let rsa_spanning_header_only = raw_signature_to_rfc4880(&signature_header[..])?;
 
         let signature_header_and_archive = signer.sign(self.content.as_slice())?;
-        let size = self.content.len();
+        let size = self.content.len() + header_bytes.len();
 
         let rsa_spanning_header_and_archive =
             raw_signature_to_rfc4880(&signature_header_and_archive[..])?;
