@@ -25,10 +25,6 @@ where
     T: ConstructionStage,
 {
     entries: Vec<IndexEntry<IndexSignatureTag>>,
-    // TODO right now this is always 0
-    // TODO verify what this actually is
-    // TODO and how it must be constructed
-    offset: i32,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -36,14 +32,6 @@ impl SignatureHeaderBuilder<Empty> {
     pub fn new() -> Self {
         Self {
             entries: Vec::with_capacity(10),
-            offset: 0i32,
-            phantom: Default::default(),
-        }
-    }
-    pub fn with_offset(offset: i32) -> Self {
-        Self {
-            entries: Vec::with_capacity(10),
-            offset,
             phantom: Default::default(),
         }
     }
@@ -58,7 +46,7 @@ where
             0,
             IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SIZE,
-                self.offset,
+                0i32,
                 IndexData::Int32(vec![signature_size]),
             ),
         );
@@ -77,19 +65,19 @@ impl SignatureHeaderBuilder<Empty> {
         digest_header_only: &str,
         digest_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithDigest> {
+        let offset = 0i32;
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_MD5,
-            self.offset,
+            offset,
             IndexData::Bin(digest_header_and_archive.to_vec()),
         ));
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_SHA1,
-            self.offset,
+            offset,
             IndexData::StringTag(digest_header_only.to_string()),
         ));
         SignatureHeaderBuilder::<WithDigest> {
             entries: self.entries,
-            offset: self.offset,
             phantom: Default::default(),
         }
     }
@@ -102,19 +90,19 @@ impl SignatureHeaderBuilder<WithDigest> {
         rsa_sig_header_only: &[u8],
         rsa_sig_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithSignature> {
+        let offset = 0i32;
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_RSA,
-            self.offset,
+            offset,
             IndexData::Bin(rsa_sig_header_only.to_vec()),
         ));
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_PGP,
-            self.offset,
+            offset,
             IndexData::Bin(rsa_sig_header_and_archive.to_vec()),
         ));
         SignatureHeaderBuilder::<WithSignature> {
             entries: self.entries,
-            offset: self.offset,
             phantom: Default::default(),
         }
     }
