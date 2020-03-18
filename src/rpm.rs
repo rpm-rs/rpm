@@ -288,7 +288,7 @@ impl PartialEq for Lead {
     }
 }
 
-pub trait Tag {}
+pub trait Tag : num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy {}
 
 impl<T> Tag for T where
     T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy
@@ -304,7 +304,7 @@ pub struct Header<T: num::FromPrimitive> {
 
 impl<T> Header<T>
 where
-    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy,
+    T: Tag,
 {
     fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; 16] = [0; 16];
