@@ -20,20 +20,23 @@ use std::os::unix::fs::PermissionsExt;
 
 use std::time::UNIX_EPOCH;
 
+
 mod errors;
 pub use crate::errors::*;
+
+pub mod crypto;
 
 mod constants;
 pub use crate::constants::*;
 
-#[cfg(feature = "signing")]
+#[cfg(any(feature = "signing-ring", feature = "signing-shrapnel"))]
 mod signature;
-#[cfg(feature = "signing")]
+#[cfg(any(feature = "signing-ring", feature = "signing-shrapnel"))]
 mod signature_builder;
 
-#[cfg(feature = "signing")]
+#[cfg(any(feature = "signing-ring", feature = "signing-shrapnel"))]
 pub use crate::signature::*;
-#[cfg(feature = "signing")]
+#[cfg(any(feature = "signing-ring", feature = "signing-shrapnel"))]
 pub use crate::signature_builder::*;
 
 pub struct RPMPackage {
@@ -1348,7 +1351,29 @@ impl RPMBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<RPMPackage, RPMError> {
+    /// build without a signature
+    ///
+    /// ignores a present key, if any
+    pub fn build_without_signature(self) -> Result<RPMPackage, RPMError> {
+        self.build_with_external_signer::<std::marker::PhantomData<crypto::RSA_SHA256>>(None)
+    }
+
+    /// build with the given signer type
+    ///
+    /// The signer will be instantiated as needed if a signing key is present.
+    pub fn build<S>(self) -> Result<RPMPackage, RPMError> where S : crypto::Signing<crate::crypto::RSA_SHA256> + crypto::LoaderPkcs8 {
+
+        let signer = if let Some(ref gpg_signing_key) = self.gpg_signing_key {
+            Some(<S as crate::crypto::LoaderPkcs8>::load_from_pkcs8(gpg_signing_key.as_slice())?)
+        } else {
+            None
+        };
+        self.build_with_external_signer::<S>(signer)
+    }
+
+    /// build with a given external signer of type S
+    pub fn build_with_external_signer<S>(mut self, signer : Option<S>) -> Result<RPMPackage, RPMError> where S : crypto::Signing<crate::crypto::RSA_SHA256> {
+
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all toghether.
         // Lead is not important. just build it here
@@ -1803,9 +1828,7 @@ impl RPMBuilder {
         let builder = Header::<IndexSignatureTag>::builder()
             .add_digest(digest_sha1.to_string().as_str(), digest_md5);
 
-        let signature_header = if let Some(ref gpg_signing_key) = self.gpg_signing_key {
-
-            let signer = Signer::load_secret_key(gpg_signing_key)?;
+        let signature_header = if let Some(ref signer) = signer {
 
             let rsa_sig_header_only = signer.sign(dbg!(&digest_sha1.bytes()[..]))
                 .map_err(|_e| { dbg!(_e); RPMError::new("Failed to create signature based on header sha1") } )?;
@@ -1816,8 +1839,8 @@ impl RPMBuilder {
 
             builder
                 .add_signature(
-                    rsa_sig_header_only.as_slice(),
-                    rsa_sig_header_and_archive.as_slice(),
+                    rsa_sig_header_only.as_ref(),
+                    rsa_sig_header_and_archive.as_ref(),
                 )
                 .build(signature_size as i32) // TODO calculate properly
         } else {

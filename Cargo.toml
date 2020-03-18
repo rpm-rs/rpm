@@ -44,11 +44,15 @@ sloppy-rfc4880 = { version = "^0.1.5", optional = true }
 simple_asn1 = { version = "0.4", optional = true }
 rand = { version = "0.7" }
 lazy_static = "1"
-ring = { version = "0.16", optional = true}
+ring = { version = "0.16", features = ["alloc","std"], optional = true}
 
 [features]
-default = ["signing"]
-signing = ["rsa","pem","sloppy-rfc4880","rsa-der","num-bigint-dig","simple_asn1"]
+default = ["signing-ring"]
+
+all = ["signing-ring","signing-shrapnel","test_with_podman"]
+
+signing-ring = ["ring"]
+signing-shrapnel = ["rsa","pem","sloppy-rfc4880","rsa-der","num-bigint-dig","simple_asn1"]
 
 test_with_podman = ["ring"]
 

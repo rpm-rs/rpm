@@ -46,7 +46,7 @@ where
             0,
             IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SIZE,
-                0i32,
+                0i32, // externally filled
                 IndexData::Int32(vec![signature_size]),
             ),
         );
@@ -65,7 +65,7 @@ impl SignatureHeaderBuilder<Empty> {
         digest_header_only: &str,
         digest_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithDigest> {
-        let offset = 0i32;
+        let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_MD5,
             offset,
@@ -90,7 +90,7 @@ impl SignatureHeaderBuilder<WithDigest> {
         rsa_sig_header_only: &[u8],
         rsa_sig_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithSignature> {
-        let offset = 0i32;
+        let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_RSA,
             offset,
