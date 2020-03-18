@@ -37,7 +37,11 @@ pub use crate::signature::*;
 pub use crate::signature_builder::*;
 
 pub struct RPMPackage {
+    /// Header and metadata structures.
+    ///
+    /// Contains the constant lead as well as the metadata store.
     pub metadata: RPMPackageMetadata,
+    /// The compressed or uncompressed files.
     pub content: Vec<u8>,
 }
 

@@ -7,7 +7,7 @@ use simple_asn1::oid;
 use simple_asn1::{ASN1Block, BigUint, OID};
 
 use num_bigint_dig;
-use pem;
+
 use rsa_der;
 use sha2;
 
