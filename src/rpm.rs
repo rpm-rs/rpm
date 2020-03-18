@@ -478,36 +478,10 @@ impl Header<IndexSignatureTag> {
         rsa_spanning_header: &[u8],
         rsa_spanning_header_and_archive: &[u8],
     ) -> Self {
-        let offset = 0;
-        let entries = vec![
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_SIZE,
-                offset,
-                IndexData::Int32(vec![size]),
-            ),
-            // TODO consider dropping md5 in favour of sha256
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_MD5,
-                offset,
-                IndexData::Bin(md5sum.to_vec()),
-            ),
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_SHA1,
-                offset,
-                IndexData::StringTag(sha1),
-            ),
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_RSA,
-                offset,
-                IndexData::Bin(rsa_spanning_header.to_vec()),
-            ),
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_PGP,
-                offset,
-                IndexData::Bin(rsa_spanning_header_and_archive.to_vec()),
-            ),
-        ];
-        Self::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
+        SignatureHeaderBuilder::new()
+            .add_digest(sha1.as_str(), md5sum)
+            .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
+            .build(size)
     }
 
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
@@ -1858,4 +1832,52 @@ impl RPMBuilder {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signature_header_build() {
+        let size: i32 = 209348;
+        let md5sum: &[u8] = &[22u8; 16];
+        let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
+        let rsa_spanning_header: &[u8] = b"111222333444";
+        let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
+
+        let truth = {
+            let offset = 0;
+            let entries = vec![
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SIZE,
+                    offset,
+                    IndexData::Int32(vec![size]),
+                ),
+                // TODO consider dropping md5 in favour of sha256
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_MD5,
+                    offset,
+                    IndexData::Bin(md5sum.to_vec()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SHA1,
+                    offset,
+                    IndexData::StringTag(sha1.clone()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_RSA,
+                    offset,
+                    IndexData::Bin(rsa_spanning_header.to_vec()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_PGP,
+                    offset,
+                    IndexData::Bin(rsa_spanning_header_and_archive.to_vec()),
+                ),
+            ];
+            Header::<IndexSignatureTag>::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
+        };
+
+        let built = Header::<IndexSignatureTag>::new_signature_header(size, md5sum, sha1.clone(), rsa_spanning_header, rsa_spanning_header_and_archive);
+
+        assert_eq!(built, truth);
+    }
+}

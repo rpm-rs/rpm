@@ -78,14 +78,14 @@ impl SignatureHeaderBuilder<Empty> {
         digest_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithDigest> {
         self.entries.push(IndexEntry::new(
-            IndexSignatureTag::RPMSIGTAG_SHA1,
-            self.offset,
-            IndexData::StringTag(digest_header_only.to_string()),
-        ));
-        self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_MD5,
             self.offset,
             IndexData::Bin(digest_header_and_archive.to_vec()),
+        ));
+        self.entries.push(IndexEntry::new(
+            IndexSignatureTag::RPMSIGTAG_SHA1,
+            self.offset,
+            IndexData::StringTag(digest_header_only.to_string()),
         ));
         SignatureHeaderBuilder::<WithDigest> {
             entries: self.entries,
