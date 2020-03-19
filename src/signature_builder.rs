@@ -4,11 +4,17 @@ use super::*;
 
 use std::default::Default;
 
-// marker trait for stages
+/// A marker trait for builder stages
 pub trait ConstructionStage {}
 
+/// Initial empty builder.
 pub struct Empty;
+/// Builder beyond the empty stage, already containing a digest.
+///
+/// Implies that headers and content are complete.
 pub struct WithDigest;
+
+/// Builder already has a hash and is ready for completion.
 pub struct WithSignature;
 
 impl ConstructionStage for Empty {}
@@ -19,7 +25,7 @@ impl ConstructionStage for WithSignature {}
 
 /// base signature header builder
 ///
-/// T describes the stage and can be one of Empty, WithDigest, WithSignature
+/// T describes the stage and can be one of `Empty`, `WithDigest`, `WithSignature`
 pub struct SignatureHeaderBuilder<T>
 where
     T: ConstructionStage,
@@ -41,6 +47,7 @@ impl<T> SignatureHeaderBuilder<T>
 where
     T: ConstructionStage,
 {
+    /// Construct the complete signature header.
     pub fn build(mut self, signature_size: i32) -> Header<IndexSignatureTag> {
         self.entries.insert(
             0,
@@ -125,9 +132,17 @@ mod test {
             .add_signature(&rsa_sig_header_only[..], &rsa_sig_header_and_archive[..])
             .build(32i32);
 
-        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_RSA).is_ok());
-        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_PGP).is_ok());
-        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_MD5).is_ok());
-        assert!(header.find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_SHA1).is_ok());
+        assert!(header
+            .find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_RSA)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_PGP)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_MD5)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(&constants::IndexSignatureTag::RPMSIGTAG_SHA1)
+            .is_ok());
     }
 }

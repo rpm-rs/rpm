@@ -3,26 +3,23 @@ name = "rpm-rs"
 version = "0.3.0"
 authors = [
     "René Richter <richterrettich@gmail.com>",
-    "Bernhard Schuster <bernhard@ahoi.io>"]
+    "Bernhard Schuster <bernhard@ahoi.io>"
+]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPM's"
-
 homepage = "https://github.com/Richterrettich/rpm-rs"
 repository = "https://github.com/Richterrettich/rpm-rs"
-
 readme = "README.md"
-
 keywords = ["RPM", "packaging"]
-
 categories = ["parsing", "development-tools"]
 
 [lib]
-name="rpm"
-path="src/rpm.rs"
+name = "rpm"
+path = "src/rpm.rs"
 
 [dependencies]
-nom = "5.0"
+nom = "5.1"
 num-traits = "0.2"
 num-derive = "0.3"
 num = "0.2"
@@ -36,26 +33,23 @@ md-5 = "0.8"
 sha1 = "0.6"
 # this tripplet avoids openssl dependencies
 pem = { version = "0.7", optional = true }
-rsa = { version = "^0.2.0", optional = true }
-rsa-der = { version = "^0.2.1", optional = true }
-num-bigint-dig =  { version = "0.6", optional = true }
-sloppy-rfc4880 = { version = "^0.1.5", optional = true }
-# compat only
-simple_asn1 = { version = "0.4", optional = true }
 rand = { version = "0.7" }
 lazy_static = "1"
-ring = { version = "0.16", features = ["alloc","std"], optional = true}
+pgp = { version = "0.5", optional = true }
+chrono = "0.4"
+log = "0.4"
+simple_asn1 = { version = "0.4", optional = true }
+
+[dev-dependencies]
+rsa = { version = "^0.2.0" }
+rsa-der = { version = "^0.2.1" }
+sha2 = "0.8"
+env_logger = "0.7"
+itertools = "0.9"
 
 [features]
-default = ["signing-ring"]
+default = ["signing-pgp"]
 
-all = ["signing-ring","signing-shrapnel","test_with_podman"]
-
-signing-ring = ["ring"]
-signing-shrapnel = ["rsa","pem","sloppy-rfc4880","rsa-der","num-bigint-dig","simple_asn1"]
-
-test_with_podman = ["ring"]
-
-[patch.crates-io]
-rsa-der = { git = "https://github.com/drahnr/rsa-der.git" }
-simple_asn1 = { git = "https://github.com/drahnr/simple_asn1.git" }
+signing-pgp = ["signing-meta", "pgp"]
+signing-meta = ["pem", "simple_asn1"]
+test-with-podman = ["signing-meta"]

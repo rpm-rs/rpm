@@ -28,6 +28,12 @@ impl fmt::Debug for RPMError {
     }
 }
 
+impl From<String> for RPMError {
+    fn from(message: String) -> Self {
+        RPMError { message }
+    }
+}
+
 impl From<io::Error> for RPMError {
     fn from(error: io::Error) -> Self {
         RPMError {

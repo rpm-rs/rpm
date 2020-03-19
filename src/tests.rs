@@ -2,11 +2,19 @@ use super::*;
 use std::io;
 use std::io::prelude::*;
 
+fn test_rpm_file_path() -> std::path::PathBuf {
+    let mut rpm_path = cargo_manifest_dir();
+    rpm_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
+    rpm_path
+}
+
+fn cargo_manifest_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 #[test]
-fn test_header() -> Result<(), Box<dyn std::error::Error>> {
-    let d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut rpm_file_path = d.clone();
-    rpm_file_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
+fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = test_rpm_file_path();
     let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
     let mut buf_reader = std::io::BufReader::new(rpm_file);
 
@@ -245,126 +253,6 @@ fn test_header() -> Result<(), Box<dyn std::error::Error>> {
     assert!(package.metadata == second_pkg.metadata);
 
     Ok(())
-}
-
-#[cfg(feature = "test_with_podman")]
-#[test]
-fn test_builder() -> Result<(), Box<dyn std::error::Error>> {
-    use rand::rngs::OsRng;
-    use rsa::{PaddingScheme, PublicKey, RSAPrivateKey};
-    use rsa_der;
-
-    let mut rng = OsRng;
-    let bits = 2048;
-    let gpg_signing_key = RSAPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
-
-    let gpg_signing_key = rsa_der::private_key_to_der(
-        gpg_signing_key.n().to_bytes_be().as_slice(),
-        gpg_signing_key.e().to_bytes_be().as_slice(),
-        gpg_signing_key.d().to_bytes_be().as_slice(),
-        gpg_signing_key.primes()[0].to_bytes_be().as_slice(),
-        gpg_signing_key.primes()[1].to_bytes_be().as_slice(),
-    );
-
-    let mut d = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut cargo_file = d.clone();
-    cargo_file.push("Cargo.toml");
-
-    let mut out_file = d.clone();
-    out_file.push("out/test.rpm");
-    let mut f = std::fs::File::create(out_file)?;
-    let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-        .compression(Compressor::from_str("gzip")?)
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/foo.toml"),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/zazz.toml"),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
-                .mode(0o100777)
-                .is_config(),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/bazz.toml"),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/hugo/aa.toml"),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/var/honollulu/bazz.toml"),
-        )?
-        .with_file(
-            cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/Cargo.toml"),
-        )?
-        .epoch(1)
-        .pre_install_script("echo preinst")
-        .add_changelog_entry("me", "was awesome, eh?", 123123123)
-        .add_changelog_entry("you", "yeah, it was", 12312312)
-        // .requires(Dependency::any("wget".to_string()))
-        .sign_with(&gpg_signing_key[..])
-        .build()?;
-
-    pkg.write(&mut f)?;
-    let epoch = pkg.metadata.header.get_epoch()?;
-    assert_eq!(1, epoch);
-
-    let yum_cmd = || -> Vec<&'static str> {
-        vec![
-            "yum",
-            "--disablerepo=*",
-            "localinstall",
-            "-y",
-            "/out/test.rpm",
-        ]
-    };
-
-    let dnf_cmd = || -> Vec<&'static str> {
-        vec![
-            "dnf",
-            "--disablerepo=*",
-            "localinstall",
-            "-y",
-            "/out/test.rpm",
-        ]
-    };
-
-    let rpm_sig_check =
-        || -> Vec<&'static str> { "rpm --checksig out/test.rpm".split_whitespace().collect() };
-
-    d.push("out");
-    let mapping = format!("{}:/out:z", d.to_str().unwrap());
-
-    [
-        ("scratch", &rpm_sig_check as &dyn Fn() -> Vec<&'static str>),
-        ("fedora:30", &yum_cmd as &dyn Fn() -> Vec<&'static str>),
-        ("fedora:31", &dnf_cmd as &dyn Fn() -> Vec<&'static str>),
-        ("centos:7", &yum_cmd as &dyn Fn() -> Vec<&'static str>),
-    ]
-    .iter()
-    .map(|(image, cmd)| {
-        let mut docker_cmd = std::process::Command::new("podman");
-        let mut args = vec!["run", "--rm", "-v", &mapping, image];
-        args.append(&mut cmd());
-        docker_cmd.args(args);
-        let handle = docker_cmd.spawn()?;
-        Ok(handle)
-    })
-    .try_for_each(|handle| {
-        handle.and_then(|mut handle| {
-            let status = handle.wait()?;
-            assert!(status.success());
-            Ok(())
-        })
-    })
 }
 
 #[test]
