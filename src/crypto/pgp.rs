@@ -7,12 +7,8 @@ use std::io::Cursor;
 
 use ::pgp::{
     composed::Deserializable,
-    de::Deserialize,
-    packet::{Signature, SignatureVersion},
-    types::{KeyTrait, PublicKeyTrait, SecretKeyTrait},
+    types::KeyTrait,
 };
-
-use sha2::{Digest, Sha256};
 
 fn now() -> ::chrono::DateTime<::chrono::Utc> {
     // accuracy of serialized format is only down to seconds
@@ -153,7 +149,7 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
                             Ok(())
                         }
                     },
-                ).or_else(|e| {
+                ).or_else(|_e| {
                     signature
                     .verify(&self.public_key, data)
                     .map_err(|e| RPMError::from(format!("Failed to verify with primary key: {:?}", e)))
@@ -195,7 +191,7 @@ mod test {
 
     use super::*;
 
-    use crate::signature::crypto::test::{load_asc_keys, sign_verify_roundtrip_blueprint};
+    use crate::signature::crypto::test::{load_asc_keys};
 
     use super::Signer;
     use super::Verifier;
@@ -293,8 +289,6 @@ mod test {
 
     #[test]
     fn verify_pgp_crate2() {
-        use ::pgp::types::{PublicKeyTrait, SecretKeyTrait};
-
         let (signer, verifier) = prep();
 
         let data = [1u8; 322];

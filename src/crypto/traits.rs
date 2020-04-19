@@ -145,15 +145,15 @@ where
 #[cfg(test)]
 pub(crate) mod test {
 
-    #[allow(unused)]
 
     use super::*;
     use crate::crypto::{
-        algorithm::Algorithm, echo_signature, key::KeyType, KeyLoader, Signing, Verifying,
+        algorithm::Algorithm, echo_signature, KeyLoader, Signing, Verifying,
     };
     use crate::errors::RPMError;
     use env_logger;
 
+    #[allow(unused)]
     pub(crate) fn sign_verify_roundtrip_blueprint<S, V, A>(
         data: &[u8],
         signing_key: &[u8],
@@ -175,12 +175,14 @@ pub(crate) mod test {
         Ok(())
     }
 
+	#[allow(unused)]
     pub(crate) fn load_der_keys() -> (Vec<u8>, Vec<u8>) {
         let signing_key = include_bytes!("../../test_assets/id_rsa.der");
         let verification_key = include_bytes!("../../test_assets/id_rsa.pub.der");
         (signing_key.to_vec(), verification_key.to_vec())
     }
 
+	#[allow(unused)]
     pub(crate) fn load_pem_keys() -> (Vec<u8>, Vec<u8>) {
         let signing_key = include_bytes!("../../test_assets/id_rsa.pem");
         let verification_key = include_bytes!("../../test_assets/id_rsa.pub.pem");

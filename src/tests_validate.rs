@@ -47,6 +47,49 @@ mod pgp {
         super::roundtrip::<Signer, Verifier>(signing_key.as_slice(), verification_key.as_slice())
             .expect("create_signed_rpm_and_verify> failed")
     }
+
+    #[test]
+    fn create_signature_with_gpg_and_verify() {
+        let _ = env_logger::try_init();
+        let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
+
+        let test_file = cargo_out_dir().join("test.file");
+        let test_file_sig = cargo_out_dir().join("test.file.sig");
+
+        std::fs::write(&test_file, "test").expect("Must be able to write");
+        let _ = std::fs::remove_file(&test_file_sig);
+
+        let cmd=
+            r#"
+    ls -al /out/test.file*
+    chmod +rwx /out/test.file*
+
+    echo "test" > /out/test.file
+
+    echo ">>> sign like rpm"
+    echo "cmd: $(rpm --define "__signature_filename /out/test.file.sig" \
+         --define "__plaintext_filename /out/test.file" \
+         --define "_gpg_name \"Package Manager\"" \
+         --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
+
+    gpg --verbose --no-armor --batch --pinentry-mode error --no-secmem-warning -u "Package Manager" -sbo /out/test.file.sig /out/test.file
+
+    echo ">>> inspect signature"
+    gpg -d --batch --pinentry-mode error --no-secmem-warning  < /out/test.file.sig
+
+    echo ">>> verify external gpg signature"
+    gpg --verify /out/test.file.sig /out/test.file
+
+    "#.to_owned();
+
+        podman_container_launcher(cmd.as_str(), "fedora:31", vec![]).expect("Container execution must be flawless");
+
+        let v = Verifier::load_from(verification_key.as_slice()).expect("Must load");
+
+        let raw_sig = std::fs::read(&test_file_sig).expect("must laod signature");
+        let data = std::fs::read(&test_file).expect("must laod file");
+        v.verify(data .as_slice(),raw_sig.as_slice()).expect("Must verify");
+    }
 }
 
 use std::io::BufReader;
@@ -205,6 +248,8 @@ rpm --verbose --checksig /out/{rpm_file} 2>&1
     Ok(())
 }
 
+
+
 fn wait_and_print_helper(mut child: std::process::Child, stdin_cmd: &str) -> std::io::Result<()> {
     if let Some(ref mut stdin) = child.stdin {
         write!(stdin, "{}", stdin_cmd).unwrap();
@@ -250,9 +295,12 @@ fn podman_container_launcher(
     mut mappings: Vec<String>,
 ) -> std::io::Result<()> {
     // always mount assets and out directory into container
+    let var_cache = cargo_manifest_dir().join("dnf-cache");
+    let _ = std::fs::create_dir(var_cache.as_path());
+    let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
     let out = format!("{}:/out:z", cargo_out_dir().display());
     let assets = format!("{}/test_assets:/assets:z", cargo_manifest_dir().display());
-    mappings.extend(vec![out, assets]);
+    mappings.extend(vec![out, assets, var_cache]);
     let mut args = mappings
         .iter()
         .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
@@ -274,10 +322,31 @@ fn podman_container_launcher(
     // partially following:
     //
     //  https://access.redhat.com/articles/3359321
-    let cmd = format!(
+    let cmd = vec![
         r#"
 set -e
-set -x
+
+# prepare rpm macros
+
+cat > ~/.rpmmacros << EOF_RPMMACROS
+%_signature gpg
+%_gpg_path /root/.gnupg
+%_gpg_name Package Manager
+%_gpgbin /usr/bin/gpg2
+%__gpg_sign_cmd %{__gpg} \
+    gpg \
+    --verbose \
+    --no-armor \
+    --batch \
+    --pinentry-mode error \
+    %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \
+    --no-secmem-warning \
+    -u "%{_gpg_name}" \
+    -sbo %{__signature_filename} \
+    %{__plaintext_filename}
+EOF_RPMMACROS
+
+cat ~/.rpmmacros
 
 ### either
 
@@ -300,39 +369,55 @@ set -x
 
 ### or (which has a couple of advantages regarding reproducability)
 
-gpg --import /assets/id_rsa.asc  2>&1
+export PK=/assets/id_rsa.pub.asc
+export SK=/assets/id_rsa.asc
+
+gpg --import "${SK}" 2>&1
 
 ###
 
-gpg --list-keys  2>&1
+gpg --with-keygrip --list-keys  2>&1
 
-gpg --export -a 'Package Manager' > /assets/RPM-GPG-KEY-pmanager  2>&1
+echo "\### create a test signature with this particular key id"
 
-#cat /assets/RPM-GPG-KEY-pmanager
-#cat /assets/id_rsa.pub.asc
+echo "test" | gpg -s --local-user CFD331925AB27F39 > /tmp/test.signature 2>&1
+gpg -d < /tmp/test.signature   2>&1
 
-yum install --disablerepo=updates,updates-testing,updates-modular,fedora-modular -y rpm-sign || \
-dnf install --disablerepo=updates,updates-testing,updates-modular,fedora-modular -y rpm-sign
+echo "\### export PK"
 
-rpm --import /assets/RPM-GPG-KEY-pmanager 2>&1
-rpm --import /assets/id_rsa.pub.asc 2>&1
+gpg --export -a "Package Manager" > /assets/RPM-GPG-KEY-pmanager
 
-cat > ~/.rpmmacros << EOF_Y
-%_signature gpg
-%_gpg_path /root/.gnupg
-%_gpg_name Package Manager
-%_gpgbin /usr/bin/gpg2
-%__gpg_sign_cmd %{{__gpg}} gpg --batch --verbose --no-armor --force-v3-sigs --passphrase-fd /dev/null --no-secmem-warning -u "%{{_gpg_name}}" -sbo %{{__signature_filename}} --digest-algo sha256 %{{__plaintext_filename}}'
-EOF_Y
+dig1=$(sha256sum "/assets/RPM-GPG-KEY-pmanager")
+dig2=$(sha256sum "${PK}")
 
-{}
+if [ "$dig1" = "$dig2" ]; then
+    echo "\### expected pub key and exported pubkey differ"
+    exit 77
+fi
 
-exit 0
+echo "\### install tooling for signing"
+
+dnf install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign sd || \
+yum install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign
+
+echo "\### import pub key"
+
+rpm --verbose --import "${PK}" 2>&1
+
+set -x
+
 "#,
-        cmd
-    );
+cmd,
+r#"
+
+echo "\### Container should exit any second now"
+exit 0
+"#].join("\n");
+
 
     // this is far from perfect, but at least pumps
     // stdio and stderr out
-    wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())
+    wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())?;
+    println!("Container execution complete ;)");
+    Ok(())
 }
