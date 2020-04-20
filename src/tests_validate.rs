@@ -25,6 +25,7 @@ mod pgp {
     use crypto::pgp::{Signer, Verifier};
 
     #[test]
+    #[serial_test::serial]
     fn create_full_rpm_with_signature_and_verify_externally() {
         let _ = env_logger::try_init();
         let (signing_key, _) = crate::crypto::test::load_asc_keys();
@@ -33,6 +34,7 @@ mod pgp {
     }
 
     #[test]
+    #[serial_test::serial]
     fn parse_externally_signed_rpm_and_verify() {
         let _ = env_logger::try_init();
         let (_, verification_key) = crate::crypto::test::load_asc_keys();
@@ -41,6 +43,7 @@ mod pgp {
     }
 
     #[test]
+    #[serial_test::serial]
     fn create_signed_rpm_and_verify() {
         let _ = env_logger::try_init();
         let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
@@ -49,9 +52,10 @@ mod pgp {
     }
 
     #[test]
+    #[serial_test::serial]
     fn create_signature_with_gpg_and_verify() {
         let _ = env_logger::try_init();
-        let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
+        let (_signing_key, verification_key) = crate::crypto::test::load_asc_keys();
 
         let test_file = cargo_out_dir().join("test.file");
         let test_file_sig = cargo_out_dir().join("test.file.sig");
