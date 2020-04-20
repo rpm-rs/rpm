@@ -74,13 +74,14 @@ mod pgp {
          --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
 
     echo "cmd: ${cmd}"
+    eval ${cmd}
 
     alias gpg='gpg --batch --verbose --keyid-format long --no-armor --pinentry-mode error --no-secmem-warning --local-user "Package Manager"'
-    gpg \
-        --sign \
-        --detach-sign \
-        --output /out/test.file.sig \
-        /out/test.file 2>&1
+    #gpg \
+    #    --sign \
+    #    --detach-sign \
+    #    --output /out/test.file.sig \
+    #    /out/test.file 2>&1
 
     echo ">>> inspect signature"
     gpg -d /out/test.file.sig 2>&1
@@ -233,6 +234,9 @@ where
     println!("cpy {} -> {}", rpm_file_path.display(), out_file.display());
     std::fs::copy(rpm_file_path.as_path(), out_file.as_path()).expect("Must be able to copy");
 
+    // avoid any further usage
+    drop(rpm_file_path);
+
     let cmd = format!(
         r#"
 echo ">>> sign"
@@ -241,12 +245,12 @@ rpm  -vv --addsign /out/{rpm_file} 2>&1
 echo ">>> verify"
 rpm  -vv --checksig /out/{rpm_file} 2>&1
 "#,
-        rpm_file = rpm_file_path.file_name().unwrap().to_str().unwrap()
+        rpm_file = out_file.file_name().unwrap().to_str().unwrap()
     );
 
     podman_container_launcher(cmd.as_str(), "fedora:31", vec![])?;
 
-    let out_file = std::fs::File::open(&rpm_file_path).expect("should be able to open rpm file");
+    let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
     let mut buf_reader = std::io::BufReader::new(out_file);
     let package = RPMPackage::parse(&mut buf_reader)?;
     package
@@ -342,15 +346,17 @@ cat > ~/.rpmmacros << EOF_RPMMACROS
 %_gpg_name Package Manager
 %_gpgbin /usr/bin/gpg2
 %__gpg_sign_cmd %{__gpg} \
-    gpg \
+    --batch \
     --verbose \
     --no-armor \
-    --batch \
+    --keyid-format long \
     --pinentry-mode error \
-    %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \
     --no-secmem-warning \
-    -u "%{_gpg_name}" \
-    -sbo %{__signature_filename} \
+    %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \
+    --local-user "%{_gpg_name}" \
+    --sign \
+    --detach-sign \
+    --output %{__signature_filename} \
     %{__plaintext_filename}
 EOF_RPMMACROS
 
@@ -430,10 +436,11 @@ echo "\### Container should exit any second now"
 exit 0
 "#].join("\n");
 
+    println!("Container execution starting...");
 
     // this is far from perfect, but at least pumps
     // stdio and stderr out
     wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())?;
-    println!("Container execution complete ;)");
+    println!("Container execution ended.");
     Ok(())
 }
