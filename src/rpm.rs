@@ -113,30 +113,26 @@ impl RPMPackage {
     {
         // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
 
-        // find metadata signature
-        // The  tag  contains  the  RSA  signature  of  the  Header  section.
-        // The  data  is  formatted  as  a  Version  3  Signature  Packet  as  specified  in  RFC  2440: OpenPGP  Message  Format.
-        // If  this  tag  is  present,  then  the  SIGTAG_PGP  shall also be present.
-        // RPMSIGTAG_RSA = 268,
-
-        // This  tag  specifies  the  RSA  signature  of  the  combined  Header  and  Payload  sections.
-        // The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
-        // RPMSIGTAG_PGP = 1002,
-
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
 
         let signature_header_only = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)?;
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)
+            .map_err(|e| {
+                format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e)
+            })?;
 
         crate::crypto::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)?;
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)
+            .map_err(|e| {
+                format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e)
+            })?;
 
         crate::crypto::echo_signature(
             "signature_header(header and content)",
@@ -145,7 +141,7 @@ impl RPMPackage {
 
         let verifier = V::load_from(public_key)?;
         verifier.verify(header_bytes.as_slice(), signature_header_only)
-            .map_err(|e| { format!("Failed to verify header signature / RPMSIGTAG_RSA: {:?}", e) })?;
+            .map_err(|e| { format!("Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}", e) })?;
 
         let mut header_and_content_bytes =
             Vec::with_capacity(header_bytes.len() + self.content.len());
@@ -156,7 +152,7 @@ impl RPMPackage {
             header_and_content_bytes.as_slice(),
             signature_header_and_content,
         )
-        .map_err(|e| { format!("Failed to verify header signature / RPMSIGTAG_PGP: {:?}", e) })?;
+        .map_err(|e| { format!("Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}", e) })?;
 
         Ok(())
     }

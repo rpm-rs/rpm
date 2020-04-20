@@ -124,20 +124,29 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
 
         if let Some(key_id) = signature.issuer() {
             log::trace!("Signature has issuer ref: {:?}", key_id);
+
+            if self.public_key.key_id() == *key_id {
+                return signature
+                        .verify(&self.public_key, data)
+                        .map_err(|e| RPMError::from(format!("Failed to verify with primary key: {:?}", e)))
+            } else {
+                log::trace!("Signature issuer key id {:?} does not match primary keys key id: {:?}", key_id, self.public_key.key_id());
+            }
+
             self.public_key
                 .public_subkeys
                 .iter()
-                // .filter_map(|sub_key| {
-                //     if sub_key.key_id().as_ref() == key_id.as_ref() {
-                //         log::trace!("Found a matching key id {:?} == {:?}", sub_key.key_id(), key_id);
-                //         Some(sub_key)
-                //     } else {
-                //         log::trace!("Not the one we want: {:?}", sub_key);
-                //         None
-                //     }
-                // })
+                .filter_map(|sub_key| {
+                    if sub_key.key_id().as_ref() == key_id.as_ref() {
+                        log::trace!("Found a matching key id {:?} == {:?}", sub_key.key_id(), key_id);
+                        Some(sub_key)
+                    } else {
+                        log::trace!("Not the one we want: {:?}", sub_key);
+                        None
+                    }
+                })
                 .fold(
-                    Err(RPMError::new("Did not find any candidates")),
+                    Err(RPMError::from(format!("No key id matched the signature issuer key id: {:?}", key_id))),
                     |previous_res, sub_key| {
                         if let Err(_) = previous_res {
                             log::trace!("Test next candidate subkey");
@@ -149,14 +158,10 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
                             Ok(())
                         }
                     },
-                ).or_else(|_e| {
-                    signature
-                    .verify(&self.public_key, data)
-                    .map_err(|e| RPMError::from(format!("Failed to verify with primary key: {:?}", e)))
-                })
+                )
         } else {
             log::trace!(
-                "Signature has no issuer ref, using primary key: {:?}",
+                "Signature has no issuer ref, attempting primary key: {:?}",
                 self.public_key.primary_key.key_id()
             );
             signature
