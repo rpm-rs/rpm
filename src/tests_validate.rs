@@ -28,7 +28,7 @@ mod pgp {
     fn create_full_rpm_with_signature_and_verify_externally() {
         let _ = env_logger::try_init();
         let (signing_key, _) = crate::crypto::test::load_asc_keys();
-        super::create_full_rpm::<Signer>(&signing_key)
+        super::create_full_rpm_with_signature_and_verify_externally_blueprint::<Signer>(&signing_key)
             .expect("create_full_rpm_with_signature_and_verify_externally> failed")
     }
 
@@ -36,7 +36,7 @@ mod pgp {
     fn parse_externally_signed_rpm_and_verify() {
         let _ = env_logger::try_init();
         let (_, verification_key) = crate::crypto::test::load_asc_keys();
-        super::verify_signed_rpm::<Verifier>(&verification_key)
+        super::parse_externally_signed_rpm_and_verify_blueprint::<Verifier>(&verification_key)
             .expect("parse_externally_signed_rpm_and_verify> failed")
     }
 
@@ -44,7 +44,7 @@ mod pgp {
     fn create_signed_rpm_and_verify() {
         let _ = env_logger::try_init();
         let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
-        super::roundtrip::<Signer, Verifier>(signing_key.as_slice(), verification_key.as_slice())
+        super::create_signed_rpm_and_verify_blueprint::<Signer, Verifier>(signing_key.as_slice(), verification_key.as_slice())
             .expect("create_signed_rpm_and_verify> failed")
     }
 
@@ -64,24 +64,25 @@ mod pgp {
     echo "test" > /out/test.file
 
     echo ">>> sign like rpm"
-    echo "cmd: $(rpm --define "__signature_filename /out/test.file.sig" \
+    cmd="$(rpm  -vv --define "__signature_filename /out/test.file.sig" \
          --define "__plaintext_filename /out/test.file" \
          --define "_gpg_name Package Manager" \
          --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
 
-    gpg="gpg --batch --verbose --keyid-format long --no-armor --pinentry-mode error --no-secmem-warning --local-user 77500CC056DB3521"
-    # gpg --verbose --no-armor --batch --pinentry-mode error -u "Package Manager" -sbo /out/test.file.sig /out/test.file
-    ${gpg} \
+    echo "cmd: ${cmd}"
+
+    alias gpg='gpg --batch --verbose --keyid-format long --no-armor --pinentry-mode error --no-secmem-warning --local-user "Package Manager"'
+    gpg \
         --sign \
         --detach-sign \
         --output /out/test.file.sig \
         /out/test.file 2>&1
 
     echo ">>> inspect signature"
-    ${gpg} -d /out/test.file.sig 2>&1
+    gpg -d /out/test.file.sig 2>&1
 
     echo ">>> verify external gpg signature"
-    ${gpg} --verify /out/test.file.sig /out/test.file 2>&1
+    gpg --verify /out/test.file.sig /out/test.file 2>&1
 
     "#.to_owned();
 
@@ -98,7 +99,7 @@ mod pgp {
 use std::io::BufReader;
 use std::process::Stdio;
 
-fn roundtrip<S, V>(
+fn create_signed_rpm_and_verify_blueprint<S, V>(
     signing_key: &[u8],
     verififcation_key: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>>
@@ -150,7 +151,7 @@ where
     Ok(())
 }
 
-fn create_full_rpm<S>(gpg_signing_key: &[u8]) -> Result<(), Box<dyn std::error::Error>>
+fn create_full_rpm_with_signature_and_verify_externally_blueprint<S>(gpg_signing_key: &[u8]) -> Result<(), Box<dyn std::error::Error>>
 where
     S: Signing<RSA, Signature = Vec<u8>> + KeyLoader<crypto::key::Secret>,
 {
@@ -203,7 +204,7 @@ where
 
     let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
     let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-    let rpm_sig_check = format!("rpm --verbose --checksig /out/test.rpm 2>&1;");
+    let rpm_sig_check = format!("rpm  -vv --checksig /out/test.rpm 2>&1;");
 
     [
         ("fedora:31", rpm_sig_check.as_str()),
@@ -218,7 +219,7 @@ where
     })
 }
 
-fn verify_signed_rpm<V>(verification_key: &[u8]) -> Result<(), Box<dyn std::error::Error>>
+fn parse_externally_signed_rpm_and_verify_blueprint<V>(verification_key: &[u8]) -> Result<(), Box<dyn std::error::Error>>
 where
     V: Verifying<RSA, Signature = Vec<u8>> + KeyLoader<crypto::key::Public>,
 {
@@ -231,10 +232,10 @@ where
     let cmd = format!(
         r#"
 echo ">>> sign"
-rpm --verbose --addsign /out/{rpm_file} 2>&1
+rpm  -vv --addsign /out/{rpm_file} 2>&1
 
 echo ">>> verify"
-rpm --verbose --checksig /out/{rpm_file} 2>&1
+rpm  -vv --checksig /out/{rpm_file} 2>&1
 "#,
         rpm_file = rpm_file_path.file_name().unwrap().to_str().unwrap()
     );
@@ -413,7 +414,7 @@ yum install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign
 
 echo "\### import pub key"
 
-rpm --verbose --import "${PK}" 2>&1
+rpm -vv --import "${PK}" 2>&1
 
 set -x
 
