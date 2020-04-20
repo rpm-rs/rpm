@@ -61,24 +61,27 @@ mod pgp {
 
         let cmd=
             r#"
-    ls -al /out/test.file*
-    chmod +rwx /out/test.file*
-
     echo "test" > /out/test.file
 
     echo ">>> sign like rpm"
     echo "cmd: $(rpm --define "__signature_filename /out/test.file.sig" \
          --define "__plaintext_filename /out/test.file" \
-         --define "_gpg_name \"Package Manager\"" \
+         --define "_gpg_name Package Manager" \
          --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
 
-    gpg --verbose --no-armor --batch --pinentry-mode error --no-secmem-warning -u "Package Manager" -sbo /out/test.file.sig /out/test.file
+    gpg="gpg --batch --verbose --keyid-format long --no-armor --pinentry-mode error --no-secmem-warning --local-user 77500CC056DB3521"
+    # gpg --verbose --no-armor --batch --pinentry-mode error -u "Package Manager" -sbo /out/test.file.sig /out/test.file
+    ${gpg} \
+        --sign \
+        --detach-sign \
+        --output /out/test.file.sig \
+        /out/test.file 2>&1
 
     echo ">>> inspect signature"
-    gpg -d --batch --pinentry-mode error --no-secmem-warning  < /out/test.file.sig
+    ${gpg} -d /out/test.file.sig 2>&1
 
     echo ">>> verify external gpg signature"
-    gpg --verify /out/test.file.sig /out/test.file
+    ${gpg} --verify /out/test.file.sig /out/test.file 2>&1
 
     "#.to_owned();
 
@@ -372,26 +375,34 @@ cat ~/.rpmmacros
 export PK=/assets/id_rsa.pub.asc
 export SK=/assets/id_rsa.asc
 
-gpg --import "${SK}" 2>&1
+gpg --allow-secret-key-import --import "${SK}" 2>&1
+gpg --import "${PK}" 2>&1
 
-###
+gpg --keyid-format long --list-secret-keys
+gpg --keyid-format long --list-public-keys
 
-gpg --with-keygrip --list-keys  2>&1
+echo -e "5\ny\n" | gpg --no-tty --command-fd 0 --expert --edit-key 2E5A802A67EA36B83018F654CFD331925AB27F39 trust;
+
+
 
 echo "\### create a test signature with this particular key id"
 
-echo "test" | gpg -s --local-user CFD331925AB27F39 > /tmp/test.signature 2>&1
-gpg -d < /tmp/test.signature   2>&1
+echo "test" | gpg -s --local-user "77500CC056DB3521" > /tmp/test.signature 2>&1
+gpg -d < /tmp/test.signature 2>&1
 
 echo "\### export PK"
 
 gpg --export -a "Package Manager" > /assets/RPM-GPG-KEY-pmanager
 
-dig1=$(sha256sum "/assets/RPM-GPG-KEY-pmanager")
-dig2=$(sha256sum "${PK}")
+dig1=$(gpg "/assets/RPM-GPG-KEY-pmanager" | sha256sum)
+dig2=$(gpg "${PK}" | sha256sum)
 
-if [ "$dig1" = "$dig2" ]; then
-    echo "\### expected pub key and exported pubkey differ"
+if [ "$dig1" != "$dig2" ]; then
+echo "\### expected pub key and exported pubkey differ"
+    echo "EEE /assets/RPM-GPG-KEY-pmanager"
+    gpg /assets/RPM-GPG-KEY-pmanager
+    echo "EEE ${PK}"
+    gpg "${PK}"
     exit 77
 fi
 
