@@ -113,22 +113,7 @@ where
 
 #[cfg(test)]
 pub(crate) mod test {
-
-
-	#[allow(unused)]
-    pub(crate) fn load_der_keys() -> (Vec<u8>, Vec<u8>) {
-        let signing_key = include_bytes!("../../test_assets/id_rsa.der");
-        let verification_key = include_bytes!("../../test_assets/id_rsa.pub.der");
-        (signing_key.to_vec(), verification_key.to_vec())
-    }
-
-	#[allow(unused)]
-    pub(crate) fn load_pem_keys() -> (Vec<u8>, Vec<u8>) {
-        let signing_key = include_bytes!("../../test_assets/id_rsa.pem");
-        let verification_key = include_bytes!("../../test_assets/id_rsa.pub.pem");
-        (signing_key.to_vec(), verification_key.to_vec())
-    }
-
+    /// Load a pair of sample keys.
     pub(crate) fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
         let signing_key = include_bytes!("../../test_assets/id_rsa.asc");
         let verification_key = include_bytes!("../../test_assets/id_rsa.pub.asc");

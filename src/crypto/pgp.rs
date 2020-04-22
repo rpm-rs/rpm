@@ -1,8 +1,6 @@
 use crate::crypto;
 use crate::errors::RPMError;
 
-use super::*;
-
 use std::io::Cursor;
 
 use ::pgp::{
@@ -56,10 +54,8 @@ impl crypto::Signing<crypto::algorithm::RSA> for Signer {
 
         let mut signature_bytes = Vec::with_capacity(1024);
         let mut cursor = Cursor::new(&mut signature_bytes);
-        ::pgp::packet::write_packet(&mut cursor, &dbg!(signature_packet))
+        ::pgp::packet::write_packet(&mut cursor, &signature_packet)
             .map_err(|e| format!("eee: {:?}", e))?;
-
-        echo_signature("sign(pgp)", signature_bytes.as_slice());
 
         Ok(signature_bytes)
     }
@@ -115,8 +111,6 @@ impl Verifier {
 impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
     type Signature = Vec<u8>;
     fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError> {
-        echo_signature("verify(pgp)", signature);
-
         let signature = Self::parse_signature(signature)?;
 
         log::debug!("Signature issued by: {:?}", signature.issuer());
@@ -194,6 +188,7 @@ impl Verifier {
 mod test {
 
     use super::*;
+    use super::super::{Signing, Verifying, echo_signature};
 
     use crate::signature::crypto::test::{load_asc_keys};
 

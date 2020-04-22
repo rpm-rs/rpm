@@ -1448,7 +1448,6 @@ impl RPMBuilder {
 
         let signature_header = {
             let rsa_sig_header_only = signer.sign(header.as_slice()).map_err(|_e| {
-                dbg!(_e);
                 RPMError::new("Failed to create signature for headers")
             })?;
 
@@ -1457,7 +1456,6 @@ impl RPMBuilder {
             concatenated.extend(content.as_slice());
             let rsa_sig_header_and_archive =
                 signer.sign(concatenated.as_slice()).map_err(|_e| {
-                    dbg!(_e);
                     RPMError::new("Failed to create signature based for headers and content")
                 })?;
 
