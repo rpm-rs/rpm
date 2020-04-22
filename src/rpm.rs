@@ -57,10 +57,9 @@ impl RPMPackage {
 
     /// sign all headers (except for the lead) using an external key and store it as the initial header
     #[cfg(feature = "signing-meta")]
-    pub fn sign<S>(&mut self, secret_key: &[u8]) -> Result<(), RPMError>
+    pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
         S: crypto::Signing<crypto::algorithm::RSA, Signature = Vec<u8>>
-            + crypto::KeyLoader<crypto::key::Secret>,
     {
         // create a temporary byte repr of the header
         // and re-create all hashes
@@ -83,8 +82,6 @@ impl RPMPackage {
         let digest_sha1 = sha1::Sha1::from(&header_bytes);
         let digest_sha1 = digest_sha1.digest();
 
-        let signer = S::load_from(secret_key)?;
-
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
 
         let rsa_signature_spanning_header_and_archive = signer.sign(header_and_content_bytes.as_slice())?;
@@ -106,10 +103,9 @@ impl RPMPackage {
     ///
     ///
     #[cfg(feature = "signing-meta")]
-    pub fn verify_signature<V>(&self, public_key: &[u8]) -> Result<(), RPMError>
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
         V: crypto::Verifying<crypto::algorithm::RSA, Signature = Vec<u8>>
-            + crypto::KeyLoader<crypto::key::Public>,
     {
         // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
 
@@ -139,7 +135,6 @@ impl RPMPackage {
             signature_header_and_content,
         );
 
-        let verifier = V::load_from(public_key)?;
         verifier.verify(header_bytes.as_slice(), signature_header_only)
             .map_err(|e| { format!("Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}", e) })?;
 
