@@ -18,7 +18,7 @@ fn cargo_out_dir() -> std::path::PathBuf {
 }
 
 #[cfg(feature = "signing-meta")]
-use crypto::{self, algorithm::RSA, Signing, Verifying};
+use crypto::{self, Verifying};
 
 #[cfg(feature = "signing-pgp")]
 mod pgp {
@@ -50,7 +50,7 @@ mod pgp {
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100777)
+                    .mode(0o100_777)
                     .is_config(),
             )?
             .with_file(
@@ -71,8 +71,8 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123123123)
-            .add_changelog_entry("you", "yeah, it was", 12312312)
+            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
+            .add_changelog_entry("you", "yeah, it was", 12_312_312)
             .requires(Dependency::any("rpm-sign".to_string()))
             .build_and_sign(signer)?;
 
@@ -82,7 +82,7 @@ mod pgp {
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = format!("rpm  -vv --checksig /out/test.rpm 2>&1;");
+        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
 
         [
             ("fedora:31", rpm_sig_check.as_str()),
@@ -121,7 +121,7 @@ mod pgp {
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100777)
+                    .mode(0o100_777)
                     .is_config(),
             )?
             .with_file(
@@ -130,7 +130,7 @@ mod pgp {
             )?
             .epoch(3)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("you", "yada yada", 12317712)
+            .add_changelog_entry("you", "yada yada", 12_317_712)
             .requires(Dependency::any("rpm-sign".to_string()))
             .build_and_sign(&signer)?;
 
@@ -266,6 +266,7 @@ fn wait_and_print_helper(mut child: std::process::Child, stdin_cmd: &str) -> std
             let mut done: bool = false;
             while !done {
                 done = true;
+                // can not be written as for loop
                 while let Some(line) = stdout_line.next() {
                     done = false;
                     println!("[stdout] {}", line.unwrap().as_str());

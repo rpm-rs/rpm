@@ -85,7 +85,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
         ),
         (
             1,
-            IndexData::Int32(vec![275904]),
+            IndexData::Int32(vec![275_904]),
             IndexSignatureTag::RPMSIGTAG_SIZE,
         ),
         (
@@ -143,7 +143,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
         ),
         (
             1,
-            IndexData::Int32(vec![510164]),
+            IndexData::Int32(vec![510_164]),
             IndexSignatureTag::RPMSIGTAG_PAYLOADSIZE,
         ),
     ];

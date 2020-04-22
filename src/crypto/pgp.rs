@@ -14,8 +14,7 @@ fn now() -> ::chrono::DateTime<::chrono::Utc> {
     // accuracy of serialized format is only down to seconds
     use ::chrono::offset::TimeZone;
     let now = ::chrono::offset::Utc::now();
-    let now = ::chrono::offset::Utc.timestamp(now.timestamp(), 0u32);
-    now
+    ::chrono::offset::Utc.timestamp(now.timestamp(), 0u32)
 }
 
 /// Signer implementation using the `pgp` crate.
@@ -107,7 +106,7 @@ impl Verifier {
             })
             .next()
             .ok_or_else(|| {
-                format!("Did not find a signature packet in what is supposed to be a signature")
+                "Did not find a signature packet in what is supposed to be a signature".to_string()
             })?;
         Ok(signature)
     }
@@ -148,7 +147,7 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
                 .fold(
                     Err(RPMError::from(format!("No key id matched the signature issuer key id: {:?}", key_id))),
                     |previous_res, sub_key| {
-                        if let Err(_) = previous_res {
+                        if previous_res.is_err() {
                             log::trace!("Test next candidate subkey");
                             signature
                                 .verify(sub_key, data)

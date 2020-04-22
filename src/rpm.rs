@@ -1096,6 +1096,7 @@ impl RPMFileOptionsBuilder {
         self.inner.user = user.into();
         self
     }
+
     pub fn group<T: Into<String>>(mut self, group: T) -> Self {
         self.inner.group = group.into();
         self
@@ -1105,11 +1106,13 @@ impl RPMFileOptionsBuilder {
         self.inner.symlink = symlink.into();
         self
     }
+
     pub fn mode(mut self, mode: i32) -> Self {
         self.inner.mode = mode;
         self.inner.inherit_permissions = false;
         self
     }
+
     pub fn is_doc(mut self) -> Self {
         self.inner.flag = RPMFILE_DOC;
         self
@@ -1786,8 +1789,7 @@ impl RPMBuilder {
 
         let possible_compression_details = self.compressor.get_details();
 
-        if possible_compression_details.is_some() {
-            let details = possible_compression_details.unwrap();
+        if let Some(details) = possible_compression_details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
@@ -1945,7 +1947,7 @@ mod tests2 {
 
     #[test]
     fn signature_header_build() {
-        let size: i32 = 209348;
+        let size: i32 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
         let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
         let rsa_spanning_header: &[u8] = b"111222333444";
@@ -1987,7 +1989,7 @@ mod tests2 {
         let built = Header::<IndexSignatureTag>::new_signature_header(
             size,
             md5sum,
-            sha1.clone(),
+            sha1,
             rsa_spanning_header,
             rsa_spanning_header_and_archive,
         );

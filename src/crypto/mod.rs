@@ -1,7 +1,7 @@
 mod traits;
 pub use self::traits::*;
 
-use log;
+
 
 #[cfg(feature = "signing-pgp")]
 pub mod pgp;

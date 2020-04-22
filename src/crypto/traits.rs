@@ -114,12 +114,6 @@ where
 #[cfg(test)]
 pub(crate) mod test {
 
-    use super::*;
-    use crate::crypto::{
-        algorithm::Algorithm, echo_signature, Signing, Verifying,
-    };
-    use crate::errors::RPMError;
-    use env_logger;
 
 	#[allow(unused)]
     pub(crate) fn load_der_keys() -> (Vec<u8>, Vec<u8>) {
