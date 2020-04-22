@@ -1,5 +1,8 @@
-use enum_display_derive;
-use num_derive;
+//! RPM specific constants
+//!
+//! These constants were extracted from the rpm upstream project
+//! C headers.
+
 use std::fmt::Display;
 
 pub const HEADER_IMAGE: isize = 61;
@@ -396,6 +399,8 @@ pub enum IndexSignatureTag {
     // The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_GPG = 1005,
 
+    //This  index  contains  the  SHA256  checksum  of  the  entire  Header  Section,
+    //including the Header Record, Index Records and Header store.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as isize,
 }
 

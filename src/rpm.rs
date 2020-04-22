@@ -1,14 +1,6 @@
-use nom;
-
-use cpio;
-
-use md5;
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
-use num;
 
-use sha1;
-use sha2;
 use sha2::Digest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
@@ -23,11 +15,27 @@ use std::time::UNIX_EPOCH;
 mod errors;
 pub use crate::errors::*;
 
+pub mod crypto;
+
 mod constants;
 pub use crate::constants::*;
 
+#[cfg(feature = "signing-meta")]
+mod signature;
+#[cfg(feature = "signing-meta")]
+mod signature_builder;
+
+#[cfg(feature = "signing-meta")]
+pub use crate::signature::*;
+#[cfg(feature = "signing-meta")]
+pub use crate::signature_builder::*;
+
 pub struct RPMPackage {
+    /// Header and metadata structures.
+    ///
+    /// Contains the constant lead as well as the metadata store.
     pub metadata: RPMPackageMetadata,
+    /// The compressed or uncompressed files.
     pub content: Vec<u8>,
 }
 
@@ -44,7 +52,107 @@ impl RPMPackage {
         out.write_all(&self.content)?;
         Ok(())
     }
+
+    // TODO allow passing an external signer/verifier
+
+    /// sign all headers (except for the lead) using an external key and store it as the initial header
+    #[cfg(feature = "signing-meta")]
+    pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
+    where
+        S: crypto::Signing<crypto::algorithm::RSA, Signature = Vec<u8>>
+    {
+        // create a temporary byte repr of the header
+        // and re-create all hashes
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        self.metadata.header.write(&mut header_bytes)?;
+
+        let mut header_and_content_bytes =
+        Vec::with_capacity(header_bytes.len() + self.content.len());
+        header_and_content_bytes.extend(header_bytes.as_slice());
+        header_and_content_bytes.extend(self.content.as_slice());
+
+        let mut hasher = md5::Md5::default();
+
+        hasher.input(&header_and_content_bytes);
+
+        let hash_result = hasher.result();
+
+        let digest_md5 = hash_result.as_slice();
+
+        let digest_sha1 = sha1::Sha1::from(&header_bytes);
+        let digest_sha1 = digest_sha1.digest();
+
+        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
+
+        let rsa_signature_spanning_header_and_archive = signer.sign(header_and_content_bytes.as_slice())?;
+
+        // TODO FIXME verify this is the size we want, I don't think it is
+        // TODO maybe use signature_size instead of size
+        self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
+            header_and_content_bytes.len() as i32,
+            digest_md5,
+            digest_sha1.to_string(),
+            rsa_signature_spanning_header_only.as_slice(),
+            rsa_signature_spanning_header_and_archive.as_slice(),
+        );
+
+        Ok(())
+    }
+
+    /// Verify the signature as present within the RPM package.
+    ///
+    ///
+    #[cfg(feature = "signing-meta")]
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
+    where
+        V: crypto::Verifying<crypto::algorithm::RSA, Signature = Vec<u8>>
+    {
+        // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
+
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        self.metadata.header.write(&mut header_bytes)?;
+
+        let signature_header_only = self
+            .metadata
+            .signature
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)
+            .map_err(|e| {
+                format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e)
+            })?;
+
+        crate::crypto::echo_signature("signature_header(header only)", signature_header_only);
+
+        let signature_header_and_content = self
+            .metadata
+            .signature
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)
+            .map_err(|e| {
+                format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e)
+            })?;
+
+        crate::crypto::echo_signature(
+            "signature_header(header and content)",
+            signature_header_and_content,
+        );
+
+        verifier.verify(header_bytes.as_slice(), signature_header_only)
+            .map_err(|e| { format!("Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}", e) })?;
+
+        let mut header_and_content_bytes =
+            Vec::with_capacity(header_bytes.len() + self.content.len());
+        header_and_content_bytes.extend(header_bytes);
+        header_and_content_bytes.extend(self.content.as_slice());
+
+        verifier.verify(
+            header_and_content_bytes.as_slice(),
+            signature_header_and_content,
+        )
+        .map_err(|e| { format!("Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}", e) })?;
+
+        Ok(())
+    }
 }
+
 #[derive(PartialEq)]
 pub struct RPMPackageMetadata {
     pub lead: Lead,
@@ -177,15 +285,11 @@ impl Lead {
     }
 
     fn new(name: &str) -> Self {
-        let mut name_size = name.len();
-
-        // the last byte needs to be the null terminator
-        if name_size > 65 {
-            name_size = 65;
-        }
-
         let mut name_arr = [0; 66];
-        name_arr[..name_size - 1].clone_from_slice(&name.as_bytes()[..name_size - 1]);
+        // the last byte needs to be the null terminator
+        let name_size = std::cmp::min(name_arr.len() - 1, name.len());
+
+        name_arr[..name_size].clone_from_slice(&name.as_bytes()[..name_size]);
         Lead {
             magic: RPM_MAGIC,
             major: 3,
@@ -218,6 +322,16 @@ impl PartialEq for Lead {
     }
 }
 
+pub trait Tag:
+    num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy
+{
+}
+
+impl<T> Tag for T where
+    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy
+{
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Header<T: num::FromPrimitive> {
     index_header: IndexHeader,
@@ -227,7 +341,7 @@ pub struct Header<T: num::FromPrimitive> {
 
 impl<T> Header<T>
 where
-    T: num::FromPrimitive + num::ToPrimitive + PartialEq + Display + std::fmt::Debug + Copy,
+    T: Tag,
 {
     fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; 16] = [0; 16];
@@ -316,12 +430,20 @@ where
     }
 
     fn find_entry_or_err(&self, tag: &T) -> Result<&IndexEntry<T>, RPMError> {
-        for entry in &self.index_entries {
-            if &entry.tag == tag {
-                return Ok(entry);
-            }
-        }
-        Err(RPMError::new(&format!("unable to find Tag {}", tag)))
+        self.index_entries
+            .iter()
+            .find(|entry| &entry.tag == tag)
+            .ok_or_else(|| RPMError::new(&format!("unable to find Tag {}", tag)))
+    }
+
+    fn get_entry_binary_data(&self, tag: T) -> Result<&[u8], RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry.data.binary().ok_or_else(|| {
+            RPMError::new(&format!(
+                "tag {} has datatype {}, not string",
+                entry.tag, entry.data,
+            ))
+        })
     }
 
     fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
@@ -360,7 +482,7 @@ where
         IndexEntry::new(tag, offset, IndexData::Bin(header_immutable_index_data))
     }
 
-    fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
+    pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
         let mut store = Vec::new();
         for record in &mut actual_records {
             record.offset = store.len() as i32;
@@ -391,26 +513,26 @@ where
 }
 
 impl Header<IndexSignatureTag> {
-    fn new_signature_header(size: i32, md5: &[u8], sha1: String) -> Self {
-        let offset = 0;
-        let entries = vec![
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_SIZE,
-                offset,
-                IndexData::Int32(vec![size]),
-            ),
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_MD5,
-                offset,
-                IndexData::Bin(md5.to_vec()),
-            ),
-            IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_SHA1,
-                offset,
-                IndexData::StringTag(sha1),
-            ),
-        ];
-        Self::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
+    /// creates a new full signature header
+    ///
+    /// `size` is combined size of header, header store and the payload
+    ///
+    /// PGP and RSA tags expect signatures according to [RFC2440](https://tools.ietf.org/html/rfc2440)
+    fn new_signature_header(
+        size: i32,
+        md5sum: &[u8],
+        sha1: String,
+        rsa_spanning_header: &[u8],
+        rsa_spanning_header_and_archive: &[u8],
+    ) -> Self {
+        SignatureHeaderBuilder::new()
+            .add_digest(sha1.as_str(), md5sum)
+            .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
+            .build(size)
+    }
+
+    pub fn builder() -> SignatureHeaderBuilder<Empty> {
+        SignatureHeaderBuilder::<Empty>::new()
     }
 
     fn parse_signature<I: std::io::BufRead>(
@@ -475,9 +597,13 @@ impl Header<IndexTag> {
 
 #[derive(Debug, PartialEq)]
 struct IndexHeader {
+    /// rpm specific magic header
     magic: [u8; 3],
+    /// rpm version number, always 1
     version: u8,
+    /// number of header entries
     num_entries: u32,
+    /// total header size excluding the fixed part ( I think )
     header_size: u32,
 }
 
@@ -500,7 +626,7 @@ impl IndexHeader {
 
         if version != 1 {
             return Err(RPMError::new(&format!(
-                "unsupported Versionv {} - only header version 1 is supported",
+                "unsupported Version {} - only header version 1 is supported",
                 version,
             )));
         }
@@ -765,12 +891,12 @@ impl IndexData {
     fn int(&self) -> Option<i32> {
         match self {
             IndexData::Int32(s) => {
-                if s.len() > 0 {
+                if !s.is_empty() {
                     Some(s[0])
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         }
     }
@@ -778,6 +904,13 @@ impl IndexData {
     fn string_array(&self) -> Option<&[String]> {
         match self {
             IndexData::StringArray(d) | IndexData::I18NString(d) => Some(&d),
+            _ => None,
+        }
+    }
+
+    fn binary(&self) -> Option<&[u8]> {
+        match self {
+            IndexData::Bin(d) => Some(d.as_slice()),
             _ => None,
         }
     }
@@ -874,9 +1007,9 @@ impl Dependency {
 }
 
 const RPMSENSE_ANY: u32 = 0;
-const RPMSENSE_LESS: u32 = (1 << 1);
-const RPMSENSE_GREATER: u32 = (1 << 2);
-const RPMSENSE_EQUAL: u32 = (1 << 3);
+const RPMSENSE_LESS: u32 = 1 << 1;
+const RPMSENSE_GREATER: u32 = 1 << 2;
+const RPMSENSE_EQUAL: u32 = 1 << 3;
 
 // there is no use yet for those constants. But they are part of the official package
 // so I will leave them in in case we need them later.
@@ -946,7 +1079,7 @@ impl RPMFileOptions {
                 user: "root".to_string(),
                 group: "root".to_string(),
                 symlink: "".to_string(),
-                mode: 0o100664,
+                mode: 0o100_664,
                 flag: 0,
                 inherit_permissions: true,
             },
@@ -963,6 +1096,7 @@ impl RPMFileOptionsBuilder {
         self.inner.user = user.into();
         self
     }
+
     pub fn group<T: Into<String>>(mut self, group: T) -> Self {
         self.inner.group = group.into();
         self
@@ -972,11 +1106,13 @@ impl RPMFileOptionsBuilder {
         self.inner.symlink = symlink.into();
         self
     }
+
     pub fn mode(mut self, mode: i32) -> Self {
         self.inner.mode = mode;
         self.inner.inherit_permissions = false;
         self
     }
+
     pub fn is_doc(mut self) -> Self {
         self.inner.flag = RPMFILE_DOC;
         self
@@ -1136,10 +1272,8 @@ impl RPMBuilder {
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
         let mut options = options.into();
-        if options.inherit_permissions {
-            if cfg!(unix) {
-                options.mode = input.metadata()?.permissions().mode() as i32;
-            }
+        if options.inherit_permissions && cfg!(unix) {
+            options.mode = input.metadata()?.permissions().mode() as i32;
         }
         self.add_data(
             content,
@@ -1161,7 +1295,7 @@ impl RPMBuilder {
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
         let dest = options.destination;
-        if !dest.starts_with("./") && !dest.starts_with("/") {
+        if !dest.starts_with("./") && !dest.starts_with('/') {
             return Err(RPMError::new(&format!(
                 "invalid path {} - needs to start with / or ./",
                 dest
@@ -1173,7 +1307,7 @@ impl RPMBuilder {
         let parent = pb
             .parent()
             .ok_or_else(|| RPMError::new(&format!("invalid destination path {}", dest)))?;
-        let (cpio_path, dir) = if dest.starts_with(".") {
+        let (cpio_path, dir) = if dest.starts_with('.') {
             (
                 dest.to_string(),
                 format!("/{}/", parent.strip_prefix(".").unwrap().to_string_lossy()),
@@ -1253,7 +1387,120 @@ impl RPMBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<RPMPackage, RPMError> {
+    /// build without a signature
+    ///
+    /// ignores a present key, if any
+    pub fn build(self) -> Result<RPMPackage, RPMError> {
+        let (lead, header_idx_tag, content) = self.prepare_data()?;
+
+        let mut header = Vec::with_capacity(128);
+        header_idx_tag.write(&mut header)?;
+        let header = header;
+
+        let (
+            header_digest_sha1,
+            header_and_content_digest_md5,
+        ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+
+        let header_and_content_len = header.len() + content.len();
+
+        let digest_header = Header::<IndexSignatureTag>::builder()
+            .add_digest(
+                header_digest_sha1.as_str(),
+                header_and_content_digest_md5.as_slice(),
+            )
+            .build(header_and_content_len as i32);
+
+        let metadata = RPMPackageMetadata {
+            lead,
+            signature: digest_header,
+            header: header_idx_tag,
+        };
+        let pkg = RPMPackage { metadata, content };
+        Ok(pkg)
+    }
+
+    /// use an external signer to sing and build
+    ///
+    /// See `crypto::Signing` for more details.
+    #[cfg(feature = "signing-meta")]
+    pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
+    where
+        S: crypto::Signing<crate::crypto::algorithm::RSA>,
+    {
+        let (lead, header_idx_tag, content) = self.prepare_data()?;
+
+        let mut header = Vec::with_capacity(128);
+        header_idx_tag.write(&mut header)?;
+        let header = header;
+
+        let (
+            header_digest_sha1,
+            header_and_content_digest_md5,
+        ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+
+        let header_and_content_len = header.len() + content.len();
+
+        let builder = Header::<IndexSignatureTag>::builder().add_digest(
+            header_digest_sha1.as_str(),
+            header_and_content_digest_md5.as_slice(),
+        );
+
+        let signature_header = {
+            let rsa_sig_header_only = signer.sign(header.as_slice()).map_err(|_e| {
+                RPMError::new("Failed to create signature for headers")
+            })?;
+
+            let mut concatenated = Vec::with_capacity(header.len() + content.len());
+            concatenated.extend(header.as_slice());
+            concatenated.extend(content.as_slice());
+            let rsa_sig_header_and_archive =
+                signer.sign(concatenated.as_slice()).map_err(|_e| {
+                    RPMError::new("Failed to create signature based for headers and content")
+                })?;
+
+            builder
+                .add_signature(
+                    rsa_sig_header_only.as_ref(),
+                    rsa_sig_header_and_archive.as_ref(),
+                )
+                .build(header_and_content_len as i32)
+        };
+
+        let metadata = RPMPackageMetadata {
+            lead,
+            signature: signature_header,
+            header: header_idx_tag,
+        };
+        let pkg = RPMPackage { metadata, content };
+        Ok(pkg)
+    }
+
+    /// use prepared data but make sure the signatures are
+    fn derive_hashes(
+        header: &[u8],
+        content: &[u8],
+    ) -> Result<(String, Vec<u8>), RPMError> {
+        // accross header index and content (compressed or uncompressed, depends on configuration)
+        let mut hasher = md5::Md5::default();
+        hasher.input(&header);
+        hasher.input(&content);
+        let digest_md5 = hasher.result();
+        let digest_md5 = digest_md5.as_slice();
+
+        // header only, not the lead, just the header index
+        let digest_sha1 = sha1::Sha1::from(&header);
+        let digest_sha1 = digest_sha1.digest();
+        let digest_sha1 = digest_sha1.to_string();
+
+        Ok((
+            digest_sha1,
+            digest_md5.to_vec(),
+        ))
+    }
+
+    /// prepapre all rpm headers including content
+    fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all toghether.
         // Lead is not important. just build it here
@@ -1540,8 +1787,7 @@ impl RPMBuilder {
 
         let possible_compression_details = self.compressor.get_details();
 
-        if possible_compression_details.is_some() {
-            let details = possible_compression_details.unwrap();
+        if let Some(details) = possible_compression_details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
@@ -1686,39 +1932,72 @@ impl RPMBuilder {
         //     "4.6.0-1".to_string(),
         // ));
 
-        let mut header_bytes = Vec::new();
-        header.write(&mut header_bytes)?;
-
         self.compressor = cpio::newc::trailer(self.compressor)?;
         let content = self.compressor.finish_compression()?;
 
-        let signature_size = header_bytes.len() + content.len();
-        let mut hasher = md5::Md5::default();
+        Ok((lead, header, content))
+    }
+}
 
-        hasher.input(&header_bytes);
-        hasher.input(&content);
+#[cfg(test)]
+mod tests2 {
+    use super::*;
 
-        let hash_result = hasher.result();
+    #[test]
+    fn signature_header_build() {
+        let size: i32 = 209_348;
+        let md5sum: &[u8] = &[22u8; 16];
+        let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
+        let rsa_spanning_header: &[u8] = b"111222333444";
+        let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
 
-        let signature_md5 = hash_result.as_slice();
+        let truth = {
+            let offset = 0;
+            let entries = vec![
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SIZE,
+                    offset,
+                    IndexData::Int32(vec![size]),
+                ),
+                // TODO consider dropping md5 in favour of sha256
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_MD5,
+                    offset,
+                    IndexData::Bin(md5sum.to_vec()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SHA1,
+                    offset,
+                    IndexData::StringTag(sha1.clone()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_RSA,
+                    offset,
+                    IndexData::Bin(rsa_spanning_header.to_vec()),
+                ),
+                IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_PGP,
+                    offset,
+                    IndexData::Bin(rsa_spanning_header_and_archive.to_vec()),
+                ),
+            ];
+            Header::<IndexSignatureTag>::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
+        };
 
-        let header_sha1 = sha1::Sha1::from(&header_bytes);
-
-        let signature_header = Header::new_signature_header(
-            signature_size as i32,
-            signature_md5,
-            header_sha1.digest().to_string(),
+        let built = Header::<IndexSignatureTag>::new_signature_header(
+            size,
+            md5sum,
+            sha1,
+            rsa_spanning_header,
+            rsa_spanning_header_and_archive,
         );
 
-        let metadata = RPMPackageMetadata {
-            lead,
-            signature: signature_header,
-            header,
-        };
-        let pkg = RPMPackage { metadata, content };
-        Ok(pkg)
+        assert_eq!(built, truth);
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "test-with-podman"))]
+mod tests_validate;

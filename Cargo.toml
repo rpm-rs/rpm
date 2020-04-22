@@ -3,32 +3,49 @@ name = "rpm-rs"
 version = "0.3.0"
 authors = [
     "René Richter <richterrettich@gmail.com>",
-    "Bernhard Schuster <bernhard@ahoi.io>"]
+    "Bernhard Schuster <bernhard@ahoi.io>"
+]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPM's"
-
 homepage = "https://github.com/Richterrettich/rpm-rs"
 repository = "https://github.com/Richterrettich/rpm-rs"
-
 readme = "README.md"
-
 keywords = ["RPM", "packaging"]
-
 categories = ["parsing", "development-tools"]
 
 [lib]
-name="rpm"
-path="src/rpm.rs"
+name = "rpm"
+path = "src/rpm.rs"
 
 [dependencies]
-nom = "5.0"
+nom = "5.1"
 num-traits = "0.2"
 num-derive = "0.3"
 num = "0.2"
 enum-display-derive = "0.1"
 cpio = "0.2"
+# consider migrating to flate2
 libflate = "0.1"
 sha2 = "0.8"
 md-5 = "0.8"
 sha1 = "0.6"
+rand = { version = "0.7" }
+pgp = { version = "0.5", optional = true }
+chrono = "0.4"
+log = "0.4"
+
+[dev-dependencies]
+rsa = { version = "^0.2.0" }
+rsa-der = { version = "^0.2.1" }
+sha2 = "0.8"
+env_logger = "0.7"
+itertools = "0.9"
+serial_test = "0.4"
+
+[features]
+default = ["signing-pgp"]
+
+signing-pgp = ["signing-meta", "pgp"]
+signing-meta = []
+test-with-podman = ["signing-meta"]
