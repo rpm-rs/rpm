@@ -34,6 +34,18 @@ where
     fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError>;
 }
 
+impl<A,T,S> Signing<A> for &T
+where
+    T: Signing<A,Signature=S>,
+    A: algorithm::Algorithm,
+    S: AsRef<[u8]>,
+{
+    type Signature = S;
+    fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError> {
+        T::sign(self, data)
+    }
+}
+
 /// Verification trait to be implement for RPM signature verification.
 pub trait Verifying<A>: Debug
 where
@@ -43,6 +55,21 @@ where
     type Signature;
     fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError>;
 }
+
+
+
+impl<A,T,S> Verifying<A> for &T
+where
+    T: Verifying<A,Signature=S>,
+    A: algorithm::Algorithm,
+    S: AsRef<[u8]>,
+{
+    type Signature = S;
+    fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError> {
+        T::verify(self, data, signature)
+    }
+}
+
 
 pub mod key {
 

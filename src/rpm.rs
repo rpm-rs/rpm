@@ -1422,24 +1422,11 @@ impl RPMBuilder {
         Ok(pkg)
     }
 
-    /// build with the given signer type
-    ///
-    /// The signer will be instantiated as needed if a signing key is present.
-    /// GPG signing key must be in DER / PKCS8 format
-    #[cfg(feature = "signing-meta")]
-    pub fn build_and_sign<S>(self, signing_key: &[u8]) -> Result<RPMPackage, RPMError>
-    where
-        S: crypto::Signing<crate::crypto::algorithm::RSA> + crypto::KeyLoader<crypto::key::Secret>,
-    {
-        let signer = <S as crate::crypto::KeyLoader<crypto::key::Secret>>::load_from(signing_key)?;
-        self.build_with_external_signer::<S>(&signer)
-    }
-
     /// use an external signer to sing and build
     ///
     /// See `crypto::Signing` for more details.
     #[cfg(feature = "signing-meta")]
-    pub fn build_with_external_signer<S>(self, signer: &S) -> Result<RPMPackage, RPMError>
+    pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
     where
         S: crypto::Signing<crate::crypto::algorithm::RSA>,
     {

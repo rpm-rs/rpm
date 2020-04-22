@@ -116,6 +116,8 @@ where
     let out_file = cargo_out_dir().join("roundtrip.rpm");
 
     {
+        let signer = S::load_from(signing_key).expect("Must load");
+
         let mut f = std::fs::File::create(&out_file)?;
         let pkg = RPMBuilder::new(
             "roundtrip",
@@ -139,7 +141,7 @@ where
         .pre_install_script("echo preinst")
         .add_changelog_entry("you", "yada yada", 12317712)
         .requires(Dependency::any("rpm-sign".to_string()))
-        .build_and_sign::<S>(signing_key)?;
+        .build_and_sign::<&S>(&signer)?;
 
         pkg.write(&mut f)?;
         let epoch = pkg.metadata.header.get_epoch()?;
@@ -160,6 +162,8 @@ fn create_full_rpm_with_signature_and_verify_externally_blueprint<S>(gpg_signing
 where
     S: Signing<RSA, Signature = Vec<u8>> + KeyLoader<crypto::key::Secret>,
 {
+    let signer = S::load_from(gpg_signing_key).expect("Must load signer from signing key");
+
     let cargo_file = cargo_manifest_dir().join("Cargo.toml");
     let out_file = cargo_out_dir().join("test.rpm");
 
@@ -201,7 +205,7 @@ where
         .add_changelog_entry("me", "was awesome, eh?", 123123123)
         .add_changelog_entry("you", "yeah, it was", 12312312)
         .requires(Dependency::any("rpm-sign".to_string()))
-        .build_and_sign::<S>(gpg_signing_key)?;
+        .build_and_sign::<S>(signer)?;
 
     pkg.write(&mut f)?;
     let epoch = pkg.metadata.header.get_epoch()?;
