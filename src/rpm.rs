@@ -1400,11 +1400,11 @@ impl RPMBuilder {
         let header = header;
 
         let (
-            _header_len,
             header_digest_sha1,
-            header_and_content_len,
             header_and_content_digest_md5,
         ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+
+        let header_and_content_len = header.len() + content.len();
 
         let digest_header = Header::<IndexSignatureTag>::builder()
             .add_digest(
@@ -1450,11 +1450,11 @@ impl RPMBuilder {
         let header = header;
 
         let (
-            _header_len,
             header_digest_sha1,
-            header_and_content_len,
             header_and_content_digest_md5,
         ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+
+        let header_and_content_len = header.len() + content.len();
 
         let builder = Header::<IndexSignatureTag>::builder().add_digest(
             header_digest_sha1.as_str(),
@@ -1497,7 +1497,7 @@ impl RPMBuilder {
     fn derive_hashes(
         header: &[u8],
         content: &[u8],
-    ) -> Result<(usize, String, usize, Vec<u8>), RPMError> {
+    ) -> Result<(String, Vec<u8>), RPMError> {
         // accross header index and content (compressed or uncompressed, depends on configuration)
         let mut hasher = md5::Md5::default();
         hasher.input(&header);
@@ -1511,9 +1511,7 @@ impl RPMBuilder {
         let digest_sha1 = digest_sha1.to_string();
 
         Ok((
-            header.len(),
             digest_sha1,
-            header.len() + content.len(),
             digest_md5.to_vec(),
         ))
     }

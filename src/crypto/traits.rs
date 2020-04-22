@@ -54,7 +54,7 @@ pub mod key {
     #[derive(Debug, Clone, Copy)]
     pub struct Secret;
 
-    /// A key to publish tot he public.
+    /// A key publishable to the public.
     #[derive(Debug, Clone, Copy)]
     pub struct Public;
 
