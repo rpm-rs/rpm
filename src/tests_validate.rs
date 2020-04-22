@@ -1,5 +1,4 @@
 use super::*;
-use crate::crypto::KeyLoader;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::process::Stdio;
@@ -28,11 +27,11 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
-    fn create_full_rpm_with_signature_and_verify_externally() -> Result<(), Box<std::error::Error>> {
+    fn create_full_rpm_with_signature_and_verify_externally() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (signing_key, _) = crate::crypto::test::load_asc_keys();
 
-        let signer = Signer::load_from(signing_key.as_ref()).expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref()).expect("Must load signer from signing key");
 
         let cargo_file = cargo_manifest_dir().join("Cargo.toml");
         let out_file = cargo_out_dir().join("test.rpm");
@@ -100,7 +99,7 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
-    fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<std::error::Error>> {
+    fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
 
@@ -108,7 +107,7 @@ mod pgp {
         let out_file = cargo_out_dir().join("roundtrip.rpm");
 
         {
-            let signer = Signer::load_from(signing_key.as_ref())?;
+            let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
 
             let mut f = std::fs::File::create(&out_file)?;
             let pkg = RPMBuilder::new(
@@ -147,7 +146,7 @@ mod pgp {
             let mut buf_reader = std::io::BufReader::new(out_file);
             let package = RPMPackage::parse(&mut buf_reader)?;
 
-            let verifier = Verifier::load_from(verification_key.as_ref())?;
+            let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
             package.verify_signature(verifier)?;
         }
@@ -157,11 +156,11 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
-    fn create_signed_rpm_and_verify() -> Result<(), Box<std::error::Error>> {
+    fn create_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, verification_key) = crate::crypto::test::load_asc_keys();
+        let (_, verification_key) = crate::crypto::test::load_asc_keys();
 
-        let verifier = Verifier::load_from(verification_key.as_ref())?;
+        let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
         let rpm_file_path = test_rpm_file_path();
         let out_file = cargo_out_dir().join(rpm_file_path.file_name().unwrap().to_str().unwrap());
@@ -197,7 +196,7 @@ rpm  -vv --checksig /out/{rpm_file} 2>&1
 
     #[test]
     #[serial_test::serial]
-    fn create_signature_with_gpg_and_verify() -> Result<(), Box<std::error::Error>> {
+    fn create_signature_with_gpg_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (_signing_key, verification_key) = crate::crypto::test::load_asc_keys();
 
@@ -237,7 +236,7 @@ gpg --verify /out/test.file.sig /out/test.file 2>&1
         podman_container_launcher(cmd.as_str(), "fedora:31", vec![])
             .expect("Container execution must be flawless");
 
-        let verifier = Verifier::load_from(verification_key.as_slice()).expect("Must load");
+        let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("Must load");
 
         let raw_sig = std::fs::read(&test_file_sig).expect("must laod signature");
         let data = std::fs::read(&test_file).expect("must laod file");

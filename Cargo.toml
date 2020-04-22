@@ -50,5 +50,5 @@ serial_test = "0.4"
 default = ["signing-pgp"]
 
 signing-pgp = ["signing-meta", "pgp"]
-signing-meta = ["pem"]
+signing-meta = []
 test-with-podman = ["signing-meta"]

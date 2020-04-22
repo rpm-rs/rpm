@@ -22,8 +22,6 @@ pub mod algorithm {
     impl Algorithm for RSA {}
 }
 
-use pem;
-
 /// Signing trait to be implement for RPM signing.
 pub trait Signing<A>: Debug
 where
@@ -89,62 +87,6 @@ pub mod key {
     impl KeyType for Public {}
 }
 
-/// Public and secret key loading trait.
-///
-/// Supposed to load application specific formatted keys with
-/// `fn load_from` in whatever format is desired or used by the
-/// [`Signer`](Self::Signing) or [`Verifier`](Self::Verifying) itself.
-pub trait KeyLoader<T>: Sized
-where
-    T: key::KeyType,
-{
-    /// An application specific key loader.
-    ///
-    /// Should be implemented as a combination of the particular ones.
-    fn load_from(bytes: &[u8]) -> Result<Self, RPMError>;
-
-    /// Load a key from ascii armored key string.
-    fn load_from_asc(_asc: &str) -> Result<Self, RPMError> {
-        unimplemented!("ASCII ARMORED is not implemented")
-    }
-
-    /// Load a key from DER ASN.1 formatted bytes in PKCS#1 format.
-    ///
-    /// Its preamble is `-----BEGIN RSA (PRIVATE|PUBLIC) KEY-----`
-    fn load_from_pkcs1_der(_pkcs1_der: &[u8]) -> Result<Self, RPMError> {
-        unimplemented!("PKCS#1 der loading is not implemented")
-    }
-
-    /// Load a key from DER ASN.1 formatted bytes in PKCS#8 format.
-    ///
-    /// Its preamble is `-----BEGIN (ENCRYPTED)? (PRIVATE|PUBLIC) KEY-----`
-    fn load_from_pkcs8_der(_pkcs8_der: &[u8]) -> Result<Self, RPMError> {
-        unimplemented!("PKCS#8 der loading is not implemented")
-    }
-
-    /// Load a key from PEM formatted string in PKCS#8 or PKCS#1 internal format.
-    fn load_from_pem(pem: &str) -> Result<Self, RPMError> {
-        let pem = pem::parse(pem).map_err(|e| format!("Failed to parse pem format: {:?}", e))?;
-        // PEM may containe any kind of key format, so at least support
-        // well know PKCS#1 and PKCS#8 formats
-        match pem.tag.as_str() {
-            "RSA PRIVATE KEY" | "RSA PUBLIC KEY" => {
-                Self::load_from_pkcs1_der(pem.contents.as_slice())
-            }
-            "PRIVATE KEY" | "PUBLIC KEY" => Self::load_from_pkcs8_der(pem.contents.as_slice()),
-            _ => Err(RPMError::from(
-                "Unknown key delimiter, only supporting PKCS#8 or PKCS#1 PRIVATE/PUBLIC keys"
-                    .to_owned(),
-            )),
-        }
-    }
-
-    /// Load a key from the openssh specific format.
-    fn load_from_openssh(_openssh: &[u8]) -> Result<Self, RPMError> {
-        unimplemented!("OpenSSH loading is not implemented")
-    }
-}
-
 /// Implement unreachable signer for empty tuple `()`
 impl<A> Signing<A> for std::marker::PhantomData<A>
 where
@@ -172,35 +114,12 @@ where
 #[cfg(test)]
 pub(crate) mod test {
 
-
     use super::*;
     use crate::crypto::{
-        algorithm::Algorithm, echo_signature, KeyLoader, Signing, Verifying,
+        algorithm::Algorithm, echo_signature, Signing, Verifying,
     };
     use crate::errors::RPMError;
     use env_logger;
-
-    #[allow(unused)]
-    pub(crate) fn sign_verify_roundtrip_blueprint<S, V, A>(
-        data: &[u8],
-        signing_key: &[u8],
-        verification_key: &[u8],
-    ) -> Result<(), RPMError>
-    where
-        S: Signing<A, Signature = Vec<u8>> + KeyLoader<key::Secret>,
-        V: Verifying<A, Signature = Vec<u8>> + KeyLoader<key::Public>,
-        A: Algorithm,
-    {
-        let _ = env_logger::try_init();
-        let signer = S::load_from(signing_key).expect("Failed to load signer from secret key");
-        let verifier =
-            V::load_from(verification_key).expect("Failed to load verifier from public key");
-        let signature = signer.sign(data)?;
-        echo_signature("test/roundtrip", signature.as_slice());
-        verifier.verify(data, signature.as_slice())?;
-
-        Ok(())
-    }
 
 	#[allow(unused)]
     pub(crate) fn load_der_keys() -> (Vec<u8>, Vec<u8>) {

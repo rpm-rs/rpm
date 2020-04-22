@@ -66,9 +66,9 @@ impl crypto::Signing<crypto::algorithm::RSA> for Signer {
     }
 }
 
-impl crypto::KeyLoader<crypto::key::Secret> for Signer {
+impl Signer {
     /// load the private key for signing
-    fn load_from(input: &[u8]) -> Result<Self, RPMError> {
+    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
         // only asc loading is supported right now
         let input = ::std::str::from_utf8(input).map_err(|e| {
             format!(
@@ -79,7 +79,7 @@ impl crypto::KeyLoader<crypto::key::Secret> for Signer {
         Self::load_from_asc(input)
     }
 
-    fn load_from_asc(input: &str) -> Result<Self, RPMError> {
+    pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
         let (secret_key, _) = ::pgp::composed::signed_key::SignedSecretKey::from_string(input)
             .map_err(|e| format!("Failed to load secret key {:?}", e))?;
         Ok(Self { secret_key })
@@ -171,8 +171,8 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
     }
 }
 
-impl crypto::KeyLoader<crypto::key::Public> for Verifier {
-    fn load_from(input: &[u8]) -> Result<Self, RPMError> {
+impl Verifier {
+    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
         // only asc loading is supported right now
         let input = ::std::str::from_utf8(input).map_err(|e| {
             format!(
@@ -183,7 +183,7 @@ impl crypto::KeyLoader<crypto::key::Public> for Verifier {
         Self::load_from_asc(input)
     }
 
-    fn load_from_asc(input: &str) -> Result<Self, RPMError> {
+    pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
         let (public_key, _) = ::pgp::composed::signed_key::SignedPublicKey::from_string(input)
             .map_err(|e| format!("Failed to load public key {:?}", e))?;
 
@@ -204,8 +204,8 @@ mod test {
     fn prep() -> (Signer, Verifier) {
         let _ = env_logger::try_init();
         let (signing_key, verification_key) = load_asc_keys();
-        let verifier = Verifier::load_from(verification_key.as_slice()).expect("PK parsing failed");
-        let signer = Signer::load_from(signing_key.as_slice()).expect("PK parsing failed");
+        let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
+        let signer = Signer::load_from_asc_bytes(signing_key.as_slice()).expect("PK parsing failed");
         (signer, verifier)
     }
 
@@ -213,8 +213,8 @@ mod test {
     fn parse_asc() {
         // assert `prep()` itself is sane
         let (signing_key, verification_key) = load_asc_keys();
-        assert!(Signer::load_from(signing_key.as_ref()).is_ok());
-        assert!(Verifier::load_from(verification_key.as_ref()).is_ok());
+        assert!(Signer::load_from_asc_bytes(signing_key.as_ref()).is_ok());
+        assert!(Verifier::load_from_asc_bytes(verification_key.as_ref()).is_ok());
     }
 
     #[test]
