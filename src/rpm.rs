@@ -59,7 +59,7 @@ impl RPMPackage {
     #[cfg(feature = "signing-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
-        S: crypto::Signing<crypto::algorithm::RSA, Signature = Vec<u8>>
+        S: crypto::Signing<crypto::algorithm::RSA, Signature = Vec<u8>>,
     {
         // create a temporary byte repr of the header
         // and re-create all hashes
@@ -67,7 +67,7 @@ impl RPMPackage {
         self.metadata.header.write(&mut header_bytes)?;
 
         let mut header_and_content_bytes =
-        Vec::with_capacity(header_bytes.len() + self.content.len());
+            Vec::with_capacity(header_bytes.len() + self.content.len());
         header_and_content_bytes.extend(header_bytes.as_slice());
         header_and_content_bytes.extend(self.content.as_slice());
 
@@ -105,7 +105,7 @@ impl RPMPackage {
     #[cfg(feature = "signing-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
-        V: crypto::Verifying<crypto::algorithm::RSA, Signature = Vec<u8>>
+        V: crypto::Verifying<crypto::algorithm::RSA, Signature = Vec<u8>>,
     {
         // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
 
@@ -116,9 +116,7 @@ impl RPMPackage {
             .metadata
             .signature
             .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)
-            .map_err(|e| {
-                format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e)
-            })?;
+            .map_err(|e| format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e))?;
 
         crate::crypto::echo_signature("signature_header(header only)", signature_header_only);
 
@@ -126,28 +124,38 @@ impl RPMPackage {
             .metadata
             .signature
             .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)
-            .map_err(|e| {
-                format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e)
-            })?;
+            .map_err(|e| format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e))?;
 
         crate::crypto::echo_signature(
             "signature_header(header and content)",
             signature_header_and_content,
         );
 
-        verifier.verify(header_bytes.as_slice(), signature_header_only)
-            .map_err(|e| { format!("Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}", e) })?;
+        verifier
+            .verify(header_bytes.as_slice(), signature_header_only)
+            .map_err(|e| {
+                format!(
+                    "Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}",
+                    e
+                )
+            })?;
 
         let mut header_and_content_bytes =
             Vec::with_capacity(header_bytes.len() + self.content.len());
         header_and_content_bytes.extend(header_bytes);
         header_and_content_bytes.extend(self.content.as_slice());
 
-        verifier.verify(
-            header_and_content_bytes.as_slice(),
-            signature_header_and_content,
-        )
-        .map_err(|e| { format!("Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}", e) })?;
+        verifier
+            .verify(
+                header_and_content_bytes.as_slice(),
+                signature_header_and_content,
+            )
+            .map_err(|e| {
+                format!(
+                    "Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}",
+                    e
+                )
+            })?;
 
         Ok(())
     }
@@ -1397,10 +1405,8 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let (
-            header_digest_sha1,
-            header_and_content_digest_md5,
-        ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+        let (header_digest_sha1, header_and_content_digest_md5) =
+            Self::derive_hashes(header.as_slice(), content.as_slice())?;
 
         let header_and_content_len = header.len() + content.len();
 
@@ -1434,10 +1440,8 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let (
-            header_digest_sha1,
-            header_and_content_digest_md5,
-        ) = Self::derive_hashes(header.as_slice(), content.as_slice())?;
+        let (header_digest_sha1, header_and_content_digest_md5) =
+            Self::derive_hashes(header.as_slice(), content.as_slice())?;
 
         let header_and_content_len = header.len() + content.len();
 
@@ -1447,9 +1451,9 @@ impl RPMBuilder {
         );
 
         let signature_header = {
-            let rsa_sig_header_only = signer.sign(header.as_slice()).map_err(|_e| {
-                RPMError::new("Failed to create signature for headers")
-            })?;
+            let rsa_sig_header_only = signer
+                .sign(header.as_slice())
+                .map_err(|_e| RPMError::new("Failed to create signature for headers"))?;
 
             let mut concatenated = Vec::with_capacity(header.len() + content.len());
             concatenated.extend(header.as_slice());
@@ -1477,10 +1481,7 @@ impl RPMBuilder {
     }
 
     /// use prepared data but make sure the signatures are
-    fn derive_hashes(
-        header: &[u8],
-        content: &[u8],
-    ) -> Result<(String, Vec<u8>), RPMError> {
+    fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
         // accross header index and content (compressed or uncompressed, depends on configuration)
         let mut hasher = md5::Md5::default();
         hasher.input(&header);
@@ -1493,10 +1494,7 @@ impl RPMBuilder {
         let digest_sha1 = digest_sha1.digest();
         let digest_sha1 = digest_sha1.to_string();
 
-        Ok((
-            digest_sha1,
-            digest_md5.to_vec(),
-        ))
+        Ok((digest_sha1, digest_md5.to_vec()))
     }
 
     /// prepapre all rpm headers including content

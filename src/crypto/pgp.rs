@@ -187,10 +187,10 @@ impl Verifier {
 #[cfg(test)]
 mod test {
 
+    use super::super::{echo_signature, Signing, Verifying};
     use super::*;
-    use super::super::{Signing, Verifying, echo_signature};
 
-    use crate::signature::crypto::test::{load_asc_keys};
+    use crate::signature::crypto::test::load_asc_keys;
 
     use super::Signer;
     use super::Verifier;
