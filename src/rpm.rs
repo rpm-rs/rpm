@@ -1,16 +1,15 @@
-use nom::bytes::complete;
-use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
-
-use sha2::Digest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Display;
 use std::io::{Read, Write};
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
+#[cfg(unix)] use std::os::unix::fs::PermissionsExt;
+use std::str::FromStr;
 use std::time::UNIX_EPOCH;
+
+use nom::bytes::complete;
+use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u16, be_u32, be_u8};
+use sha2::Digest;
 
 mod errors;
 pub use crate::errors::*;
@@ -1191,13 +1190,6 @@ impl Write for Compressor {
 }
 
 impl Compressor {
-    pub fn from_str(raw: &str) -> Result<Self, RPMError> {
-        match raw {
-            "none" => Ok(Compressor::None(Vec::new())),
-            "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
-            _ => Err(RPMError::new(&format!("unknown compressor type {}", raw))),
-        }
-    }
     fn finish_compression(self) -> Result<Vec<u8>, RPMError> {
         match self {
             Compressor::None(data) => Ok(data),
@@ -1212,6 +1204,18 @@ impl Compressor {
                 compression_level: "9",
                 compression_name: "gzip",
             }),
+        }
+    }
+}
+
+impl FromStr for Compressor {
+    type Err = RPMError;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        match raw {
+            "none" => Ok(Compressor::None(Vec::new())),
+            "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
+            _ => Err(RPMError::new(&format!("unknown compressor type {}", raw))),
         }
     }
 }
