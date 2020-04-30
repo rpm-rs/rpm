@@ -3,10 +3,7 @@ use crate::errors::RPMError;
 
 use std::io::Cursor;
 
-use ::pgp::{
-    composed::Deserializable,
-    types::KeyTrait,
-};
+use ::pgp::{composed::Deserializable, types::KeyTrait};
 
 fn now() -> ::chrono::DateTime<::chrono::Utc> {
     // accuracy of serialized format is only down to seconds
@@ -29,7 +26,6 @@ impl crypto::Signing<crypto::algorithm::RSA> for Signer {
     type Signature = Vec<u8>;
     fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError> {
         let passwd_fn = || String::new();
-
 
         let now = now();
         let mut sig_cfg_bldr = ::pgp::packet::SignatureConfigBuilder::default();
@@ -119,33 +115,48 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
             log::trace!("Signature has issuer ref: {:?}", key_id);
 
             if self.public_key.key_id() == *key_id {
-                return signature
-                        .verify(&self.public_key, data)
-                        .map_err(|e| RPMError::from(format!("Failed to verify with primary key: {:?}", e)))
+                return signature.verify(&self.public_key, data).map_err(|e| {
+                    RPMError::from(format!("Failed to verify with primary key: {:?}", e))
+                });
             } else {
-                log::trace!("Signature issuer key id {:?} does not match primary keys key id: {:?}", key_id, self.public_key.key_id());
+                log::trace!(
+                    "Signature issuer key id {:?} does not match primary keys key id: {:?}",
+                    key_id,
+                    self.public_key.key_id()
+                );
             }
 
             self.public_key
                 .public_subkeys
                 .iter()
-                .filter(|sub_key| {
-                    let matching_key = sub_key.key_id().as_ref() == key_id.as_ref();
-                    if matching_key {
-                        log::trace!("Found a matching key id {:?} == {:?}", sub_key.key_id(), key_id);
+                .filter_map(|sub_key| {
+                    if sub_key.key_id().as_ref() == key_id.as_ref() {
+                        log::trace!(
+                            "Found a matching key id {:?} == {:?}",
+                            sub_key.key_id(),
+                            key_id
+                        );
+                        Some(sub_key)
                     } else {
                         log::trace!("Not the one we want: {:?}", sub_key);
+                        None
                     }
-                    matching_key
                 })
                 .fold(
-                    Err(RPMError::from(format!("No key id matched the signature issuer key id: {:?}", key_id))),
+                    Err(RPMError::from(format!(
+                        "No key id matched the signature issuer key id: {:?}",
+                        key_id
+                    ))),
                     |previous_res, sub_key| {
                         if previous_res.is_err() {
                             log::trace!("Test next candidate subkey");
-                            signature
-                                .verify(sub_key, data)
-                                .map_err(|e| RPMError::from(format!("Failed to verify with subkey {:?}: {:?}", sub_key.key_id(), e)))
+                            signature.verify(sub_key, data).map_err(|e| {
+                                RPMError::from(format!(
+                                    "Failed to verify with subkey {:?}: {:?}",
+                                    sub_key.key_id(),
+                                    e
+                                ))
+                            })
                         } else {
                             log::trace!("Signature already verified, nop");
                             Ok(())
@@ -198,8 +209,10 @@ mod test {
     fn prep() -> (Signer, Verifier) {
         let _ = env_logger::try_init();
         let (signing_key, verification_key) = load_asc_keys();
-        let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
-        let signer = Signer::load_from_asc_bytes(signing_key.as_slice()).expect("PK parsing failed");
+        let verifier =
+            Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
+        let signer =
+            Signer::load_from_asc_bytes(signing_key.as_slice()).expect("PK parsing failed");
         (signer, verifier)
     }
 

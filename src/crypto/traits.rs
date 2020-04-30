@@ -3,6 +3,7 @@
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.
 
+#[allow(unused)]
 use crate::errors::*;
 use std::fmt::Debug;
 

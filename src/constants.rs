@@ -411,3 +411,44 @@ pub const RPM_MAGIC: [u8; 4] = [0xed, 0xab, 0xee, 0xdb];
 
 /// header magic recognition (not the lead!)
 pub const HEADER_MAGIC: [u8; 3] = [0x8e, 0xad, 0xe8];
+
+pub const RPMSENSE_ANY: u32 = 0;
+pub const RPMSENSE_LESS: u32 = 1 << 1;
+pub const RPMSENSE_GREATER: u32 = 1 << 2;
+pub const RPMSENSE_EQUAL: u32 = 1 << 3;
+
+// there is no use yet for those constants. But they are part of the official package
+// so I will leave them in in case we need them later.
+
+// const RPMSENSE_POSTTRANS: u32 = (1 << 5);
+// const RPMSENSE_PREREQ: u32 = (1 << 6);
+// const RPMSENSE_PRETRANS: u32 = (1 << 7);
+// const RPMSENSE_INTERP: u32 = (1 << 8);
+// const RPMSENSE_SCRIPT_PRE: u32 = (1 << 9);
+// const RPMSENSE_SCRIPT_POST: u32 = (1 << 10);
+// const RPMSENSE_SCRIPT_PREUN: u32 = (1 << 11);
+// const RPMSENSE_SCRIPT_POSTUN: u32 = (1 << 12);
+// const RPMSENSE_SCRIPT_VERIFY: u32 = (1 << 13);
+// const RPMSENSE_FIND_REQUIRES: u32 = (1 << 14);
+// const RPMSENSE_FIND_PROVIDES: u32 = (1 << 15);
+// const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
+// const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
+// const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
+// const RPMSENSE_MISSINGOK: u32 = (1 << 19);
+
+// // for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
+// const RPMSENSE_RPMLIB: u32 = (1 << 24); //0o100000012;
+// const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
+// const RPMSENSE_KEYRING: u32 = (1 << 26);
+// const RPMSENSE_CONFIG: u32 = (1 << 28);
+
+pub const RPMFILE_CONFIG: i32 = 1;
+pub const RPMFILE_DOC: i32 = 1 << 1;
+// const RPMFILE_DONOTUSE: i32 = (1 << 2);
+// const RPMFILE_MISSINGOK: i32 = (1 << 3);
+// const RPMFILE_NOREPLACE: i32 = (1 << 4);
+// const RPMFILE_SPECFILE: i32 = (1 << 5);
+// const RPMFILE_GHOST: i32 = (1 << 6);
+// const RPMFILE_LICENSE: i32 = (1 << 7);
+// const RPMFILE_README: i32 = (1 << 8);
+// const RPMFILE_EXCLUDE: i32 = (1 << 9);

@@ -27,11 +27,13 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
-    fn create_full_rpm_with_signature_and_verify_externally() -> Result<(), Box<dyn std::error::Error>> {
+    fn create_full_rpm_with_signature_and_verify_externally(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (signing_key, _) = crate::crypto::test::load_asc_keys();
 
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref()).expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key");
 
         let cargo_file = cargo_manifest_dir().join("Cargo.toml");
         let out_file = cargo_out_dir().join("test.rpm");
@@ -234,7 +236,8 @@ gpg --verify /out/test.file.sig /out/test.file 2>&1
         podman_container_launcher(cmd.as_str(), "fedora:31", vec![])
             .expect("Container execution must be flawless");
 
-        let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("Must load");
+        let verifier =
+            Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("Must load");
 
         let raw_sig = std::fs::read(&test_file_sig).expect("must laod signature");
         let data = std::fs::read(&test_file).expect("must laod file");
