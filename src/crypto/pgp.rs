@@ -129,14 +129,14 @@ impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
             self.public_key
                 .public_subkeys
                 .iter()
-                .filter_map(|sub_key| {
-                    if sub_key.key_id().as_ref() == key_id.as_ref() {
+                .filter(|sub_key| {
+                    let matching_key = sub_key.key_id().as_ref() == key_id.as_ref();
+                    if matching_key {
                         log::trace!("Found a matching key id {:?} == {:?}", sub_key.key_id(), key_id);
-                        Some(sub_key)
                     } else {
                         log::trace!("Not the one we want: {:?}", sub_key);
-                        None
                     }
+                    matching_key
                 })
                 .fold(
                     Err(RPMError::from(format!("No key id matched the signature issuer key id: {:?}", key_id))),
@@ -187,10 +187,10 @@ impl Verifier {
 #[cfg(test)]
 mod test {
 
+    use super::super::{echo_signature, Signing, Verifying};
     use super::*;
-    use super::super::{Signing, Verifying, echo_signature};
 
-    use crate::signature::crypto::test::{load_asc_keys};
+    use crate::signature::crypto::test::load_asc_keys;
 
     use super::Signer;
     use super::Verifier;

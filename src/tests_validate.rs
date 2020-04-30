@@ -141,8 +141,7 @@ mod pgp {
 
         // verify
         {
-            let out_file =
-                std::fs::File::open(&out_file).expect("should be able to open rpm file");
+            let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
             let mut buf_reader = std::io::BufReader::new(out_file);
             let package = RPMPackage::parse(&mut buf_reader)?;
 
@@ -188,8 +187,7 @@ rpm  -vv --checksig /out/{rpm_file} 2>&1
         let mut buf_reader = std::io::BufReader::new(out_file);
         let package = RPMPackage::parse(&mut buf_reader)?;
 
-        package
-            .verify_signature(verifier)?;
+        package.verify_signature(verifier)?;
 
         Ok(())
     }
@@ -244,9 +242,7 @@ gpg --verify /out/test.file.sig /out/test.file 2>&1
 
         Ok(())
     }
-
 }
-
 
 fn wait_and_print_helper(mut child: std::process::Child, stdin_cmd: &str) -> std::io::Result<()> {
     if let Some(ref mut stdin) = child.stdin {

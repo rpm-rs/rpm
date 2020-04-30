@@ -3,7 +3,6 @@
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.
 
-#[allow(unused)]
 use crate::errors::*;
 use std::fmt::Debug;
 
@@ -32,9 +31,9 @@ where
     fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError>;
 }
 
-impl<A,T,S> Signing<A> for &T
+impl<A, T, S> Signing<A> for &T
 where
-    T: Signing<A,Signature=S>,
+    T: Signing<A, Signature = S>,
     A: algorithm::Algorithm,
     S: AsRef<[u8]>,
 {
@@ -54,11 +53,9 @@ where
     fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError>;
 }
 
-
-
-impl<A,T,S> Verifying<A> for &T
+impl<A, T, S> Verifying<A> for &T
 where
-    T: Verifying<A,Signature=S>,
+    T: Verifying<A, Signature = S>,
     A: algorithm::Algorithm,
     S: AsRef<[u8]>,
 {
@@ -67,7 +64,6 @@ where
         T::verify(self, data, signature)
     }
 }
-
 
 pub mod key {
 
