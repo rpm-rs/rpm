@@ -22,10 +22,9 @@ impl Write for Compressor {
     }
 }
 
-
 impl std::str::FromStr for Compressor {
-	type Err = RPMError;
-	fn from_str(raw: &str) -> Result<Self, Self::Err> {
+    type Err = RPMError;
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
         match raw {
             "none" => Ok(Compressor::None(Vec::new())),
             "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
@@ -35,7 +34,6 @@ impl std::str::FromStr for Compressor {
 }
 
 impl Compressor {
-
     pub(crate) fn finish_compression(self) -> Result<Vec<u8>, RPMError> {
         match self {
             Compressor::None(data) => Ok(data),

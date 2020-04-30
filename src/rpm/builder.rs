@@ -13,7 +13,10 @@ use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
-use crate::crypto;
+
+#[cfg(feature = "signature-meta")]
+use crate::signature;
+
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
@@ -259,11 +262,11 @@ impl RPMBuilder {
 
     /// use an external signer to sing and build
     ///
-    /// See `crypto::Signing` for more details.
-    #[cfg(feature = "signing-meta")]
+    /// See `signature::Signing` for more details.
+    #[cfg(feature = "signature-meta")]
     pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
     where
-        S: crypto::Signing<crate::crypto::algorithm::RSA>,
+        S: signature::Signing<crate::signature::algorithm::RSA>,
     {
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 

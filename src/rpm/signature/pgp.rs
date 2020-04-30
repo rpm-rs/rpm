@@ -1,4 +1,4 @@
-use crate::crypto;
+use super::traits;
 use crate::errors::RPMError;
 
 use std::io::Cursor;
@@ -22,7 +22,7 @@ pub struct Signer {
     secret_key: ::pgp::composed::signed_key::SignedSecretKey,
 }
 
-impl crypto::Signing<crypto::algorithm::RSA> for Signer {
+impl traits::Signing<traits::algorithm::RSA> for Signer {
     type Signature = Vec<u8>;
     fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError> {
         let passwd_fn = || String::new();
@@ -104,7 +104,7 @@ impl Verifier {
     }
 }
 
-impl crypto::Verifying<crypto::algorithm::RSA> for Verifier {
+impl traits::Verifying<traits::algorithm::RSA> for Verifier {
     type Signature = Vec<u8>;
     fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError> {
         let signature = Self::parse_signature(signature)?;
@@ -201,8 +201,6 @@ mod test {
     use super::super::{echo_signature, Signing, Verifying};
     use super::*;
 
-    use crate::signature::crypto::test::load_asc_keys;
-
     use super::Signer;
     use super::Verifier;
 
@@ -214,6 +212,13 @@ mod test {
         let signer =
             Signer::load_from_asc_bytes(signing_key.as_slice()).expect("PK parsing failed");
         (signer, verifier)
+    }
+
+    /// Load a pair of sample keys.
+    pub(crate) fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
+        let signing_key = include_bytes!("../../../test_assets/id_rsa.asc");
+        let verification_key = include_bytes!("../../../test_assets/id_rsa.pub.asc");
+        (signing_key.to_vec(), verification_key.to_vec())
     }
 
     #[test]

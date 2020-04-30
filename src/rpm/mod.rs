@@ -3,7 +3,7 @@ mod compressor;
 mod headers;
 mod package;
 
-#[cfg(feature = "signing-meta")]
+#[cfg(feature = "signature-meta")]
 pub mod signature;
 
 pub use headers::*;

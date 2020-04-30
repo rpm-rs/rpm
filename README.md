@@ -11,7 +11,7 @@ A pure rust library for parsing and creating RPM files.
 
 ### Non Goals
 
-RPM has a lot of cryptic features. I do not want to reimplement all of them. This library focuses on 
+RPM has a lot of cryptic features. I do not want to reimplement all of them. This library focuses on
 the ones that I assume as useful.
 This library does not build software like rpmbuild. It is meant for finished artifacts that need to be packaged as RPM.
 
@@ -28,7 +28,7 @@ This library does not build software like rpmbuild. It is meant for finished art
 
 ```rust
 use rpm;
-use rpm::crypto::pgp::{Signer,Verifier};
+use rpm::signature::pgp::{Signer,Verifier};
 
 let raw_secret_key = std::fs::read("/path/to/gpg.secret.key")?;
 let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -52,7 +52,7 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
             .add_changelog_entry("you", "yeah, it was", 12312312)
             .requires(Dependency::any("wget"))
             .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)
-let mut f = std::fs::File::create("./awesome.rpm")?;   
+let mut f = std::fs::File::create("./awesome.rpm")?;
 pkg.write(&mut f)?;
 
 // reading

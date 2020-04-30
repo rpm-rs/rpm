@@ -1,7 +1,7 @@
 mod traits;
 pub use self::traits::*;
 
-#[cfg(feature = "signing-pgp")]
+#[cfg(feature = "signature-pgp")]
 pub mod pgp;
 
 /// test helper to print signatures

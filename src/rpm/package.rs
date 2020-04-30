@@ -7,7 +7,7 @@ use crate::constants::*;
 use crate::errors::*;
 
 use super::Lead;
-use crate::crypto;
+use crate::signature;
 /// A complete rpm file.
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
@@ -38,10 +38,10 @@ impl RPMPackage {
     // TODO allow passing an external signer/verifier
 
     /// sign all headers (except for the lead) using an external key and store it as the initial header
-    #[cfg(feature = "signing-meta")]
+    #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
-        S: crypto::Signing<crypto::algorithm::RSA, Signature = Vec<u8>>,
+        S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
         // create a temporary byte repr of the header
         // and re-create all hashes
@@ -85,10 +85,10 @@ impl RPMPackage {
     /// Verify the signature as present within the RPM package.
     ///
     ///
-    #[cfg(feature = "signing-meta")]
+    #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
-        V: crypto::Verifying<crypto::algorithm::RSA, Signature = Vec<u8>>,
+        V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
         // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
 
@@ -101,7 +101,7 @@ impl RPMPackage {
             .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)
             .map_err(|e| format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e))?;
 
-        crate::crypto::echo_signature("signature_header(header only)", signature_header_only);
+        crate::signature::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
@@ -109,7 +109,7 @@ impl RPMPackage {
             .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)
             .map_err(|e| format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e))?;
 
-        crate::crypto::echo_signature(
+        crate::signature::echo_signature(
             "signature_header(header and content)",
             signature_header_and_content,
         );
