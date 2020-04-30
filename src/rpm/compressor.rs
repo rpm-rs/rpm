@@ -22,14 +22,20 @@ impl Write for Compressor {
     }
 }
 
-impl Compressor {
-    pub fn from_str(raw: &str) -> Result<Self, RPMError> {
+
+impl std::str::FromStr for Compressor {
+	type Err = RPMError;
+	fn from_str(raw: &str) -> Result<Self, Self::Err> {
         match raw {
             "none" => Ok(Compressor::None(Vec::new())),
             "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
             _ => Err(RPMError::new(&format!("unknown compressor type {}", raw))),
         }
     }
+}
+
+impl Compressor {
+
     pub(crate) fn finish_compression(self) -> Result<Vec<u8>, RPMError> {
         match self {
             Compressor::None(data) => Ok(data),

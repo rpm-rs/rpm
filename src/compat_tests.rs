@@ -2,6 +2,7 @@ use super::*;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::process::Stdio;
+use std::str::FromStr;
 
 fn test_rpm_file_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
