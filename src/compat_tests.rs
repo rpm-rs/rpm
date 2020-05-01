@@ -370,8 +370,8 @@ cat ~/.rpmmacros
 
 ### or (which has a couple of advantages regarding reproducability)
 
-export PK=/assets/id_rsa.pub.asc
-export SK=/assets/id_rsa.asc
+export PK=/assets/public_key.asc
+export SK=/assets/secret_key.asc
 
 gpg --allow-secret-key-import --import "${SK}" 2>&1
 gpg --import "${PK}" 2>&1

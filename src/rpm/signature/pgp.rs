@@ -216,8 +216,8 @@ mod test {
 
     /// Load a pair of sample keys.
     pub(crate) fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
-        let signing_key = include_bytes!("../../../test_assets/id_rsa.asc");
-        let verification_key = include_bytes!("../../../test_assets/id_rsa.pub.asc");
+        let signing_key = include_bytes!("../../../test_assets/secret_key.asc");
+        let verification_key = include_bytes!("../../../test_assets/public_key.asc");
         (signing_key.to_vec(), verification_key.to_vec())
     }
 
