@@ -31,7 +31,7 @@ mod pgp {
     fn create_full_rpm_with_signature_and_verify_externally(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = crate::signature::test::load_asc_keys();
+        let (signing_key, _) = crate::signature::pgp::test::load_asc_keys();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
@@ -104,7 +104,7 @@ mod pgp {
     #[serial_test::serial]
     fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, verification_key) = crate::signature::test::load_asc_keys();
+        let (signing_key, verification_key) = crate::signature::pgp::test::load_asc_keys();
 
         let cargo_file = cargo_manifest_dir().join("Cargo.toml");
         let out_file = cargo_out_dir().join("roundtrip.rpm");
@@ -160,7 +160,7 @@ mod pgp {
     #[serial_test::serial]
     fn create_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_, verification_key) = crate::signature::test::load_asc_keys();
+        let (_, verification_key) = crate::signature::pgp::test::load_asc_keys();
 
         let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
@@ -199,7 +199,7 @@ rpm  -vv --checksig /out/{rpm_file} 2>&1
     #[serial_test::serial]
     fn create_signature_with_gpg_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_signing_key, verification_key) = crate::signature::test::load_asc_keys();
+        let (_signing_key, verification_key) = crate::signature::pgp::test::load_asc_keys();
 
         let test_file = cargo_out_dir().join("test.file");
         let test_file_sig = cargo_out_dir().join("test.file.sig");

@@ -196,7 +196,7 @@ impl Verifier {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
 
     use super::super::{echo_signature, Signing, Verifying};
     use super::*;
