@@ -1,7 +1,7 @@
 use super::traits;
 use crate::errors::RPMError;
 
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 use ::pgp::{composed::Deserializable, types::KeyTrait};
 
@@ -24,7 +24,7 @@ pub struct Signer {
 
 impl traits::Signing<traits::algorithm::RSA> for Signer {
     type Signature = Vec<u8>;
-    fn sign(&self, data: &[u8]) -> Result<Self::Signature, RPMError> {
+    fn sign<R: Read>(&self, mut data: R) -> Result<Self::Signature, RPMError> {
         let passwd_fn = || String::new();
 
         let now = now();
@@ -44,8 +44,13 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
             ]) // must be initialized
             .build()?;
 
+        // currently the copy is necessary due to a lack of API allowing
+        // something `std::io::Read` based: https://github.com/rpgp/rpgp/issues/99
+        let mut buf = Vec::with_capacity(16384);
+        let _ = data.read_to_end(&mut buf)?;
+
         let signature_packet = sig_cfg
-            .sign(&self.secret_key, passwd_fn, data)
+            .sign(&self.secret_key, passwd_fn, buf.as_slice())
             .map_err(|e| format!("eee: {:?}", e))?;
 
         let mut signature_bytes = Vec::with_capacity(1024);
@@ -106,16 +111,22 @@ impl Verifier {
 
 impl traits::Verifying<traits::algorithm::RSA> for Verifier {
     type Signature = Vec<u8>;
-    fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), RPMError> {
+    fn verify<R: Read>(&self, mut data: R, signature: &[u8]) -> Result<(), RPMError> {
         let signature = Self::parse_signature(signature)?;
 
         log::debug!("Signature issued by: {:?}", signature.issuer());
+
+        // currently the copy is necessary due to a lack of API allowing
+        // something `std::io::Read` based: https://github.com/rpgp/rpgp/issues/99
+        let mut buf = Vec::with_capacity(16384);
+        let _ = data.read_to_end(&mut buf)?;
+        let buf = &buf[..];
 
         if let Some(key_id) = signature.issuer() {
             log::trace!("Signature has issuer ref: {:?}", key_id);
 
             if self.public_key.key_id() == *key_id {
-                return signature.verify(&self.public_key, data).map_err(|e| {
+                return signature.verify(&self.public_key, buf).map_err(|e| {
                     RPMError::from(format!("Failed to verify with primary key: {:?}", e))
                 });
             } else {
@@ -150,7 +161,7 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
                     |previous_res, sub_key| {
                         if previous_res.is_err() {
                             log::trace!("Test next candidate subkey");
-                            signature.verify(sub_key, data).map_err(|e| {
+                            signature.verify(sub_key, buf).map_err(|e| {
                                 RPMError::from(format!(
                                     "Failed to verify with subkey {:?}: {:?}",
                                     sub_key.key_id(),
@@ -169,7 +180,7 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
                 self.public_key.primary_key.key_id()
             );
             signature
-                .verify(&self.public_key, data)
+                .verify(&self.public_key, buf)
                 .map_err(|e| RPMError::from(format!("Failed to verify: {:?}", e)))
         }
     }
@@ -229,13 +240,16 @@ pub(crate) mod test {
         assert!(Verifier::load_from_asc_bytes(verification_key.as_ref()).is_ok());
     }
 
+    use std::io::Cursor;
+
     #[test]
     fn sign_verify_roundtrip() {
         let data = b"dfsdfjsd9ivnq320348934752312308205723900000580134850sdf";
+        let mut cursor = Cursor::new(&data[..]);
 
         let (signer, verifier) = prep();
 
-        let signature = signer.sign(data).expect("signed");
+        let signature = signer.sign(&mut cursor).expect("signed");
         let signature = signature.as_slice();
         {
             // just to see if the previous already failed or not
@@ -245,8 +259,9 @@ pub(crate) mod test {
 
         echo_signature("test/roundtrip", signature);
 
+        let mut cursor = Cursor::new(&data[..]);
         verifier
-            .verify(data, signature)
+            .verify(&mut cursor, signature)
             .expect("failed to verify just signed signature");
     }
 

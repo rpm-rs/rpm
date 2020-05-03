@@ -3,11 +3,14 @@ use sha2::Digest;
 use super::headers::*;
 
 use crate::constants::*;
+use crate::sequential_cursor::SeqCursor;
 
 use crate::errors::*;
 
 use super::Lead;
 use crate::signature;
+
+use std::io::{Read, Seek, SeekFrom};
 /// A complete rpm file.
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
@@ -48,16 +51,21 @@ impl RPMPackage {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
 
-        let mut header_and_content_bytes =
-            Vec::with_capacity(header_bytes.len() + self.content.len());
-        header_and_content_bytes.extend(header_bytes.as_slice());
-        header_and_content_bytes.extend(self.content.as_slice());
+        let mut header_and_content_cursor =
+            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
         let mut hasher = md5::Md5::default();
-
-        hasher.input(&header_and_content_bytes);
-
+        {
+            // avoid loading it into memory all at once
+            // since the content could be multiple 100s of MBs
+            let mut buf = [0u8; 256];
+            while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
+                hasher.input(&buf[0..n]);
+            }
+        }
         let hash_result = hasher.result();
+
+        header_and_content_cursor.seek(SeekFrom::Start(0))?;
 
         let digest_md5 = hash_result.as_slice();
 
@@ -67,12 +75,12 @@ impl RPMPackage {
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
 
         let rsa_signature_spanning_header_and_archive =
-            signer.sign(header_and_content_bytes.as_slice())?;
+            signer.sign(&mut header_and_content_cursor)?;
 
         // TODO FIXME verify this is the size we want, I don't think it is
         // TODO maybe use signature_size instead of size
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
-            header_and_content_bytes.len() as i32,
+            header_and_content_cursor.len() as i32,
             digest_md5,
             digest_sha1.to_string(),
             rsa_signature_spanning_header_only.as_slice(),
@@ -123,16 +131,11 @@ impl RPMPackage {
                 )
             })?;
 
-        let mut header_and_content_bytes =
-            Vec::with_capacity(header_bytes.len() + self.content.len());
-        header_and_content_bytes.extend(header_bytes);
-        header_and_content_bytes.extend(self.content.as_slice());
+        let header_and_content_cursor =
+            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
         verifier
-            .verify(
-                header_and_content_bytes.as_slice(),
-                signature_header_and_content,
-            )
+            .verify(header_and_content_cursor, signature_header_and_content)
             .map_err(|e| {
                 format!(
                     "Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}",
