@@ -1,8 +1,9 @@
-//! Trait abstractions of cryptographic operations.
+//! Trait abstractions of signinggraphic operations.
 //!
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.
 
+#[allow(unused)]
 use crate::errors::*;
 use std::fmt::Debug;
 
@@ -104,15 +105,5 @@ where
         unreachable!(
             "if you want to verify, you need to implement `verify` of the `Verifying` trait"
         )
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod test {
-    /// Load a pair of sample keys.
-    pub(crate) fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
-        let signing_key = include_bytes!("../../test_assets/id_rsa.asc");
-        let verification_key = include_bytes!("../../test_assets/id_rsa.pub.asc");
-        (signing_key.to_vec(), verification_key.to_vec())
     }
 }

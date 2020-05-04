@@ -16,7 +16,6 @@ categories = ["parsing", "development-tools"]
 
 [lib]
 name = "rpm"
-path = "src/rpm.rs"
 
 [dependencies]
 nom = "5.1"
@@ -44,8 +43,8 @@ itertools = "0.9"
 serial_test = "0.4"
 
 [features]
-default = ["signing-pgp"]
+default = ["signature-pgp"]
 
-signing-pgp = ["signing-meta", "pgp"]
-signing-meta = []
-test-with-podman = ["signing-meta"]
+signature-pgp = ["signature-meta", "pgp"]
+signature-meta = []
+test-with-podman = ["signature-meta"]
