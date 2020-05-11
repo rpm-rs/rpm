@@ -128,7 +128,7 @@ where
 
     pub(crate) fn get_entry_binary_data(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.binary().ok_or_else(|| {
+        entry.data.as_binary().ok_or_else(|| {
             RPMError::new(&format!(
                 "tag {} has datatype {}, not string",
                 entry.tag, entry.data,
@@ -138,7 +138,7 @@ where
 
     pub(crate) fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.string().ok_or_else(|| {
+        entry.data.as_str().ok_or_else(|| {
             RPMError::new(&format!(
                 "tag {} has datatype {}, not string",
                 entry.tag, entry.data,
@@ -146,9 +146,9 @@ where
         })
     }
 
-    pub(crate) fn get_entry_int_data(&self, tag: T) -> Result<i32, RPMError> {
+    pub(crate) fn get_entry_i32_data(&self, tag: T) -> Result<i32, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.int().ok_or_else(|| {
+        entry.data.as_i32().ok_or_else(|| {
             RPMError::new(&format!(
                 "tag {} has datatype {}, not i32",
                 entry.tag, entry.data,
@@ -156,9 +156,19 @@ where
         })
     }
 
+    pub(crate) fn get_entry_i64_data(&self, tag: T) -> Result<i64, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry.data.as_i64().ok_or_else(|| {
+            RPMError::new(&format!(
+                "tag {} has datatype {}, not i64",
+                entry.tag, entry.data,
+            ))
+        })
+    }
+
     pub(crate) fn get_entry_string_array_data(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.string_array().ok_or_else(|| {
+        entry.data.as_string_array().ok_or_else(|| {
             RPMError::new(&format!("tag {} does not provide string array", entry.tag,))
         })
     }
@@ -254,36 +264,49 @@ impl Header<IndexSignatureTag> {
 }
 
 impl Header<IndexTag> {
+    #[inline]
     pub fn get_payload_format(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADFORMAT)
     }
 
+    #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
     }
 
+    #[inline]
     pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
         self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)
     }
 
+    #[inline]
     pub fn get_name(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_NAME)
     }
 
+    #[inline]
     pub fn get_epoch(&self) -> Result<i32, RPMError> {
-        self.get_entry_int_data(IndexTag::RPMTAG_EPOCH)
+        self.get_entry_i32_data(IndexTag::RPMTAG_EPOCH)
     }
 
+    #[inline]
     pub fn get_version(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_VERSION)
     }
 
+    #[inline]
     pub fn get_release(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_RELEASE)
     }
 
+    #[inline]
     pub fn get_arch(&self) -> Result<&str, RPMError> {
         self.get_entry_string_data(IndexTag::RPMTAG_ARCH)
+    }
+
+    #[inline]
+    pub fn get_install_time(&self) -> Result<i64, RPMError> {
+        self.get_entry_i64_data(IndexTag::RPMTAG_INSTALLTIME)
     }
 }
 
@@ -652,14 +675,15 @@ impl IndexData {
         }
     }
 
-    pub(crate) fn string(&self) -> Option<&str> {
+
+    pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
             IndexData::StringTag(s) => Some(&s),
             _ => None,
         }
     }
 
-    pub(crate) fn int(&self) -> Option<i32> {
+    pub(crate) fn as_i32(&self) -> Option<i32> {
         match self {
             IndexData::Int32(s) => {
                 if !s.is_empty() {
@@ -672,14 +696,28 @@ impl IndexData {
         }
     }
 
-    pub(crate) fn string_array(&self) -> Option<&[String]> {
+
+    pub(crate) fn as_i64(&self) -> Option<i64> {
+        match self {
+            IndexData::Int64(s) => {
+                if !s.is_empty() {
+                    Some(s[0])
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_string_array(&self) -> Option<&[String]> {
         match self {
             IndexData::StringArray(d) | IndexData::I18NString(d) => Some(&d),
             _ => None,
         }
     }
 
-    pub(crate) fn binary(&self) -> Option<&[u8]> {
+    pub(crate) fn as_binary(&self) -> Option<&[u8]> {
         match self {
             IndexData::Bin(d) => Some(d.as_slice()),
             _ => None,
