@@ -402,6 +402,9 @@ pub enum IndexSignatureTag {
     //This  index  contains  the  SHA256  checksum  of  the  entire  Header  Section,
     //including the Header Record, Index Records and Header store.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as isize,
+
+    // A silly tag for a date.
+    RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as isize,
 }
 
 pub trait TypeName {
