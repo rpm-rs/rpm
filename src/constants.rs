@@ -404,6 +404,22 @@ pub enum IndexSignatureTag {
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as isize,
 }
 
+pub trait TypeName {
+    fn type_name() -> &'static str;
+}
+
+impl TypeName for IndexTag {
+    fn type_name() -> &'static str {
+        "IndexTag"
+    }
+}
+
+impl TypeName for IndexSignatureTag {
+    fn type_name() -> &'static str {
+        "IndexSignatureTag"
+    }
+}
+
 /// lead header size
 pub const LEAD_SIZE: usize = 96;
 /// rpm magic as part of the lead header

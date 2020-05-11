@@ -13,12 +13,12 @@ use crate::errors::*;
 /// Each and every header has a particular header tag that identifier the type of
 /// the header the format / information contained in that header.
 pub trait Tag:
-    num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy
+    num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy + TypeName
 {
 }
 
 impl<T> Tag for T where
-    T: num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy
+    T: num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy + TypeName
 {
 }
 
@@ -442,20 +442,20 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) num_items: u32,
 }
 
-impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug> IndexEntry<T> {
+impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntry<T> {
     // 16 bytes
     pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
         //first 4 bytes are the tag.
         let (input, raw_tag) = be_u32(input)?;
 
         let tag: T = num::FromPrimitive::from_u32(raw_tag)
-            .ok_or_else(|| RPMError::new(&format!("invalid tag {}", raw_tag)))?;
+            .ok_or_else(|| RPMError::new(&format!("invalid tag {} for type {}", raw_tag, T::type_name())))?;
         //next 4 bytes is the tag type
         let (input, raw_tag_type) = be_u32(input)?;
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
         let data = IndexData::from_u32(raw_tag_type)
-            .ok_or_else(|| RPMError::new(&format!("invalid tag_type {}", raw_tag_type)))?;
+            .ok_or_else(|| RPMError::new(&format!("invalid tag_type {} for {:?} of type {}", raw_tag_type, tag, T::type_name())))?;
 
         //  next 4 bytes is the offset relative to the beginning of the store
         let (input, offset) = be_i32(input)?;
