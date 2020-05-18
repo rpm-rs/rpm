@@ -24,6 +24,10 @@ pub struct Signer {
 
 impl traits::Signing<traits::algorithm::RSA> for Signer {
     type Signature = Vec<u8>;
+
+    /// Despite the fact the API suggest zero copy pattern,
+    /// it internally creates a copy until crate `pgp` provides
+    /// a `Read` based implementation.
     fn sign<R: Read>(&self, mut data: R) -> Result<Self::Signature, RPMError> {
         let passwd_fn = || String::new();
 
@@ -111,6 +115,9 @@ impl Verifier {
 
 impl traits::Verifying<traits::algorithm::RSA> for Verifier {
     type Signature = Vec<u8>;
+    /// Despite the fact the API suggest zero copy pattern,
+    /// it internally creates a copy until crate `pgp` provides
+    /// a `Read` based implementation.
     fn verify<R: Read>(&self, mut data: R, signature: &[u8]) -> Result<(), RPMError> {
         let signature = Self::parse_signature(signature)?;
 
