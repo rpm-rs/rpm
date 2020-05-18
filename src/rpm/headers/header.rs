@@ -465,6 +465,8 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) num_items: u32,
 }
 
+use crate::constants::TypeName;
+
 impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntry<T> {
     // 16 bytes
     pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
