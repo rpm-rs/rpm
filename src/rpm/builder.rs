@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::UNIX_EPOCH;
 
 use crate::errors::*;
+use crate::sequential_cursor::SeqCursor;
 
 use super::compressor::Compressor;
 use super::headers::*;
@@ -289,13 +290,10 @@ impl RPMBuilder {
                 .sign(header.as_slice())
                 .map_err(|_e| RPMError::new("Failed to create signature for headers"))?;
 
-            let mut concatenated = Vec::with_capacity(header.len() + content.len());
-            concatenated.extend(header.as_slice());
-            concatenated.extend(content.as_slice());
-            let rsa_sig_header_and_archive =
-                signer.sign(concatenated.as_slice()).map_err(|_e| {
-                    RPMError::new("Failed to create signature based for headers and content")
-                })?;
+            let cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+            let rsa_sig_header_and_archive = signer.sign(cursor).map_err(|_e| {
+                RPMError::new("Failed to create signature based for headers and content")
+            })?;
 
             builder
                 .add_signature(
