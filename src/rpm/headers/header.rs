@@ -10,7 +10,7 @@ use crate::errors::*;
 
 /// Header tag.
 ///
-/// Each and every header has a particular header tag that identifier the type of
+/// Each and every header has a particular header tag that identifies the type of
 /// the header the format / information contained in that header.
 pub trait Tag:
     num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy + TypeName

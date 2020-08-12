@@ -6,12 +6,12 @@ A pure rust library for parsing and creating RPM files.
 
 - Easy to use API
 - Pure rust to make it easy to use in larger Projects
-- Independence of Spec files. Pure programatic interface for Packaging.
-- Compability  to Centos 7 / Fedora (I may extend test cases for suse)
+- Independence of Spec files. Pure programmatic interface for Packaging.
+- Compatibility  to Centos 7 / Fedora (I may extend test cases for SUSE)
 
 ### Non Goals
 
-RPM has a lot of cryptic features. I do not want to reimplement all of them. This library focuses on
+RPM has a lot of cryptic features. I do not want to re-implement all of them. This library focuses on
 the ones that I assume as useful.
 This library does not build software like rpmbuild. It is meant for finished artifacts that need to be packaged as RPM.
 
