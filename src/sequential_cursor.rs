@@ -9,6 +9,7 @@ impl<'s> SeqCursor<'s> {
     /// Add an additional slice to the end of the cursor
     ///
     /// Does not modify the current cursors position.
+    #[allow(unused)]
     pub(crate) fn add<'b>(&mut self, another: &'b [u8])
     where
         'b: 's,
