@@ -60,10 +60,10 @@ impl RPMPackage {
             // since the content could be multiple 100s of MBs
             let mut buf = [0u8; 256];
             while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
-                hasher.input(&buf[0..n]);
+                hasher.update(&buf[0..n]);
             }
         }
-        let hash_result = hasher.result();
+        let hash_result = hasher.finalize();
 
         header_and_content_cursor.seek(SeekFrom::Start(0))?;
 

@@ -163,8 +163,8 @@ impl RPMBuilder {
         };
 
         let mut hasher = sha2::Sha256::default();
-        hasher.input(&content);
-        let hash_result = hasher.result();
+        hasher.update(&content);
+        let hash_result = hasher.finalize();
         let sha_checksum = format!("{:x}", hash_result);
         let entry = RPMFileEntry {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
@@ -316,9 +316,9 @@ impl RPMBuilder {
     fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
         // accross header index and content (compressed or uncompressed, depends on configuration)
         let mut hasher = md5::Md5::default();
-        hasher.input(&header);
-        hasher.input(&content);
-        let digest_md5 = hasher.result();
+        hasher.update(&header);
+        hasher.update(&content);
+        let digest_md5 = hasher.finalize();
         let digest_md5 = digest_md5.as_slice();
 
         // header only, not the lead, just the header index
