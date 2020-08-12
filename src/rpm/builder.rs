@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::time::UNIX_EPOCH;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 use crate::sequential_cursor::SeqCursor;
@@ -106,11 +107,15 @@ impl RPMBuilder {
         self
     }
 
-    pub fn with_file<T: Into<RPMFileOptions>>(
+    pub fn with_file<T, P>(
         mut self,
-        source: &str,
+        source: P,
         options: T,
-    ) -> Result<Self, RPMError> {
+    ) -> Result<Self, RPMError>
+    where
+        P: AsRef<Path>,
+        T: Into<RPMFileOptions>,
+    {
         let mut input = std::fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -145,7 +150,7 @@ impl RPMBuilder {
             )));
         }
 
-        let pb = std::path::PathBuf::from(dest.clone());
+        let pb = PathBuf::from(dest.clone());
 
         let parent = pb
             .parent()
@@ -330,6 +335,8 @@ impl RPMBuilder {
     }
 
     /// prepapre all rpm headers including content
+    ///
+    /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
     fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all toghether.
