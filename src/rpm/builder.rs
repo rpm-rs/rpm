@@ -415,7 +415,7 @@ impl RPMBuilder {
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
-        for d in self.provides.drain(0..) {
+        for d in self.provides.into_iter() {
             provide_names.push(d.dep_name);
             provide_flags.push(d.sense as i32);
             provide_versions.push(d.version);
@@ -425,7 +425,7 @@ impl RPMBuilder {
         let mut obsolete_flags = Vec::new();
         let mut obsolete_versions = Vec::new();
 
-        for d in self.obsoletes.drain(0..) {
+        for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.dep_name);
             obsolete_flags.push(d.sense as i32);
             obsolete_versions.push(d.version);
@@ -435,7 +435,7 @@ impl RPMBuilder {
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
-        for d in self.requires.drain(0..) {
+        for d in self.requires.into_iter() {
             require_names.push(d.dep_name);
             require_flags.push(d.sense as i32);
             require_versions.push(d.version);
@@ -445,7 +445,7 @@ impl RPMBuilder {
         let mut conflicts_flags = Vec::new();
         let mut conflicts_versions = Vec::new();
 
-        for d in self.conflicts.drain(0..) {
+        for d in self.conflicts.into_iter() {
             conflicts_names.push(d.dep_name);
             conflicts_flags.push(d.sense as i32);
             conflicts_versions.push(d.version);
