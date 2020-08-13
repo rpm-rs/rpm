@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::time::UNIX_EPOCH;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 use crate::sequential_cursor::SeqCursor;
@@ -106,11 +107,15 @@ impl RPMBuilder {
         self
     }
 
-    pub fn with_file<T: Into<RPMFileOptions>>(
+    pub fn with_file<T, P>(
         mut self,
-        source: &str,
+        source: P,
         options: T,
-    ) -> Result<Self, RPMError> {
+    ) -> Result<Self, RPMError>
+    where
+        P: AsRef<Path>,
+        T: Into<RPMFileOptions>,
+    {
         let mut input = std::fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -145,7 +150,7 @@ impl RPMBuilder {
             )));
         }
 
-        let pb = std::path::PathBuf::from(dest.clone());
+        let pb = PathBuf::from(dest.clone());
 
         let parent = pb
             .parent()
@@ -163,8 +168,8 @@ impl RPMBuilder {
         };
 
         let mut hasher = sha2::Sha256::default();
-        hasher.input(&content);
-        let hash_result = hasher.result();
+        hasher.update(&content);
+        let hash_result = hasher.finalize();
         let sha_checksum = format!("{:x}", hash_result);
         let entry = RPMFileEntry {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
@@ -316,9 +321,9 @@ impl RPMBuilder {
     fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
         // accross header index and content (compressed or uncompressed, depends on configuration)
         let mut hasher = md5::Md5::default();
-        hasher.input(&header);
-        hasher.input(&content);
-        let digest_md5 = hasher.result();
+        hasher.update(&header);
+        hasher.update(&content);
+        let digest_md5 = hasher.finalize();
         let digest_md5 = digest_md5.as_slice();
 
         // header only, not the lead, just the header index
@@ -330,6 +335,8 @@ impl RPMBuilder {
     }
 
     /// prepapre all rpm headers including content
+    ///
+    /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
     fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all toghether.
@@ -408,7 +415,7 @@ impl RPMBuilder {
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
-        for d in self.provides.drain(0..) {
+        for d in self.provides.into_iter() {
             provide_names.push(d.dep_name);
             provide_flags.push(d.sense as i32);
             provide_versions.push(d.version);
@@ -418,7 +425,7 @@ impl RPMBuilder {
         let mut obsolete_flags = Vec::new();
         let mut obsolete_versions = Vec::new();
 
-        for d in self.obsoletes.drain(0..) {
+        for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.dep_name);
             obsolete_flags.push(d.sense as i32);
             obsolete_versions.push(d.version);
@@ -428,7 +435,7 @@ impl RPMBuilder {
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
-        for d in self.requires.drain(0..) {
+        for d in self.requires.into_iter() {
             require_names.push(d.dep_name);
             require_flags.push(d.sense as i32);
             require_versions.push(d.version);
@@ -438,7 +445,7 @@ impl RPMBuilder {
         let mut conflicts_flags = Vec::new();
         let mut conflicts_versions = Vec::new();
 
-        for d in self.conflicts.drain(0..) {
+        for d in self.conflicts.into_iter() {
             conflicts_names.push(d.dep_name);
             conflicts_flags.push(d.sense as i32);
             conflicts_versions.push(d.version);

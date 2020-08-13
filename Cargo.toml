@@ -25,9 +25,9 @@ num = "0.2"
 enum-display-derive = "0.1"
 cpio = "0.2"
 # consider migrating to flate2
-libflate = "0.1"
-sha2 = "0.8"
-md-5 = "0.8"
+libflate = "1"
+sha2 = "0.9"
+md-5 = "0.9"
 sha1 = "0.6"
 rand = { version = "0.7" }
 pgp = { version = "0.6", optional = true }
@@ -35,9 +35,8 @@ chrono = "0.4"
 log = "0.4"
 
 [dev-dependencies]
-rsa = { version = "^0.2.0" }
+rsa = { version = "^0.3.0" }
 rsa-der = { version = "^0.2.1" }
-sha2 = "0.8"
 env_logger = "0.7"
 itertools = "0.9"
 serial_test = "0.4"
