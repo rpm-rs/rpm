@@ -30,33 +30,25 @@ impl Lead {
         let (rest, magic) = complete::take(4usize)(input)?;
         for i in 0..magic.len() {
             if magic[i] != RPM_MAGIC[i] {
-                return Err(RPMError::new(&format!(
-                    "invalid rpm magic - expected {} but got {}. The whole input was {:x?}",
-                    RPM_MAGIC[i], magic[i], input,
-                )));
+                return Err(RPMError::InvalidMagic {
+                    expected: RPM_MAGIC[i],
+                    actual: magic[i],
+                    complete_input: input.to_vec(),
+                });
             }
         }
         let (rest, major) = be_u8(rest)?;
         if major != 3 {
-            return Err(RPMError::new(&format!(
-                "invalid major version - expected 3 but got {}. The whole input was {:x?}",
-                major, input
-            )));
+            return Err(RPMError::InvalidLeadMajorVersion(major));
         }
         let (rest, minor) = be_u8(rest)?;
         if minor != 0 {
-            return Err(RPMError::new(&format!(
-                "invalid minor version - expected 0 but got {}. The whole input was {:x?}",
-                major, input
-            )));
+            return Err(RPMError::InvalidLeadMinorVersion(minor));
         }
         let (rest, pkg_type) = be_u16(rest)?;
 
         if pkg_type > 1 {
-            return Err(RPMError::new(&format!(
-                "invalid type - expected 0 or 1 but got {}. The whole input was {:x?}",
-                pkg_type, input
-            )));
+            return Err(RPMError::InvalidLeadPKGType(pkg_type));
         }
 
         let (rest, arch) = be_u16(rest)?;
@@ -64,25 +56,19 @@ impl Lead {
 
         let (rest, os) = be_u16(rest)?;
         if os != 1 {
-            return Err(RPMError::new(&format!(
-                "invalid os-type - expected 1 but got {}. The whole input was {:x?}",
-                os, input
-            )));
+            return Err(RPMError::InvalidLeadOSType(os));
         }
 
         let (rest, sigtype) = be_u16(rest)?;
         if sigtype != 5 {
-            return Err(RPMError::new(&format!(
-                "invalid signature-type - expected 5 but got {}. The whole input was {:x?}",
-                os, input
-            )));
+            return Err(RPMError::InvalidLeadSignatureType(sigtype));
         }
 
         if rest.len() != 16 {
-            return Err(RPMError::new(&format!(
-                "invalid size of reserved area - expected length of 16 but got {}. The whole input was {:x?}",
-                rest.len(), input
-            )));
+            return Err(RPMError::InvalidReservedSpaceSize {
+                expected: 16,
+                actual: rest.len(),
+            });
         }
 
         let mut name_arr: [u8; 66] = [0; 66];

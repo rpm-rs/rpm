@@ -106,42 +106,26 @@ impl RPMPackage {
         let signature_header_only = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)
-            .map_err(|e| format!("Missing header-only signature / RPMSIGTAG_RSA: {:?}", e))?;
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)?;
 
         crate::signature::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)
-            .map_err(|e| format!("Missing header+content signature / RPMSIGTAG_PGP: {:?}", e))?;
+            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)?;
 
         crate::signature::echo_signature(
             "signature_header(header and content)",
             signature_header_and_content,
         );
 
-        verifier
-            .verify(header_bytes.as_slice(), signature_header_only)
-            .map_err(|e| {
-                format!(
-                    "Failed to verify header-only signature / RPMSIGTAG_RSA: {:?}",
-                    e
-                )
-            })?;
+        verifier.verify(header_bytes.as_slice(), signature_header_only)?;
 
         let header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
-        verifier
-            .verify(header_and_content_cursor, signature_header_and_content)
-            .map_err(|e| {
-                format!(
-                    "Failed to verify header+content signature / RPMSIGTAG_PGP: {:?}",
-                    e
-                )
-            })?;
+        verifier.verify(header_and_content_cursor, signature_header_and_content)?;
 
         Ok(())
     }

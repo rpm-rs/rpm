@@ -5,8 +5,8 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use std::time::UNIX_EPOCH;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use crate::errors::*;
 use crate::sequential_cursor::SeqCursor;
@@ -107,11 +107,7 @@ impl RPMBuilder {
         self
     }
 
-    pub fn with_file<T, P>(
-        mut self,
-        source: P,
-        options: T,
-    ) -> Result<Self, RPMError>
+    pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
     where
         P: AsRef<Path>,
         T: Into<RPMFileOptions>,
@@ -144,17 +140,20 @@ impl RPMBuilder {
     ) -> Result<(), RPMError> {
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
-            return Err(RPMError::new(&format!(
-                "invalid path {} - needs to start with / or ./",
-                dest
-            )));
+            return Err(RPMError::InvalidDestinationPath {
+                path: dest,
+                desc: "invalid start, expected / or ./",
+            });
         }
 
         let pb = PathBuf::from(dest.clone());
 
         let parent = pb
             .parent()
-            .ok_or_else(|| RPMError::new(&format!("invalid destination path {}", dest)))?;
+            .ok_or_else(|| RPMError::InvalidDestinationPath {
+                path: dest.clone(),
+                desc: "no parent directory found",
+            })?;
         let (cpio_path, dir) = if dest.starts_with('.') {
             (
                 dest.to_string(),
@@ -291,14 +290,10 @@ impl RPMBuilder {
         );
 
         let signature_header = {
-            let rsa_sig_header_only = signer
-                .sign(header.as_slice())
-                .map_err(|_e| RPMError::new("Failed to create signature for headers"))?;
+            let rsa_sig_header_only = signer.sign(header.as_slice())?;
 
             let cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
-            let rsa_sig_header_and_archive = signer.sign(cursor).map_err(|_e| {
-                RPMError::new("Failed to create signature based for headers and content")
-            })?;
+            let rsa_sig_header_and_archive = signer.sign(cursor)?;
 
             builder
                 .add_signature(

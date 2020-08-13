@@ -259,10 +259,11 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
     let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
 
-    let data = match region_entry.data {
-        IndexData::Bin(d) => d,
-        _ => return Err(Box::new(RPMError::new("should be bin"))),
-    };
+    let possible_binary = region_entry.data.as_binary();
+
+    assert!(possible_binary.is_some(), "should be binary");
+
+    let data = possible_binary.unwrap();
 
     let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(&data)?;
 

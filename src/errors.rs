@@ -1,56 +1,90 @@
-use std::fmt;
-
+use nom;
 use std::io;
 
-pub struct RPMError {
-    message: String,
-}
+use thiserror::Error;
 
-impl std::error::Error for RPMError {}
+#[derive(Error, Debug)]
+#[non_exhaustive]
+pub enum RPMError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
 
-impl RPMError {
-    pub fn new(message: &str) -> Self {
-        RPMError {
-            message: message.to_string(),
-        }
-    }
-}
+    #[error("{0}")]
+    Nom(String),
+    #[error(
+        "invalid magic expected: {expected} but got: {actual} - whole input was {complete_input:?}"
+    )]
+    InvalidMagic {
+        expected: u8,
+        actual: u8,
+        complete_input: Vec<u8>,
+    },
+    #[error("unsupported Version {0} - only header version 1 is supported")]
+    UnsupportedHeaderVersion(u8),
+    #[error("invalid tag {raw_tag} for store {store_type}")]
+    InvalidTag {
+        raw_tag: u32,
+        store_type: &'static str,
+    },
+    #[error("invalid tag data type in store {store_type}: expected 0 - 9 but got {raw_data_type}")]
+    InvalidTagDataType {
+        raw_data_type: u32,
+        store_type: &'static str,
+    },
+    #[error("unable to find tag {0}")]
+    TagNotFound(String),
+    #[error("tag {tag} has data type {actual_data_type}, not {expected_data_type}")]
+    UnexpectedTagDataType {
+        expected_data_type: &'static str,
+        actual_data_type: String,
+        tag: String,
+    },
+    #[error("unsupported lead major version {0} - only version 3 is supported")]
+    InvalidLeadMajorVersion(u8),
+    #[error("unsupported lead major version {0} - only version 0 is supported")]
+    InvalidLeadMinorVersion(u8),
+    #[error("invalid type - expected 0 or 1 but got {0}")]
+    InvalidLeadPKGType(u16),
+    #[error("invalid os-type - expected 1 but got {0}")]
+    InvalidLeadOSType(u16),
+    #[error("invalid signature-type - expected 5 but got {0}")]
+    InvalidLeadSignatureType(u16),
+    #[error("invalid size of reserved area - expected length of {expected} but got {actual}")]
+    InvalidReservedSpaceSize { expected: u16, actual: usize },
 
-impl fmt::Display for RPMError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message) // user-facing output
-    }
-}
+    #[error("invalid destination path {path} - {desc}")]
+    InvalidDestinationPath { path: String, desc: &'static str },
 
-impl fmt::Debug for RPMError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message) // programmer-facing output
-    }
-}
+    #[error("signature packet not found in what is supposed to be a signature")]
+    NoSignatureFound,
+    #[error("error creating signature: {0}")]
+    SignError(Box<dyn std::error::Error>),
+    #[error("error parsing key - {details}. underlying error was: {source}")]
+    KeyLoadError {
+        source: Box<dyn std::error::Error>,
+        details: &'static str,
+    },
 
-impl From<String> for RPMError {
-    fn from(message: String) -> Self {
-        RPMError { message }
-    }
-}
+    #[error("error verifying signature with key {key_ref}: {source}")]
+    VerificationError {
+        source: Box<dyn std::error::Error>,
+        key_ref: String,
+    },
 
-impl From<io::Error> for RPMError {
-    fn from(error: io::Error) -> Self {
-        RPMError {
-            message: error.to_string(),
-        }
-    }
+    #[error("unable to find key with key-ref: {key_ref}")]
+    KeyNotFoundError { key_ref: String },
+
+    #[error("unknown compressor type {0} - only gzip and none are supported")]
+    UnknownCompressorType(String),
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
     fn from(error: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
         match error {
-            nom::Err::Error((_, kind)) | nom::Err::Failure((_, kind)) => RPMError {
-                message: kind.description().to_string(),
-            },
-            nom::Err::Incomplete(_) => RPMError {
-                message: "unhandled incomplete".to_string(),
-            },
+            nom::Err::Error((_, kind)) | nom::Err::Failure((_, kind)) => {
+                RPMError::Nom(kind.description().to_string())
+            }
+            nom::Err::Incomplete(_) => RPMError::Nom("unhandled incomplete".to_string()),
         }
     }
 }

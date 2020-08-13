@@ -18,7 +18,13 @@ pub trait Tag:
 }
 
 impl<T> Tag for T where
-    T: num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy + TypeName
+    T: num::FromPrimitive
+        + num::ToPrimitive
+        + PartialEq
+        + fmt::Display
+        + fmt::Debug
+        + Copy
+        + TypeName
 {
 }
 
@@ -123,54 +129,67 @@ where
         self.index_entries
             .iter()
             .find(|entry| &entry.tag == tag)
-            .ok_or_else(|| RPMError::new(&format!("unable to find Tag {}", tag)))
+            .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
     }
 
     pub(crate) fn get_entry_binary_data(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.as_binary().ok_or_else(|| {
-            RPMError::new(&format!(
-                "tag {} has datatype {}, not string",
-                entry.tag, entry.data,
-            ))
-        })
+        entry
+            .data
+            .as_binary()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "binary",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
     }
 
     pub(crate) fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.as_str().ok_or_else(|| {
-            RPMError::new(&format!(
-                "tag {} has datatype {}, not string",
-                entry.tag, entry.data,
-            ))
-        })
+        entry
+            .data
+            .as_str()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "string",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
     }
 
     pub(crate) fn get_entry_i32_data(&self, tag: T) -> Result<i32, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.as_i32().ok_or_else(|| {
-            RPMError::new(&format!(
-                "tag {} has datatype {}, not i32",
-                entry.tag, entry.data,
-            ))
-        })
+        entry
+            .data
+            .as_i32()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i32",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
     }
 
     pub(crate) fn get_entry_i64_data(&self, tag: T) -> Result<i64, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.as_i64().ok_or_else(|| {
-            RPMError::new(&format!(
-                "tag {} has datatype {}, not i64",
-                entry.tag, entry.data,
-            ))
-        })
+        entry
+            .data
+            .as_i64()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i64",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
     }
 
     pub(crate) fn get_entry_string_array_data(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
-        entry.data.as_string_array().ok_or_else(|| {
-            RPMError::new(&format!("tag {} does not provide string array", entry.tag,))
-        })
+        entry
+            .data
+            .as_string_array()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "string array",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
     }
 
     pub(crate) fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
@@ -406,21 +425,18 @@ impl IndexHeader {
         let (rest, magic) = complete::take(3usize)(input)?;
         for i in 0..2 {
             if HEADER_MAGIC[i] != magic[i] {
-                return Err(RPMError::new(&format!(
-                    "invalid magic {} vs {} - whole input was {:x?}",
-                    HEADER_MAGIC[i], magic[i], input,
-                )));
+                return Err(RPMError::InvalidMagic {
+                    expected: HEADER_MAGIC[i],
+                    actual: magic[i],
+                    complete_input: input.to_vec(),
+                });
             }
         }
-
         // then version
         let (rest, version) = be_u8(rest)?;
 
         if version != 1 {
-            return Err(RPMError::new(&format!(
-                "unsupported Version {} - only header version 1 is supported",
-                version,
-            )));
+            return Err(RPMError::UnsupportedHeaderVersion(version));
         }
         // then reserved
         let (rest, _) = complete::take(4usize)(rest)?;
@@ -473,14 +489,19 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         //first 4 bytes are the tag.
         let (input, raw_tag) = be_u32(input)?;
 
-        let tag: T = num::FromPrimitive::from_u32(raw_tag)
-            .ok_or_else(|| RPMError::new(&format!("invalid tag {} for type {}", raw_tag, T::type_name())))?;
+        let tag: T = num::FromPrimitive::from_u32(raw_tag).ok_or_else(|| RPMError::InvalidTag {
+            raw_tag: raw_tag,
+            store_type: T::type_name(),
+        })?;
         //next 4 bytes is the tag type
         let (input, raw_tag_type) = be_u32(input)?;
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
-        let data = IndexData::from_u32(raw_tag_type)
-            .ok_or_else(|| RPMError::new(&format!("invalid tag_type {} for {:?} of type {}", raw_tag_type, tag, T::type_name())))?;
+        let data =
+            IndexData::from_u32(raw_tag_type).ok_or_else(|| RPMError::InvalidTagDataType {
+                raw_data_type: raw_tag_type,
+                store_type: T::type_name(),
+            })?;
 
         //  next 4 bytes is the offset relative to the beginning of the store
         let (input, offset) = be_i32(input)?;
@@ -677,7 +698,6 @@ impl IndexData {
         }
     }
 
-
     pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
             IndexData::StringTag(s) => Some(&s),
@@ -697,7 +717,6 @@ impl IndexData {
             _ => None,
         }
     }
-
 
     pub(crate) fn as_i64(&self) -> Option<i64> {
         match self {

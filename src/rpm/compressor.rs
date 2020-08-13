@@ -28,7 +28,7 @@ impl std::str::FromStr for Compressor {
         match raw {
             "none" => Ok(Compressor::None(Vec::new())),
             "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
-            _ => Err(RPMError::new(&format!("unknown compressor type {}", raw))),
+            _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
         }
     }
 }

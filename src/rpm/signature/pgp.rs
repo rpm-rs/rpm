@@ -5,6 +5,8 @@ use std::io::{Cursor, Read};
 
 use ::pgp::{composed::Deserializable, types::KeyTrait};
 
+use ::pgp::packet::*;
+
 fn now() -> ::chrono::DateTime<::chrono::Utc> {
     // accuracy of serialized format is only down to seconds
     use ::chrono::offset::TimeZone;
@@ -32,22 +34,21 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
         let passwd_fn = || String::new();
 
         let now = now();
-        let mut sig_cfg_bldr = ::pgp::packet::SignatureConfigBuilder::default();
-        let sig_cfg = sig_cfg_bldr
-            .version(::pgp::packet::SignatureVersion::V4)
-            .typ(::pgp::packet::SignatureType::Binary)
-            .pub_alg(::pgp::crypto::public_key::PublicKeyAlgorithm::RSA)
-            .hash_alg(::pgp::crypto::hash::HashAlgorithm::SHA2_256)
-            .issuer(Some(self.secret_key.key_id()))
-            .created(Some(now))
-            .unhashed_subpackets(vec![]) // must be initialized
-            .hashed_subpackets(vec![
-                ::pgp::packet::Subpacket::SignatureCreationTime(now),
-                ::pgp::packet::Subpacket::Issuer(self.secret_key.key_id()),
-                //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
-            ]) // must be initialized
-            .build()?;
 
+        let sig_cfg = SignatureConfig {
+            version: SignatureVersion::V4,
+            typ: SignatureType::Binary,
+            pub_alg: ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
+            hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+            issuer: Some(self.secret_key.key_id()),
+            created: Some(now),
+            unhashed_subpackets: vec![],
+            hashed_subpackets: vec![
+                Subpacket::SignatureCreationTime(now),
+                Subpacket::Issuer(self.secret_key.key_id()),
+                //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
+            ],
+        };
         // currently the copy is necessary due to a lack of API allowing
         // something `std::io::Read` based: https://github.com/rpgp/rpgp/issues/99
         let mut buf = Vec::with_capacity(16384);
@@ -55,12 +56,12 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
 
         let signature_packet = sig_cfg
             .sign(&self.secret_key, passwd_fn, buf.as_slice())
-            .map_err(|e| format!("eee: {:?}", e))?;
+            .map_err(|e| RPMError::SignError(Box::new(e)))?;
 
         let mut signature_bytes = Vec::with_capacity(1024);
         let mut cursor = Cursor::new(&mut signature_bytes);
         ::pgp::packet::write_packet(&mut cursor, &signature_packet)
-            .map_err(|e| format!("eee: {:?}", e))?;
+            .map_err(|e| RPMError::SignError(Box::new(e)))?;
 
         Ok(signature_bytes)
     }
@@ -70,18 +71,19 @@ impl Signer {
     /// load the private key for signing
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| {
-            format!(
-                "Failed to parse bytes as utf8 for ascii armored parsing: {}",
-                e
-            )
+        let input = ::std::str::from_utf8(input).map_err(|e| RPMError::KeyLoadError {
+            source: Box::new(e),
+            details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
         Self::load_from_asc(input)
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
         let (secret_key, _) = ::pgp::composed::signed_key::SignedSecretKey::from_string(input)
-            .map_err(|e| format!("Failed to load secret key {:?}", e))?;
+            .map_err(|e| RPMError::KeyLoadError {
+                source: Box::new(e),
+                details: "Failed to parse bytes as ascii armored key",
+            })?;
         Ok(Self { secret_key })
     }
 }
@@ -106,9 +108,7 @@ impl Verifier {
                 _ => None,
             })
             .next()
-            .ok_or_else(|| {
-                "Did not find a signature packet in what is supposed to be a signature".to_string()
-            })?;
+            .ok_or_else(|| RPMError::NoSignatureFound)?;
         Ok(signature)
     }
 }
@@ -134,7 +134,10 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
 
             if self.public_key.key_id() == *key_id {
                 return signature.verify(&self.public_key, buf).map_err(|e| {
-                    RPMError::from(format!("Failed to verify with primary key: {:?}", e))
+                    RPMError::VerificationError {
+                        source: Box::new(e),
+                        key_ref: format!("{:?}", key_id),
+                    }
                 });
             } else {
                 log::trace!(
@@ -161,19 +164,17 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
                     }
                 })
                 .fold(
-                    Err(RPMError::from(format!(
-                        "No key id matched the signature issuer key id: {:?}",
-                        key_id
-                    ))),
+                    Err(RPMError::KeyNotFoundError {
+                        key_ref: format!("{:?}", key_id),
+                    }),
                     |previous_res, sub_key| {
                         if previous_res.is_err() {
                             log::trace!("Test next candidate subkey");
                             signature.verify(sub_key, buf).map_err(|e| {
-                                RPMError::from(format!(
-                                    "Failed to verify with subkey {:?}: {:?}",
-                                    sub_key.key_id(),
-                                    e
-                                ))
+                                RPMError::VerificationError {
+                                    source: Box::new(e),
+                                    key_ref: format!("{:?}", sub_key.key_id()),
+                                }
                             })
                         } else {
                             log::trace!("Signature already verified, nop");
@@ -188,7 +189,10 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
             );
             signature
                 .verify(&self.public_key, buf)
-                .map_err(|e| RPMError::from(format!("Failed to verify: {:?}", e)))
+                .map_err(|e| RPMError::VerificationError {
+                    source: Box::new(e),
+                    key_ref: format!("{:?}", self.public_key.key_id()),
+                })
         }
     }
 }
@@ -196,18 +200,19 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
 impl Verifier {
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| {
-            format!(
-                "Failed to parse bytes as utf8 for ascii armored parsing: {}",
-                e
-            )
+        let input = ::std::str::from_utf8(input).map_err(|e| RPMError::KeyLoadError {
+            source: Box::new(e),
+            details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
         Self::load_from_asc(input)
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
         let (public_key, _) = ::pgp::composed::signed_key::SignedPublicKey::from_string(input)
-            .map_err(|e| format!("Failed to load public key {:?}", e))?;
+            .map_err(|e| RPMError::KeyLoadError {
+                source: Box::new(e),
+                details: "Failed to parse bytes as ascii armored key",
+            })?;
 
         Ok(Self { public_key })
     }
@@ -336,22 +341,21 @@ pub(crate) mod test {
         let passwd_fn = || String::new();
 
         let now = now();
-        let mut sig_cfg_bldr = ::pgp::packet::SignatureConfigBuilder::default();
-        let sig_cfg = sig_cfg_bldr
-            .version(::pgp::packet::SignatureVersion::V4)
-            .typ(::pgp::packet::SignatureType::Binary)
-            .pub_alg(::pgp::crypto::public_key::PublicKeyAlgorithm::RSA)
-            .hash_alg(::pgp::crypto::hash::HashAlgorithm::SHA2_256)
-            .issuer(Some(signer.secret_key.key_id()))
-            .created(Some(now))
-            .unhashed_subpackets(vec![]) // must be initialized
-            .hashed_subpackets(vec![
-                ::pgp::packet::Subpacket::SignatureCreationTime(now),
-                ::pgp::packet::Subpacket::Issuer(signer.secret_key.key_id()),
+
+        let sig_cfg = SignatureConfig {
+            version: SignatureVersion::V4,
+            typ: SignatureType::Binary,
+            pub_alg: ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
+            hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+            issuer: Some(signer.secret_key.key_id()),
+            created: Some(now),
+            unhashed_subpackets: vec![],
+            hashed_subpackets: vec![
+                Subpacket::SignatureCreationTime(now),
+                Subpacket::Issuer(signer.secret_key.key_id()),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
-            ]) // must be initialized
-            .build()
-            .unwrap();
+            ],
+        };
 
         let signature_packet = sig_cfg
             .sign(&signer.secret_key, passwd_fn, data)
