@@ -39,6 +39,9 @@ pub enum RPMError {
         actual_data_type: String,
         tag: String,
     },
+    #[error("invalid tag array index {tag} with {index} while bounded at {bound}")]
+    InvalidTagIndex { tag: String, index: u32, bound: u32 },
+
     #[error("unsupported lead major version {0} - only version 3 is supported")]
     InvalidLeadMajorVersion(u8),
     #[error("unsupported lead major version {0} - only version 0 is supported")]

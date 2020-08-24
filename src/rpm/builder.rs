@@ -39,8 +39,8 @@ pub struct RPMBuilder {
     // File entries need to be sorted. The entries need to be in the same order as they come
     // in the cpio payload. Otherwise rpm will not be able to resolve those paths.
     // key is the directory, values are complete paths
-    files: std::collections::BTreeMap<String, RPMFileEntry>,
-    directories: std::collections::BTreeSet<String>,
+    files: BTreeMap<String, RPMFileEntry>,
+    directories: BTreeSet<String>,
     requires: Vec<Dependency>,
     obsoletes: Vec<Dependency>,
     provides: Vec<Dependency>,

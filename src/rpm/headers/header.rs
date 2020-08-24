@@ -4,6 +4,7 @@ use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 use crate::constants::*;
 use std::convert::TryInto;
 use std::fmt;
+use std::path::PathBuf;
 
 use super::*;
 use crate::errors::*;
@@ -168,6 +169,18 @@ where
             })
     }
 
+    pub(crate) fn get_entry_i32_array_data(&self, tag: T) -> Result<Vec<i32>, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry
+            .data
+            .as_i32_array()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i32 array",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
+    }
+
     pub(crate) fn get_entry_i64_data(&self, tag: T) -> Result<i64, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -326,6 +339,36 @@ impl Header<IndexTag> {
     #[inline]
     pub fn get_install_time(&self) -> Result<i64, RPMError> {
         self.get_entry_i64_data(IndexTag::RPMTAG_INSTALLTIME)
+    }
+
+    /// Extract a the set of contained file names.
+    pub fn get_file_names(&self) -> Result<Vec<PathBuf>, RPMError> {
+        // reconstruct the messy de-constructed paths
+        let base = self.get_entry_string_array_data(IndexTag::RPMTAG_BASENAMES)?;
+        let biject = self.get_entry_i32_array_data(IndexTag::RPMTAG_DIRINDEXES)?;
+        let dirs = self.get_entry_string_array_data(IndexTag::RPMTAG_DIRNAMES)?;
+
+        let n = dirs.len();
+        let v = base
+            .into_iter()
+            .zip(biject.into_iter())
+            .try_fold::<Vec<PathBuf>, _, _>(
+                Vec::<PathBuf>::with_capacity(base.len()),
+                |mut acc, item| {
+                    let (base, dir_index) = item;
+                    if let Some(dir) = dirs.get(dir_index as usize) {
+                        acc.push(PathBuf::from(dir).join(base));
+                        Ok(acc)
+                    } else {
+                        Err(RPMError::InvalidTagIndex {
+                            tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
+                            index: dir_index as u32,
+                            bound: n as u32,
+                        })
+                    }
+                },
+            )?;
+        Ok(v)
     }
 }
 
@@ -714,6 +757,12 @@ impl IndexData {
                     None
                 }
             }
+            _ => None,
+        }
+    }
+    pub(crate) fn as_i32_array(&self) -> Option<Vec<i32>> {
+        match self {
+            IndexData::Int32(s) => Some(s.to_vec()),
             _ => None,
         }
     }
