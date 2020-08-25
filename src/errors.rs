@@ -3,11 +3,16 @@ use std::io;
 
 use thiserror::Error;
 
+use crate::FileDigestAlgorithm;
+
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum RPMError {
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error(transparent)]
+    Hex(#[from] hex::FromHexError),
 
     #[error("{0}")]
     Nom(String),
@@ -89,6 +94,9 @@ pub enum RPMError {
 
     #[error("unknown compressor type {0} - only gzip and none are supported")]
     UnknownCompressorType(String),
+
+    #[error("unsupported file digest algorithm {0:?}")]
+    UnsupportedFileDigestAlgorithm(FileDigestAlgorithm),
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {

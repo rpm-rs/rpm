@@ -179,7 +179,7 @@ impl RPMBuilder {
         let mut hasher = sha2::Sha256::default();
         hasher.update(&content);
         let hash_result = hasher.finalize();
-        let sha_checksum = format!("{:x}", hash_result);
+        let sha_checksum = hex::encode(hash_result); // encode as string
         let entry = RPMFileEntry {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             size: content.len() as i32,

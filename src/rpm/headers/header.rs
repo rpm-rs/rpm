@@ -437,7 +437,8 @@ impl Header<IndexTag> {
         let v = itertools::multizip((paths.into_iter(), users, groups, modes, digests, mtimes, sizes, flags))
             .try_fold::<Vec<FileEntry>,_,Result<_, RPMError>>(
                 Vec::with_capacity(n),
-                |mut acc, (path,user,group,mode, _digest,mtime, size, flags)| {
+                |mut acc, (path,user,group,mode, digest,mtime, size, flags)| {
+                    let digest = if digest.is_empty() { None } else { Some(FileDigest::load_from_str(algorithm, digest)?) };
                     let utc = chrono::Utc;
                     acc.push(FileEntry {
                         path,
@@ -447,7 +448,7 @@ impl Header<IndexTag> {
                         },
                         mode: FileMode(mode as u16),
                         modified_at: utc.timestamp( mtime as i64, 0u32),
-                        digest: None, // @todo if digest.is_empty() { None } else { Some(digest) },
+                        digest,
                         category: FileCategory::from_i32(flags).unwrap_or_default(),
                         size: size as usize,
                     });
@@ -487,7 +488,7 @@ impl Default for FileCategory {
 
 
 #[repr(i32)]
-#[derive(Debug,Clone,enum_primitive_derive::Primitive)]
+#[derive(Debug,Clone,Copy,enum_primitive_derive::Primitive)]
 pub enum FileDigestAlgorithm {
     // broken and very broken
     Md5 = constants::PGPHASHALGO_MD5,
@@ -515,12 +516,27 @@ impl Default for FileDigestAlgorithm {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum FileDigest {
-    Md5([u8;16]),
-    Sha2_256([u8;32]),
-    Sha2_384(Vec<u8>), // @todo trait impls only go up to 32 bytes length
+    Md5(Vec<u8>),
+    Sha2_256(Vec<u8>),
+    Sha2_384(Vec<u8>),
     Sha2_512(Vec<u8>),
-    Sha2_224([u8;30]),
+    Sha2_224(Vec<u8>),
     // @todo unsupported other types for now
+}
+
+impl FileDigest {
+    pub fn load_from_str(algorithm: FileDigestAlgorithm, stringly_data: impl AsRef<str>) -> Result<Self, RPMError> {
+        let hex: Vec<u8> = hex::decode(stringly_data.as_ref())?;
+        Ok(match algorithm {
+            FileDigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
+            FileDigestAlgorithm::Sha2_256 if hex.len() == 32 => FileDigest::Sha2_256(hex),
+            FileDigestAlgorithm::Sha2_224 if hex.len() == 30 => FileDigest::Sha2_224(hex),
+            FileDigestAlgorithm::Sha2_384 if hex.len() == 48 => FileDigest::Sha2_384(hex),
+            FileDigestAlgorithm::Sha2_512 if hex.len() == 64 => FileDigest::Sha2_512(hex),
+            // @todo disambiguate mismatch of length from unsupported algorithm
+            digest_algo => return Err(RPMError::UnsupportedFileDigestAlgorithm(digest_algo)),
+        })
+    }
 }
 
 /// User facing accessor type for a file entry with contextual information
