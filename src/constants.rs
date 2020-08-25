@@ -471,3 +471,19 @@ pub const RPMFILE_DOC: i32 = 1 << 1;
 // const RPMFILE_LICENSE: i32 = (1 << 7);
 // const RPMFILE_README: i32 = (1 << 8);
 // const RPMFILE_EXCLUDE: i32 = (1 << 9);
+
+
+// copied from rpmpgp.h
+// should be technically equiv to 
+// `pgp::crypto::hash::HashAlgorithm`
+// but that is only available with feature `signature`
+pub const PGPHASHALGO_MD5: i32 =  1;
+pub const PGPHASHALGO_SHA1: i32 =  2;
+pub const PGPHASHALGO_RIPEMD160: i32 =  3;
+pub const PGPHASHALGO_MD2: i32 =  5;
+pub const PGPHASHALGO_TIGER192: i32 =  6;
+pub const PGPHASHALGO_HAVAL_5_160: i32 =  7;
+pub const PGPHASHALGO_SHA256: i32 =  8;
+pub const PGPHASHALGO_SHA384: i32 =  9;
+pub const PGPHASHALGO_SHA512: i32 = 10;
+pub const PGPHASHALGO_SHA224: i32 = 11;

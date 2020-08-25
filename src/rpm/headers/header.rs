@@ -1,10 +1,12 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 
-use crate::constants::*;
+use crate::constants::{self,*};
 use std::convert::TryInto;
 use std::fmt;
 use std::path::PathBuf;
+use chrono::offset::TimeZone;
+use num_traits::FromPrimitive;
 
 use super::*;
 use crate::errors::*;
@@ -157,6 +159,19 @@ where
             })
     }
 
+
+    pub(crate) fn get_entry_i16_array_data(&self, tag: T) -> Result<Vec<i16>, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry
+            .data
+            .as_i16_array()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i64 array",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
+    }
+
     pub(crate) fn get_entry_i32_data(&self, tag: T) -> Result<i32, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -188,6 +203,18 @@ where
             .as_i64()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
                 expected_data_type: "i64",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
+    }
+
+    pub(crate) fn get_entry_i64_array_data(&self, tag: T) -> Result<Vec<i64>, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry
+            .data
+            .as_i64_array()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i64 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
@@ -342,7 +369,7 @@ impl Header<IndexTag> {
     }
 
     /// Extract a the set of contained file names.
-    pub fn get_file_names(&self) -> Result<Vec<PathBuf>, RPMError> {
+    pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, RPMError> {
         // reconstruct the messy de-constructed paths
         let base = self.get_entry_string_array_data(IndexTag::RPMTAG_BASENAMES)?;
         let biject = self.get_entry_i32_array_data(IndexTag::RPMTAG_DIRINDEXES)?;
@@ -370,6 +397,149 @@ impl Header<IndexTag> {
             )?;
         Ok(v)
     }
+
+    /// The digest algorithm used per file.
+    ///
+    /// Note that this is not necessarily the same as the digest
+    /// used for headers.
+    pub fn get_file_digest_algorithm(&self) -> Result<FileDigestAlgorithm, RPMError> {
+        self.get_entry_i32_data(IndexTag::RPMTAG_FILEDIGESTALGO)
+            .and_then(|x| FileDigestAlgorithm::from_i32(x).ok_or_else (|| RPMError::InvalidTagValueEnumVariant {
+                tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
+                variant: x as u32,
+            }))
+    }
+
+
+    /// Extract a the set of contained file names including the additional metadata.
+    pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, RPMError> {
+        // rpm does not encode it, if it is the default md5
+        let algorithm = self.get_file_digest_algorithm().unwrap_or_default();
+        //
+        let modes = self.get_entry_i16_array_data(IndexTag::RPMTAG_FILEMODES)?;
+        let users = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEUSERNAME)?;
+        let groups = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEGROUPNAME)?;
+        let digests = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)?;
+        let mtimes = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEMTIMES)?;
+        let sizes = self.get_entry_i64_array_data(IndexTag::RPMTAG_LONGFILESIZES).or_else(|_e| {
+            self.get_entry_i32_array_data(IndexTag::RPMTAG_FILESIZES).map(|file_sizes| {
+                file_sizes.into_iter().map(|file_size| file_size as _ ).collect::<Vec<i64>>()
+            })
+        })?;
+        let flags = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEFLAGS)?;
+        // @todo
+        // let caps = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILECAPS)?;
+
+
+        let paths = self.get_file_paths()?;
+        let n = paths.len();
+
+        let v = itertools::multizip((paths.into_iter(), users, groups, modes, digests, mtimes, sizes, flags))
+            .try_fold::<Vec<FileEntry>,_,Result<_, RPMError>>(
+                Vec::with_capacity(n),
+                |mut acc, (path,user,group,mode, _digest,mtime, size, flags)| {
+                    let utc = chrono::Utc;
+                    acc.push(FileEntry {
+                        path,
+                        ownership: FileOwnership{
+                            user: user.to_owned(),
+                            group: group.to_owned(),
+                        },
+                        mode: FileMode(mode as u16),
+                        modified_at: utc.timestamp( mtime as i64, 0u32),
+                        digest: None, // @todo if digest.is_empty() { None } else { Some(digest) },
+                        category: FileCategory::from_i32(flags).unwrap_or_default(),
+                        size: size as usize,
+                    });
+                    Ok(acc)
+                })?;
+        Ok(v)
+    }
+}
+
+
+/// User facing accessor type representing a file mode
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub struct FileMode(pub u16);
+
+/// User facing accessor type representing ownership of a file
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct FileOwnership{ user: String, group: String}
+
+
+
+/// Declaration what category this file belongs to
+/// @todo must be bitflags
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq,enum_primitive_derive::Primitive)]
+#[repr(i32)]
+pub enum FileCategory {
+    None = 0i32,
+    Config = constants::RPMFILE_CONFIG,
+    Doc = constants::RPMFILE_DOC,
+}
+
+impl Default for FileCategory {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+
+
+#[repr(i32)]
+#[derive(Debug,Clone,enum_primitive_derive::Primitive)]
+pub enum FileDigestAlgorithm {
+    // broken and very broken
+    Md5 = constants::PGPHASHALGO_MD5,
+    Sha1 = constants::PGPHASHALGO_SHA1,
+    Md2 = constants::PGPHASHALGO_MD2,
+
+    // not proven to be broken, weaker variants broken
+    #[allow(non_camel_case_types)]
+    Haval_5_160 = constants::PGPHASHALGO_HAVAL_5_160, // not part of PGP
+    Ripemd160 = constants::PGPHASHALGO_RIPEMD160,
+
+    Tiger192 = constants::PGPHASHALGO_TIGER192, // not part of PGP
+    Sha2_256 = constants::PGPHASHALGO_SHA256,
+    Sha2_384 = constants::PGPHASHALGO_SHA384,
+    Sha2_512 = constants::PGPHASHALGO_SHA512,
+    Sha2_224 = constants::PGPHASHALGO_SHA224,
+}
+
+impl Default for FileDigestAlgorithm {
+    fn default() -> Self {
+        // if the entry is missing, this is the default fallback
+        Self::Md5
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum FileDigest {
+    Md5([u8;16]),
+    Sha2_256([u8;32]),
+    Sha2_384(Vec<u8>), // @todo trait impls only go up to 32 bytes length
+    Sha2_512(Vec<u8>),
+    Sha2_224([u8;30]),
+    // @todo unsupported other types for now
+}
+
+/// User facing accessor type for a file entry with contextual information
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct FileEntry {
+    /// Full path of the file entry and where it will be installed to.
+    pub path: PathBuf,
+    /// The file mode of the file.
+    pub mode: FileMode,
+    /// Defines the owning user and group.
+    pub ownership: FileOwnership,
+    /// Clocks the last access time.
+    pub modified_at: chrono::DateTime<chrono::Utc>,
+    /// The size of this file, dirs have the inode size (which is insane)
+    pub size: usize,
+    /// Categorizes the file or directory into three groups.
+    pub category: FileCategory,
+    // @todo SELinux context? how is that done?
+    pub digest: Option<FileDigest>,
 }
 
 fn parse_entry_data_number<'a, T, E, F>(
@@ -748,6 +918,30 @@ impl IndexData {
         }
     }
 
+    #[allow(unused)]
+    pub(crate) fn as_char_array(&self) -> Option<Vec<u8>> {
+        match self {
+            IndexData::Char(s) => Some(s.to_vec()),
+            _ => None,
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn as_i8_array(&self) -> Option<Vec<i8>> {
+        match self {
+            IndexData::Int8(s) => Some(s.to_vec()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_i16_array(&self) -> Option<Vec<i16>> {
+        match self {
+            IndexData::Int16(s) => Some(s.to_vec()),
+            _ => None,
+        }
+    }
+
+
     pub(crate) fn as_i32(&self) -> Option<i32> {
         match self {
             IndexData::Int32(s) => {
@@ -776,6 +970,13 @@ impl IndexData {
                     None
                 }
             }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_i64_array(&self) -> Option<Vec<i64>> {
+        match self {
+            IndexData::Int64(s) => Some(s.to_vec()),
             _ => None,
         }
     }

@@ -23,6 +23,7 @@ nom = "5.1"
 num-traits = "0.2"
 num-derive = "0.3"
 num = "0.2"
+enum-primitive-derive = "0.2"
 enum-display-derive = "0.1"
 cpio = "0.2"
 # consider migrating to flate2
@@ -34,12 +35,12 @@ rand = { version = "0.7" }
 pgp = { version = "0.7", optional = true }
 chrono = "0.4"
 log = "0.4"
+itertools = "0.9"
 
 [dev-dependencies]
 rsa = { version = "^0.3.0" }
 rsa-der = { version = "^0.2.1" }
 env_logger = "0.7"
-itertools = "0.9"
 serial_test = "0.4"
 
 [features]

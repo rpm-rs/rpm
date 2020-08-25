@@ -42,16 +42,24 @@ pub enum RPMError {
     #[error("invalid tag array index {tag} with {index} while bounded at {bound}")]
     InvalidTagIndex { tag: String, index: u32, bound: u32 },
 
+    #[error("invalid tag value enum varaint for {tag} with {variant}")]
+    InvalidTagValueEnumVariant { tag: String, variant: u32 },
+
     #[error("unsupported lead major version {0} - only version 3 is supported")]
     InvalidLeadMajorVersion(u8),
+
     #[error("unsupported lead major version {0} - only version 0 is supported")]
     InvalidLeadMinorVersion(u8),
+
     #[error("invalid type - expected 0 or 1 but got {0}")]
     InvalidLeadPKGType(u16),
+
     #[error("invalid os-type - expected 1 but got {0}")]
     InvalidLeadOSType(u16),
+
     #[error("invalid signature-type - expected 5 but got {0}")]
     InvalidLeadSignatureType(u16),
+
     #[error("invalid size of reserved area - expected length of {expected} but got {actual}")]
     InvalidReservedSpaceSize { expected: u16, actual: usize },
 
@@ -60,8 +68,10 @@ pub enum RPMError {
 
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
+
     #[error("error creating signature: {0}")]
     SignError(Box<dyn std::error::Error>),
+
     #[error("error parsing key - {details}. underlying error was: {source}")]
     KeyLoadError {
         source: Box<dyn std::error::Error>,
