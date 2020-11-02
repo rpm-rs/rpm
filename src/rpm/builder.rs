@@ -22,6 +22,16 @@ use crate::signature;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
+#[cfg(unix)]
+fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
+    Ok(file.metadata()?.permissions().mode())
+}
+
+#[cfg(windows)]
+fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
+    Ok(0)
+}
+
 /// Builder pattern for a full rpm file.
 ///
 /// Prefered method of creating a rpm file.
@@ -116,8 +126,8 @@ impl RPMBuilder {
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
         let mut options = options.into();
-        if options.inherit_permissions && cfg!(unix) {
-            options.mode = input.metadata()?.permissions().mode() as i32;
+        if options.inherit_permissions {
+            options.mode = file_mode(&input)? as i32;
         }
         self.add_data(
             content,
