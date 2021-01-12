@@ -320,6 +320,16 @@ impl Header<IndexSignatureTag> {
         }
         Ok(())
     }
+
+    #[inline]
+    pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
+        self.get_entry_string_array_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
+    }
+
+    #[inline]
+    pub fn get_file_ima_signature_length(&self) -> Result<i32, RPMError> {
+        self.get_entry_i32_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+    }
 }
 
 impl Header<IndexTag> {

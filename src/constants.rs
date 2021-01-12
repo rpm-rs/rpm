@@ -391,6 +391,15 @@ pub enum IndexSignatureTag {
     // If  this  tag  is  present,  then  the  SIGTAG_PGP  shall also be present.
     RPMSIGTAG_RSA = 268,
 
+    // The tag contains the file signature of a file.
+    // The data is formatted as a hex-encoded string.
+    // If this tag is present, then the SIGTAG_FILESIGNATURE_LENGTH shall also be present.
+    RPMSIGTAG_FILESIGNATURES = 274,
+
+    // The tag contains the length of the file signatures in total.
+    // If this tag is present, then the SIGTAG_FILESIGNATURE shall also be present.
+    RPMSIGTAG_FILESIGNATURE_LENGTH = 275,
+
     // This  tag  specifies  the  RSA  signature  of  the  combined  Header  and  Payload  sections.
     // The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_PGP = 1002,
