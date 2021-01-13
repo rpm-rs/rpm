@@ -15,6 +15,7 @@ use std::io::{Read, Seek, SeekFrom};
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
 /// or used with [`parse`](`self::RPMPackage::parse`) to obtain from a file.
+#[derive(Debug)]
 pub struct RPMPackage {
     /// Header and metadata structures.
     ///
@@ -131,7 +132,7 @@ impl RPMPackage {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct RPMPackageMetadata {
     pub lead: Lead,
     pub signature: Header<IndexSignatureTag>,

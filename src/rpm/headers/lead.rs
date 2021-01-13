@@ -25,6 +25,23 @@ pub struct Lead {
     reserved: [u8; 16],
 }
 
+impl std::fmt::Debug for Lead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = String::from_utf8_lossy(&self.name);
+        f.debug_struct("Lead")
+            .field("magic", &self.magic)
+            .field("major", &self.major)
+            .field("minor", &self.minor)
+            .field("package_type", &self.package_type)
+            .field("arch", &self.arch)
+            .field("name", &name)
+            .field("os", &self.os)
+            .field("signature_type", &self.signature_type)
+            .field("reserved", &self.reserved)
+            .finish()
+    }
+}
+
 impl Lead {
     pub(crate) fn parse(input: &[u8]) -> Result<Self, RPMError> {
         let (rest, magic) = complete::take(4usize)(input)?;
