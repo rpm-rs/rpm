@@ -31,7 +31,7 @@ libflate = "1"
 sha2 = "0.9"
 md-5 = "0.9"
 sha1 = "0.6"
-rand = { version = "0.7" }
+rand = { version = "0.8" }
 pgp = { version="0.7.2", optional = true }
 chrono = "0.4"
 log = "0.4"
