@@ -17,7 +17,7 @@ pub struct RPMFileEntry {
 }
 
 #[non_exhaustive]
-#[derive(Copy, Clone, PartialEq, Eq, Debug,Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum FileMode {
     // It does not really matter if we use u16 or i16 since all we care about
     // is the bit representation which is the same for both.
