@@ -124,7 +124,7 @@ mod pgp {
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100_777)
+                    .mode(FileMode::regular(0o777))
                     .is_config(),
             )?
             .with_file(

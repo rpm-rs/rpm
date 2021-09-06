@@ -127,7 +127,7 @@ impl RPMBuilder {
         input.read_to_end(&mut content)?;
         let mut options = options.into();
         if options.inherit_permissions {
-            options.mode = file_mode(&input)? as i32;
+            options.mode = (file_mode(&input)? as i32).into();
         }
         self.add_data(
             content,
@@ -187,7 +187,7 @@ impl RPMBuilder {
             flag: options.flag,
             user: options.user,
             group: options.group,
-            mode: options.mode as i16,
+            mode: options.mode,
             link: options.symlink,
             modified_at,
             dir: dir.clone(),
@@ -372,7 +372,7 @@ impl RPMBuilder {
         for (cpio_path, entry) in self.files.iter() {
             combined_file_sizes += entry.size;
             file_sizes.push(entry.size);
-            file_modes.push(entry.mode);
+            file_modes.push(entry.mode.into());
             // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
             // Who knows, who cares.
             file_rdevs.push(0);
@@ -395,7 +395,7 @@ impl RPMBuilder {
             file_verify_flags.push(-1);
             let content = entry.content.to_owned().unwrap();
             let mut writer = cpio::newc::Builder::new(&cpio_path)
-                .mode(entry.mode as u32)
+                .mode(entry.mode.into())
                 .ino(ino_index as u32)
                 .uid(self.uid.unwrap_or(0))
                 .gid(self.gid.unwrap_or(0))

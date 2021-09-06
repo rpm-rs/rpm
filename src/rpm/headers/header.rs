@@ -1,12 +1,12 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 
-use crate::constants::{self,*};
+use crate::constants::{self, *};
+use chrono::offset::TimeZone;
+use num_traits::FromPrimitive;
 use std::convert::TryInto;
 use std::fmt;
 use std::path::PathBuf;
-use chrono::offset::TimeZone;
-use num_traits::FromPrimitive;
 
 use super::*;
 use crate::errors::*;
@@ -158,7 +158,6 @@ where
                 tag: entry.tag.to_string(),
             })
     }
-
 
     pub(crate) fn get_entry_i16_array_data(&self, tag: T) -> Result<Vec<i16>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
@@ -414,12 +413,15 @@ impl Header<IndexTag> {
     /// used for headers.
     pub fn get_file_digest_algorithm(&self) -> Result<FileDigestAlgorithm, RPMError> {
         self.get_entry_i32_data(IndexTag::RPMTAG_FILEDIGESTALGO)
-            .and_then(|x| FileDigestAlgorithm::from_i32(x).ok_or_else (|| RPMError::InvalidTagValueEnumVariant {
-                tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
-                variant: x as u32,
-            }))
+            .and_then(|x| {
+                FileDigestAlgorithm::from_i32(x).ok_or_else(|| {
+                    RPMError::InvalidTagValueEnumVariant {
+                        tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
+                        variant: x as u32,
+                    }
+                })
+            })
     }
-
 
     /// Extract a the set of contained file names including the additional metadata.
     pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, RPMError> {
@@ -431,57 +433,72 @@ impl Header<IndexTag> {
         let groups = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEGROUPNAME)?;
         let digests = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)?;
         let mtimes = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEMTIMES)?;
-        let sizes = self.get_entry_i64_array_data(IndexTag::RPMTAG_LONGFILESIZES).or_else(|_e| {
-            self.get_entry_i32_array_data(IndexTag::RPMTAG_FILESIZES).map(|file_sizes| {
-                file_sizes.into_iter().map(|file_size| file_size as _ ).collect::<Vec<i64>>()
-            })
-        })?;
+        let sizes = self
+            .get_entry_i64_array_data(IndexTag::RPMTAG_LONGFILESIZES)
+            .or_else(|_e| {
+                self.get_entry_i32_array_data(IndexTag::RPMTAG_FILESIZES)
+                    .map(|file_sizes| {
+                        file_sizes
+                            .into_iter()
+                            .map(|file_size| file_size as _)
+                            .collect::<Vec<i64>>()
+                    })
+            })?;
         let flags = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEFLAGS)?;
         // @todo
         // let caps = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILECAPS)?;
 
-
         let paths = self.get_file_paths()?;
         let n = paths.len();
 
-        let v = itertools::multizip((paths.into_iter(), users, groups, modes, digests, mtimes, sizes, flags))
-            .try_fold::<Vec<FileEntry>,_,Result<_, RPMError>>(
-                Vec::with_capacity(n),
-                |mut acc, (path,user,group,mode, digest,mtime, size, flags)| {
-                    let digest = if digest.is_empty() { None } else { Some(FileDigest::load_from_str(algorithm, digest)?) };
-                    let utc = chrono::Utc;
-                    acc.push(FileEntry {
-                        path,
-                        ownership: FileOwnership{
-                            user: user.to_owned(),
-                            group: group.to_owned(),
-                        },
-                        mode: FileMode(mode as u16),
-                        modified_at: utc.timestamp( mtime as i64, 0u32),
-                        digest,
-                        category: FileCategory::from_i32(flags).unwrap_or_default(),
-                        size: size as usize,
-                    });
-                    Ok(acc)
-                })?;
+        let v = itertools::multizip((
+            paths.into_iter(),
+            users,
+            groups,
+            modes,
+            digests,
+            mtimes,
+            sizes,
+            flags,
+        ))
+        .try_fold::<Vec<FileEntry>, _, Result<_, RPMError>>(
+            Vec::with_capacity(n),
+            |mut acc, (path, user, group, mode, digest, mtime, size, flags)| {
+                let digest = if digest.is_empty() {
+                    None
+                } else {
+                    Some(FileDigest::load_from_str(algorithm, digest)?)
+                };
+                let utc = chrono::Utc;
+                acc.push(FileEntry {
+                    path,
+                    ownership: FileOwnership {
+                        user: user.to_owned(),
+                        group: group.to_owned(),
+                    },
+                    mode: mode.into(),
+                    modified_at: utc.timestamp(mtime as i64, 0u32),
+                    digest,
+                    category: FileCategory::from_i32(flags).unwrap_or_default(),
+                    size: size as usize,
+                });
+                Ok(acc)
+            },
+        )?;
         Ok(v)
     }
 }
 
-
-/// User facing accessor type representing a file mode
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct FileMode(pub u16);
-
 /// User facing accessor type representing ownership of a file
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct FileOwnership{ user: String, group: String}
-
-
+pub struct FileOwnership {
+    user: String,
+    group: String,
+}
 
 /// Declaration what category this file belongs to
 /// @todo must be bitflags
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq,enum_primitive_derive::Primitive)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, enum_primitive_derive::Primitive)]
 #[repr(i32)]
 pub enum FileCategory {
     None = 0i32,
@@ -495,10 +512,8 @@ impl Default for FileCategory {
     }
 }
 
-
-
 #[repr(i32)]
-#[derive(Debug,Clone,Copy,enum_primitive_derive::Primitive)]
+#[derive(Debug, Clone, Copy, enum_primitive_derive::Primitive)]
 pub enum FileDigestAlgorithm {
     // broken and very broken
     Md5 = constants::PGPHASHALGO_MD5,
@@ -535,7 +550,10 @@ pub enum FileDigest {
 }
 
 impl FileDigest {
-    pub fn load_from_str(algorithm: FileDigestAlgorithm, stringly_data: impl AsRef<str>) -> Result<Self, RPMError> {
+    pub fn load_from_str(
+        algorithm: FileDigestAlgorithm,
+        stringly_data: impl AsRef<str>,
+    ) -> Result<Self, RPMError> {
         let hex: Vec<u8> = hex::decode(stringly_data.as_ref())?;
         Ok(match algorithm {
             FileDigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
@@ -555,7 +573,7 @@ pub struct FileEntry {
     /// Full path of the file entry and where it will be installed to.
     pub path: PathBuf,
     /// The file mode of the file.
-    pub mode: FileMode,
+    pub mode: types::FileMode,
     /// Defines the owning user and group.
     pub ownership: FileOwnership,
     /// Clocks the last access time.
@@ -966,7 +984,6 @@ impl IndexData {
             _ => None,
         }
     }
-
 
     pub(crate) fn as_i32(&self) -> Option<i32> {
         match self {

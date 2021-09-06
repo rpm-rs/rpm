@@ -97,6 +97,9 @@ pub enum RPMError {
 
     #[error("unsupported file digest algorithm {0:?}")]
     UnsupportedFileDigestAlgorithm(FileDigestAlgorithm),
+
+    #[error("invalid file mode {raw_mode} - {reason}")]
+    InvalidFileMode{ raw_mode: i32, reason: &'static str},
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {

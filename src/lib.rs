@@ -33,7 +33,7 @@
 //!                 "./test_assets/awesome.toml",
 //!                 // you can set a custom mode and custom user too
 //!                 rpm::RPMFileOptions::new("/etc/awesome/second.toml")
-//! 						.mode(0o100744)
+//! 						.mode(rpm::FileMode::regular(0o644))
 //! 						.user("hugo"),
 //!             )?
 //!             .pre_install_script("echo preinst")
