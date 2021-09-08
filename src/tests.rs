@@ -1,6 +1,4 @@
 use super::*;
-use std::io;
-use std::io::prelude::*;
 
 fn test_rpm_file_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
@@ -43,13 +41,7 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = test_rpm_file_path();
-    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
-    let mut buf_reader = std::io::BufReader::new(rpm_file);
-
-    let package = RPMPackage::parse(&mut buf_reader)?;
+fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
     assert_eq!(7, metadata.signature.index_entries.len());
     assert!(metadata.signature.index_entries[0].num_items == 16);
@@ -243,15 +235,6 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let lead = Lead::parse(&buf)?;
     assert!(package.metadata.lead == lead);
 
-    buf_reader.seek(io::SeekFrom::Start(0))?;
-    let mut expected = vec![0; 96];
-    // buf_reader.read_to_end(&mut expected);
-    buf_reader.read_exact(&mut expected)?;
-
-    for i in 0..expected.len() {
-        assert_eq!(expected[i], buf[i]);
-    }
-
     buf = Vec::new();
     package.metadata.signature.write_signature(&mut buf)?;
     let signature = Header::parse_signature(&mut buf.as_ref())?;
@@ -284,6 +267,24 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     assert!(package.metadata == second_pkg.metadata);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = test_rpm_file_path();
+
+    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?;
+    let package = RPMPackage::parse_async(&mut rpm_file).await?;
+    test_rpm_header_base(package)
+}
+
+#[test]
+fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = test_rpm_file_path();
+    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
+    let mut buf_reader = std::io::BufReader::new(rpm_file);
+    let package = RPMPackage::parse(&mut buf_reader)?;
+    test_rpm_header_base(package)
 }
 
 #[test]

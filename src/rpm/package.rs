@@ -1,4 +1,5 @@
 use sha2::Digest;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 use super::headers::*;
 
@@ -26,6 +27,14 @@ pub struct RPMPackage {
 }
 
 impl RPMPackage {
+    #[cfg(feature = "async-tokio")]
+    pub async fn parse_async<I: AsyncRead + Unpin>(input: &mut I) -> Result<Self, RPMError> {
+        let metadata = RPMPackageMetadata::parse_async(input).await?;
+        let mut content = Vec::new();
+        input.read_to_end(&mut content).await?;
+        Ok(RPMPackage { metadata, content })
+    }
+
     pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
@@ -36,6 +45,15 @@ impl RPMPackage {
     pub fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
+        Ok(())
+    }
+
+    pub async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        self.metadata.write_async(out).await?;
+        out.write_all(&self.content).await?;
         Ok(())
     }
 
@@ -140,6 +158,20 @@ pub struct RPMPackageMetadata {
 }
 
 impl RPMPackageMetadata {
+    #[cfg(feature = "async-tokio")]
+    pub async fn parse_async<T: AsyncRead + Unpin>(input: &mut T) -> Result<Self, RPMError> {
+        let mut lead_buffer = [0; LEAD_SIZE];
+        input.read_exact(&mut lead_buffer).await?;
+        let lead = Lead::parse(&lead_buffer)?;
+        let signature_header = Header::parse_signature_async(input).await?;
+        let header = Header::parse_async(input).await?;
+        Ok(RPMPackageMetadata {
+            lead,
+            signature: signature_header,
+            header,
+        })
+    }
+
     pub(crate) fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE];
         input.read_exact(&mut lead_buffer)?;
@@ -157,6 +189,17 @@ impl RPMPackageMetadata {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "async-tokio")]
+    pub async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        self.lead.write_async(out).await?;
+        self.signature.write_signature_async(out).await?;
+        self.header.write_async(out).await?;
         Ok(())
     }
 }

@@ -21,6 +21,7 @@ use crate::signature;
 
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
+use tokio::io::AsyncReadExt;
 
 #[cfg(unix)]
 fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
@@ -115,6 +116,33 @@ impl RPMBuilder {
         self.changelog_entries.push(entry.into());
         self.changelog_times.push(time);
         self
+    }
+
+    #[cfg(feature = "async-tokio")]
+    pub async fn with_file_async<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
+    where
+        P: AsRef<Path>,
+        T: Into<RPMFileOptions>,
+    {
+        let mut input = tokio::fs::File::open(source).await?;
+        let mut content = Vec::new();
+        input.read_to_end(&mut content).await?;
+        let mut options = options.into();
+        if options.inherit_permissions {
+            options.mode = (input.metadata().await?.permissions().mode() as i32).into();
+        }
+        self.add_data(
+            content,
+            input
+                .metadata()
+                .await?
+                .modified()?
+                .duration_since(UNIX_EPOCH)
+                .expect("something really wrong with your time")
+                .as_secs() as i32,
+            options,
+        )?;
+        Ok(self)
     }
 
     pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>

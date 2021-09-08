@@ -25,6 +25,88 @@ use signature::{self, Verifying};
 mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
+    use tokio::io::AsyncWriteExt;
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn create_full_rpm_async() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let (signing_key, _) = crate::signature::pgp::test::load_asc_keys();
+
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key");
+
+        let cargo_file = cargo_manifest_dir().join("Cargo.toml");
+        let out_file = cargo_out_dir().join("test.rpm");
+
+        let mut f = tokio::fs::File::create(out_file).await?;
+        let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
+            .compression(Compressor::from_str("gzip")?)
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/foo.toml"),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/zazz.toml"),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                    .mode(0o100_777)
+                    .is_config(),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/bazz.toml"),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/hugo/aa.toml"),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/var/honollulu/bazz.toml"),
+            )
+            .await?
+            .with_file_async(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/Cargo.toml"),
+            )
+            .await?
+            .epoch(1)
+            .pre_install_script("echo preinst")
+            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
+            .add_changelog_entry("you", "yeah, it was", 12_312_312)
+            .requires(Dependency::any("rpm-sign".to_string()))
+            .build_and_sign(signer)?;
+
+        pkg.write_async(&mut f).await?;
+        f.flush().await?;
+        let epoch = pkg.metadata.header.get_epoch()?;
+        assert_eq!(1, epoch);
+
+        let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
+        let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
+        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
+
+        [
+            ("fedora:31", rpm_sig_check.as_str()),
+            ("fedora:31", dnf_cmd),
+            ("centos:8", yum_cmd),
+            ("centos:7", yum_cmd),
+        ]
+        .iter()
+        .try_for_each(|(image, cmd)| {
+            podman_container_launcher(cmd, image, vec![])?;
+            Ok(())
+        })
+    }
 
     #[test]
     #[serial_test::serial]

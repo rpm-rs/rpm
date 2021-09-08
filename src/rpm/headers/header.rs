@@ -1,6 +1,8 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+
 use crate::constants::{self, *};
 use chrono::offset::TimeZone;
 use num_traits::FromPrimitive;
@@ -42,17 +44,22 @@ impl<T> Header<T>
 where
     T: Tag,
 {
-    pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn parse_async<I: AsyncRead + Unpin>(
+        input: &mut I,
+    ) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; 16] = [0; 16];
-        input.read_exact(&mut buf)?;
+        input.read_exact(&mut buf).await?;
         let index_header = IndexHeader::parse(&buf)?;
         // read rest of header => each index consists of 16 bytes. The index header knows how large the store is.
         let mut buf = vec![0; (index_header.header_size + index_header.num_entries * 16) as usize];
-        input.read_exact(&mut buf)?;
+        input.read_exact(&mut buf).await?;
+        Self::parse_header(index_header, &buf[..])
+    }
 
+    fn parse_header(index_header: IndexHeader, mut bytes: &[u8]) -> Result<Header<T>, RPMError> {
         // parse all entries
         let mut entries: Vec<IndexEntry<T>> = Vec::new();
-        let mut bytes = &buf[..];
         let mut buf_len = bytes.len();
         for _ in 0..index_header.num_entries {
             let (rest, entry) = IndexEntry::parse(bytes)?;
@@ -117,6 +124,28 @@ where
             index_entries: entries,
             store,
         })
+    }
+    pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
+        let mut buf: [u8; 16] = [0; 16];
+        input.read_exact(&mut buf)?;
+        let index_header = IndexHeader::parse(&buf)?;
+        // read rest of header => each index consists of 16 bytes. The index header knows how large the store is.
+        let mut buf = vec![0; (index_header.header_size + index_header.num_entries * 16) as usize];
+        input.read_exact(&mut buf)?;
+        Self::parse_header(index_header, &buf[..])
+    }
+
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        self.index_header.write_async(out).await?;
+        for entry in &self.index_entries {
+            entry.write_index_async(out).await?;
+        }
+        out.write_all(&self.store).await?;
+        Ok(())
     }
 
     pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
@@ -295,6 +324,21 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::<Empty>::new()
     }
 
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn parse_signature_async<I: AsyncRead + Unpin>(
+        input: &mut I,
+    ) -> Result<Header<IndexSignatureTag>, RPMError> {
+        let result = Self::parse_async(input).await?;
+
+        let modulo = result.index_header.header_size % 8;
+        if modulo > 0 {
+            let align_size = 8 - modulo;
+            let mut discard = vec![0; align_size as usize];
+            input.read_exact(&mut discard).await?;
+        }
+        Ok(result)
+    }
+
     pub(crate) fn parse_signature<I: std::io::BufRead>(
         input: &mut I,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
@@ -308,6 +352,20 @@ impl Header<IndexSignatureTag> {
             input.read_exact(&mut discard)?;
         }
         Ok(result)
+    }
+
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn write_signature_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        self.write_async(out).await?;
+        let modulo = self.index_header.header_size % 8;
+        if modulo > 0 {
+            let expansion = vec![0; 8 - modulo as usize];
+            out.write_all(&expansion).await?;
+        }
+        Ok(())
     }
 
     pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
@@ -719,6 +777,19 @@ impl IndexHeader {
         Ok(())
     }
 
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        out.write_all(&self.magic).await?;
+        out.write_all(&self.version.to_be_bytes()).await?;
+        out.write_all(&[0; 4]).await?;
+        out.write_all(&self.num_entries.to_be_bytes()).await?;
+        out.write_all(&self.header_size.to_be_bytes()).await?;
+        Ok(())
+    }
+
     pub(crate) fn new(num_entries: u32, header_size: u32) -> Self {
         IndexHeader {
             magic: HEADER_MAGIC,
@@ -775,6 +846,19 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
                 num_items,
             },
         ))
+    }
+
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn write_index_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes()).await?;
+        written += out.write(&self.data.to_u32().to_be_bytes()).await?;
+        written += out.write(&self.offset.to_be_bytes()).await?;
+        written += out.write(&self.num_items.to_be_bytes()).await?;
+        assert_eq!(16, written, "there should be 16 bytes written");
+        Ok(())
     }
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {

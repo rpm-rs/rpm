@@ -4,6 +4,7 @@ use std::convert::TryInto;
 
 use crate::constants::*;
 use crate::errors::*;
+use tokio::io::AsyncWriteExt;
 
 /// Lead of an rpm header.
 ///
@@ -103,6 +104,22 @@ impl Lead {
             signature_type: sigtype,
             reserved: rest.try_into().unwrap(),
         })
+    }
+    #[cfg(feature = "async-tokio")]
+    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        out: &mut W,
+    ) -> Result<(), RPMError> {
+        out.write_all(&self.magic).await?;
+        out.write_all(&self.major.to_be_bytes()).await?;
+        out.write_all(&self.minor.to_be_bytes()).await?;
+        out.write_all(&self.package_type.to_be_bytes()).await?;
+        out.write_all(&self.arch.to_be_bytes()).await?;
+        out.write_all(&self.name).await?;
+        out.write_all(&self.os.to_be_bytes()).await?;
+        out.write_all(&self.signature_type.to_be_bytes()).await?;
+        out.write_all(&self.reserved).await?;
+        Ok(())
     }
 
     pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
