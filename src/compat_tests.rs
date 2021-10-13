@@ -110,6 +110,29 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
+    fn create_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
+        let pkg = RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
+        let out_file = cargo_out_dir().join("test.rpm");
+
+        let mut f = std::fs::File::create(out_file)?;
+        pkg.write(&mut f)?;
+        let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
+        let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
+
+        [
+            ("fedora:31", dnf_cmd),
+            ("centos:8", yum_cmd),
+            ("centos:7", yum_cmd),
+        ]
+        .iter()
+        .try_for_each(|(image, cmd)| {
+            podman_container_launcher(cmd, image, vec![])?;
+            Ok(())
+        })
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn create_full_rpm_with_signature_and_verify_externally(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
