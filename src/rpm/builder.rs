@@ -33,6 +33,16 @@ fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
+#[cfg(all(unix, feature = "async-tokio"))]
+async fn tokio_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
+    Ok(file.metadata().await?.permissions().mode())
+}
+
+#[cfg(all(windows, feature = "async-tokio"))]
+async fn tokio_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
+    Ok(0)
+}
+
 /// Builder pattern for a full rpm file.
 ///
 /// Prefered method of creating a rpm file.
@@ -129,7 +139,7 @@ impl RPMBuilder {
         input.read_to_end(&mut content).await?;
         let mut options = options.into();
         if options.inherit_permissions {
-            options.mode = (input.metadata().await?.permissions().mode() as i32).into();
+            options.mode = (tokio_file_mode(&input).await? as i32).into();
         }
         self.add_data(
             content,
