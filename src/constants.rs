@@ -392,6 +392,12 @@ pub enum IndexSignatureTag {
     // If  this  tag  is  present,  then  the  SIGTAG_PGP  shall also be present.
     RPMSIGTAG_RSA = 268,
 
+    // Header+payload size if > 4GB.
+    RPMSIGTAG_LONGSIGSIZE = 270,
+
+    // (Compressed) payload size when > 4GB.
+    RPMSIGTAG_LONGARCHIVESIZE = 271,
+
     // The tag contains the file signature of a file.
     // The data is formatted as a hex-encoded string.
     // If this tag is present, then the SIGTAG_FILESIGNATURE_LENGTH shall also be present.
