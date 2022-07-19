@@ -1,4 +1,3 @@
-use sha2::Digest;
 use std::collections::{BTreeMap, BTreeSet};
 
 use std::io::{Read, Write};
@@ -9,7 +8,6 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use crate::errors::*;
-use crate::sequential_cursor::SeqCursor;
 
 use super::compressor::Compressor;
 use super::headers::*;
@@ -17,10 +15,14 @@ use super::Lead;
 use crate::constants::*;
 
 #[cfg(feature = "signature-meta")]
+use crate::sequential_cursor::SeqCursor;
+#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
+
+#[cfg(feature = "async-tokio")]
 use tokio::io::AsyncReadExt;
 
 #[cfg(unix)]
@@ -186,6 +188,8 @@ impl RPMBuilder {
         modified_at: i32,
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
+        use sha2::Digest;
+
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
             return Err(RPMError::InvalidDestinationPath {
@@ -362,19 +366,28 @@ impl RPMBuilder {
 
     /// use prepared data but make sure the signatures are
     fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
-        // accross header index and content (compressed or uncompressed, depends on configuration)
-        let mut hasher = md5::Md5::default();
-        hasher.update(&header);
-        hasher.update(&content);
-        let digest_md5 = hasher.finalize();
-        let digest_md5 = digest_md5.as_slice();
+        let digest_md5 = {
+            use md5::Digest;
+
+            // accross header index and content (compressed or uncompressed, depends on configuration)
+            let mut hasher = md5::Md5::default();
+            hasher.update(&header);
+            hasher.update(&content);
+            let digest_md5 = hasher.finalize();
+            digest_md5.to_vec()
+        };
 
         // header only, not the lead, just the header index
-        let digest_sha1 = sha1::Sha1::from(&header);
-        let digest_sha1 = digest_sha1.digest();
-        let digest_sha1 = digest_sha1.to_string();
+        let digest_sha1 = {
+            use sha1::Digest;
 
-        Ok((digest_sha1, digest_md5.to_vec()))
+            let mut hasher = sha1::Sha1::default();
+            hasher.update(&header);
+            let digest_sha1 = hasher.finalize();
+            hex::encode(digest_sha1)
+        };
+
+        Ok((digest_sha1, digest_md5))
     }
 
     /// prepapre all rpm headers including content
@@ -432,7 +445,7 @@ impl RPMBuilder {
             base_names.push(entry.base_name.to_owned());
             file_verify_flags.push(-1);
             let content = entry.content.to_owned().unwrap();
-            let mut writer = cpio::newc::Builder::new(&cpio_path)
+            let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())
                 .ino(ino_index as u32)
                 .uid(self.uid.unwrap_or(0))

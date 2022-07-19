@@ -27,7 +27,7 @@ impl<'s> SeqCursor<'s> {
         let len = slices.iter().fold(0usize, |acc, slice| slice.len() + acc);
         Self {
             cursors: slices
-                .into_iter()
+                .iter()
                 .map(|slice| std::io::Cursor::new(*slice))
                 .collect::<Vec<_>>(),
             position: 0u64,

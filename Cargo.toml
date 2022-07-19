@@ -3,13 +3,14 @@ name = "rpm-rs"
 version = "0.8.1"
 authors = [
     "René Richter <richterrettich@gmail.com>",
-    "Bernhard Schuster <bernhard@ahoi.io>"
+    "Bernhard Schuster <bernhard@ahoi.io>",
+    "Max Dymond <cmeister2@gmail.com>",
 ]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPM's"
-homepage = "https://github.com/Richterrettich/rpm-rs"
-repository = "https://github.com/Richterrettich/rpm-rs"
+homepage = "https://github.com/rpm-rs/rpm-rs"
+repository = "https://github.com/rpm-rs/rpm-rs"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
@@ -18,7 +19,7 @@ categories = ["parsing", "development-tools"]
 name = "rpm"
 
 [dependencies]
-tokio = {version = "1.11", features = ["fs", "io-util"]}
+tokio = {version = "1.11", optional = true}
 thiserror = "1"
 nom = "7"
 num-traits = "0.2"
@@ -29,23 +30,24 @@ enum-display-derive = "0.1"
 cpio = "0.2"
 # consider migrating to flate2
 libflate = "1"
-sha2 = "0.9"
-md-5 = "0.9"
-sha1 = "0.6"
+sha2 = "0.10.2"
+md-5 = "0.10"
+sha1 = "0.10"
 rand = { version = "0.8" }
-pgp = { version="0.7.2", optional = true }
+pgp = { version="0.8.0", optional = true }
 chrono = "0.4"
 log = "0.4"
 itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
-zstd = "0.9.0"
+zstd = "0.11.2"
 
 [dev-dependencies]
-rsa = { version = "0.5" }
-rsa-der = { version = "^0.2.1" }
+rsa = { version = "0.6" }
+rsa-der = { version = "^0.3.0" }
 env_logger = "0.9"
-serial_test = "0.5"
+serial_test = "0.8"
 tokio = {version = "1", features = ["full"]}
+reqwest = { version = "0.11.10", features = ["blocking"] }
 
 
 [features]
@@ -54,4 +56,4 @@ default = ["signature-pgp","async-tokio"]
 signature-pgp = ["signature-meta", "pgp"]
 signature-meta = []
 test-with-podman = ["signature-meta"]
-async-tokio = []
+async-tokio = ["tokio/fs", "tokio/io-util"]

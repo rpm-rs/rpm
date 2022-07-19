@@ -149,27 +149,27 @@ impl FileMode {
     }
 }
 
-impl Into<u32> for FileMode {
-    fn into(self) -> u32 {
-        self.raw_mode() as u32
+impl From<FileMode> for u32 {
+    fn from(mode: FileMode) -> Self {
+        mode.raw_mode() as u32
     }
 }
 
-impl Into<i32> for FileMode {
-    fn into(self) -> i32 {
-        self.raw_mode() as i32
+impl From<FileMode> for i32 {
+    fn from(mode: FileMode) -> Self {
+        mode.raw_mode() as i32
     }
 }
 
-impl Into<i16> for FileMode {
-    fn into(self) -> i16 {
-        self.raw_mode() as i16
+impl From<FileMode> for i16 {
+    fn from(mode: FileMode) -> Self {
+        mode.raw_mode() as i16
     }
 }
 
-impl Into<u16> for FileMode {
-    fn into(self) -> u16 {
-        self.raw_mode()
+impl From<FileMode> for u16 {
+    fn from(mode: FileMode) -> Self {
+        mode.raw_mode() as u16
     }
 }
 
@@ -187,6 +187,7 @@ pub struct RPMFileOptions {
 }
 
 impl RPMFileOptions {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new<T: Into<String>>(dest: T) -> RPMFileOptionsBuilder {
         RPMFileOptionsBuilder {
             inner: RPMFileOptions {
@@ -239,9 +240,9 @@ impl RPMFileOptionsBuilder {
     }
 }
 
-impl Into<RPMFileOptions> for RPMFileOptionsBuilder {
-    fn into(self) -> RPMFileOptions {
-        self.inner
+impl From<RPMFileOptionsBuilder> for RPMFileOptions {
+    fn from(builder: RPMFileOptionsBuilder) -> Self {
+        builder.inner
     }
 }
 

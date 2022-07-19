@@ -4,6 +4,8 @@ use std::convert::TryInto;
 
 use crate::constants::*;
 use crate::errors::*;
+
+#[cfg(feature = "async-tokio")]
 use tokio::io::AsyncWriteExt;
 
 /// Lead of an rpm header.

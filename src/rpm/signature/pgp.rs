@@ -31,7 +31,7 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
     /// it internally creates a copy until crate `pgp` provides
     /// a `Read` based implementation.
     fn sign<R: Read>(&self, data: R) -> Result<Self::Signature, RPMError> {
-        let passwd_fn = || String::new();
+        let passwd_fn = String::new;
 
         let now = now();
 
@@ -104,7 +104,7 @@ impl Verifier {
                 _ => None,
             })
             .next()
-            .ok_or_else(|| RPMError::NoSignatureFound)?;
+            .ok_or(RPMError::NoSignatureFound)?;
         Ok(signature)
     }
 }
@@ -140,17 +140,17 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
             self.public_key
                 .public_subkeys
                 .iter()
-                .filter_map(|sub_key| {
+                .filter(|sub_key| {
                     if sub_key.key_id().as_ref() == key_id.as_ref() {
                         log::trace!(
                             "Found a matching key id {:?} == {:?}",
                             sub_key.key_id(),
                             key_id
                         );
-                        Some(sub_key)
+                        true
                     } else {
                         log::trace!("Not the one we want: {:?}", sub_key);
-                        None
+                        false
                     }
                 })
                 .fold(

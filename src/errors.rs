@@ -1,4 +1,3 @@
-use nom;
 use std::io;
 
 use thiserror::Error;
