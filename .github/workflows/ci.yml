@@ -1,0 +1,161 @@
+on:
+  push:
+    tags:
+      # Full version
+      - "[0-9]+.[0-9]+.[0-9]+"
+      # Prerelease version
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+
+  pull_request:
+    branches:
+      # Trigger on pull requests into main/master
+      - main
+      - master
+    types: [ opened, synchronize ]
+
+name: Continuous integration
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - 1.57.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - 1.57.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - 1.57.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - 1.57.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+
+  tarpaulin:
+    name: Tarpaulin
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-tarpaulin
+      - uses: actions-rs/cargo@v1
+        with:
+          command: tarpaulin
+          args: --out xml
+      # Commented out until a codecov token is added
+
+      # - uses: codecov/codecov-action@v3
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     files: ./cobertura.xml
+      #     verbose: true
+
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - check
+      - test
+      - fmt
+      - clippy
+      - tarpaulin
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+      # Commented out until a publish token is added
+
+      # - name: Publish to crates.io on tags
+      #   uses: actions-rs/cargo@v1
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   with:
+      #     toolchain: stable
+      #     command: publish
+      #   env:
+      #     CARGO_REGISTRY_TOKEN: ${{ secrets.PUBLISH_SECRET }}
+      # - name: Dry-run publish on non-tags
+      #   uses: actions-rs/cargo@v1
+      #   if: startsWith(github.ref, 'refs/tags/') != true
+      #   with:
+      #     toolchain: stable
+      #     command: publish
+      #     args: --dry-run
+      #   env:
+      #     CARGO_REGISTRY_TOKEN: ${{ secrets.PUBLISH_SECRET }}

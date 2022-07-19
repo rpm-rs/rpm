@@ -45,6 +45,12 @@ impl SignatureHeaderBuilder<Empty> {
     }
 }
 
+impl Default for SignatureHeaderBuilder<Empty> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> SignatureHeaderBuilder<T>
 where
     T: ConstructionStage,

@@ -1,17 +1,23 @@
-use sha2::Digest;
+#[cfg(feature = "async-tokio")]
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 use super::headers::*;
 
 use crate::constants::*;
-use crate::sequential_cursor::SeqCursor;
 
 use crate::errors::*;
 
 use super::Lead;
+
+#[cfg(feature = "signature-meta")]
+use crate::sequential_cursor::SeqCursor;
+#[cfg(feature = "signature-meta")]
 use crate::signature;
 
-use std::io::{Read, Seek, SeekFrom};
+use std::io::Read;
+#[cfg(feature = "signature-meta")]
+use std::io::{Seek, SeekFrom};
+
 /// A complete rpm file.
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
@@ -48,6 +54,7 @@ impl RPMPackage {
         Ok(())
     }
 
+    #[cfg(feature = "async-tokio")]
     pub async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
         &self,
         out: &mut W,
@@ -73,23 +80,30 @@ impl RPMPackage {
         let mut header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
-        let mut hasher = md5::Md5::default();
-        {
-            // avoid loading it into memory all at once
-            // since the content could be multiple 100s of MBs
-            let mut buf = [0u8; 256];
-            while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
-                hasher.update(&buf[0..n]);
+        let digest_md5 = {
+            use md5::Digest;
+            let mut hasher = md5::Md5::default();
+            {
+                // avoid loading it into memory all at once
+                // since the content could be multiple 100s of MBs
+                let mut buf = [0u8; 256];
+                while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
+                    hasher.update(&buf[0..n]);
+                }
             }
-        }
-        let hash_result = hasher.finalize();
+            let hash_result = hasher.finalize();
+            hash_result.to_vec()
+        };
 
         header_and_content_cursor.seek(SeekFrom::Start(0))?;
 
-        let digest_md5 = hash_result.as_slice();
-
-        let digest_sha1 = sha1::Sha1::from(&header_bytes);
-        let digest_sha1 = digest_sha1.digest();
+        let digest_sha1 = {
+            use sha1::Digest;
+            let mut hasher = sha1::Sha1::default();
+            hasher.update(&header_bytes);
+            let digest = hasher.finalize();
+            hex::encode(digest)
+        };
 
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
 
@@ -100,8 +114,8 @@ impl RPMPackage {
         // TODO maybe use signature_size instead of size
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
             header_and_content_cursor.len() as i32,
-            digest_md5,
-            digest_sha1.to_string(),
+            &digest_md5,
+            digest_sha1,
             rsa_signature_spanning_header_only.as_slice(),
             rsa_signature_spanning_header_and_archive.as_slice(),
         );

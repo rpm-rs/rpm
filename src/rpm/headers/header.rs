@@ -1,6 +1,7 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 
+#[cfg(feature = "async-tokio")]
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 use crate::constants::{self, *};
@@ -307,6 +308,7 @@ impl Header<IndexSignatureTag> {
     /// PGP and RSA tags expect signatures according to [RFC2440](https://tools.ietf.org/html/rfc2440)
     ///
     /// Please use the [`builder`](Self::builder()) which has modular and safe API.
+    #[cfg(feature = "signature-meta")]
     pub(crate) fn new_signature_header(
         size: i32,
         md5sum: &[u8],
@@ -320,6 +322,7 @@ impl Header<IndexSignatureTag> {
             .build(size)
     }
 
+    #[cfg(feature = "signature-meta")]
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
         SignatureHeaderBuilder::<Empty>::new()
     }
@@ -444,7 +447,7 @@ impl Header<IndexTag> {
 
         let n = dirs.len();
         let v = base
-            .into_iter()
+            .iter()
             .zip(biject.into_iter())
             .try_fold::<Vec<PathBuf>, _, _>(
                 Vec::<PathBuf>::with_capacity(base.len()),
@@ -818,7 +821,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         let (input, raw_tag) = be_u32(input)?;
 
         let tag: T = num::FromPrimitive::from_u32(raw_tag).ok_or_else(|| RPMError::InvalidTag {
-            raw_tag: raw_tag,
+            raw_tag,
             store_type: T::type_name(),
         })?;
         //next 4 bytes is the tag type
@@ -974,7 +977,7 @@ impl IndexData {
                 0
             }
             IndexData::Bin(d) => {
-                store.extend_from_slice(&d);
+                store.extend_from_slice(d);
                 0
             }
             IndexData::StringArray(d) => {
@@ -1041,7 +1044,7 @@ impl IndexData {
 
     pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
-            IndexData::StringTag(s) => Some(&s),
+            IndexData::StringTag(s) => Some(s),
             _ => None,
         }
     }
@@ -1110,7 +1113,7 @@ impl IndexData {
 
     pub(crate) fn as_string_array(&self) -> Option<&[String]> {
         match self {
-            IndexData::StringArray(d) | IndexData::I18NString(d) => Some(&d),
+            IndexData::StringArray(d) | IndexData::I18NString(d) => Some(d),
             _ => None,
         }
     }

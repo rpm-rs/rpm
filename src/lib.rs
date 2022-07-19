@@ -8,10 +8,10 @@
 //! ```rust
 //!
 //! use rpm::{
-//! 	signature::pgp::{
-//! 		Signer,
-//! 		Verifier
-//! 	}
+//!     signature::pgp::{
+//!         Signer,
+//!         Verifier
+//!     }
 //! };
 //! use std::str::FromStr;
 //!
@@ -22,7 +22,7 @@
 //!             .with_file(
 //!                 "./test_assets/awesome.toml",
 //!                 rpm::RPMFileOptions::new("/etc/awesome/config.toml")
-//! 					.is_config(),
+//!                     .is_config(),
 //!             )?
 //!             // file mode is inherited from source file
 //!             .with_file(
@@ -33,16 +33,16 @@
 //!                 "./test_assets/awesome.toml",
 //!                 // you can set a custom mode and custom user too
 //!                 rpm::RPMFileOptions::new("/etc/awesome/second.toml")
-//! 						.mode(rpm::FileMode::regular(0o644))
-//! 						.user("hugo"),
+//!                         .mode(rpm::FileMode::regular(0o644))
+//!                         .user("hugo"),
 //!             )?
 //!             .pre_install_script("echo preinst")
 //!             .add_changelog_entry("me", "was awesome, eh?", 123123123)
 //!             .add_changelog_entry("you", "yeah, it was", 12312312)
 //!             .requires(rpm::Dependency::any("wget"))
 //!             .build_and_sign(
-//! 				Signer::load_from_asc_bytes(&raw_secret_key)?
-//! 			)?;
+//!                 Signer::load_from_asc_bytes(&raw_secret_key)?
+//!             )?;
 //! let mut f = std::fs::File::create("./target/awesome.rpm")?;
 //! pkg.write(&mut f)?;
 //!
