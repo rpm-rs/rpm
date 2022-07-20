@@ -3,8 +3,10 @@ on:
     tags:
       # Full version
       - "[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
       # Prerelease version
       - "[0-9]+.[0-9]+.[0-9]+-*"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
   pull_request:
     branches:
@@ -118,13 +120,6 @@ jobs:
         with:
           command: tarpaulin
           args: --out xml
-      # Commented out until a codecov token is added
-
-      # - uses: codecov/codecov-action@v3
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     files: ./cobertura.xml
-      #     verbose: true
 
   publish:
     runs-on: ubuntu-latest
@@ -140,22 +135,3 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
             toolchain: stable
-      # Commented out until a publish token is added
-
-      # - name: Publish to crates.io on tags
-      #   uses: actions-rs/cargo@v1
-      #   if: startsWith(github.ref, 'refs/tags/')
-      #   with:
-      #     toolchain: stable
-      #     command: publish
-      #   env:
-      #     CARGO_REGISTRY_TOKEN: ${{ secrets.PUBLISH_SECRET }}
-      # - name: Dry-run publish on non-tags
-      #   uses: actions-rs/cargo@v1
-      #   if: startsWith(github.ref, 'refs/tags/') != true
-      #   with:
-      #     toolchain: stable
-      #     command: publish
-      #     args: --dry-run
-      #   env:
-      #     CARGO_REGISTRY_TOKEN: ${{ secrets.PUBLISH_SECRET }}
