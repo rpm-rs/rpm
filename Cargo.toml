@@ -8,12 +8,13 @@ authors = [
 ]
 edition = "2018"
 license = "Apache-2.0"
-description = "A pure rust library for building and parsing RPM's"
+description = "A pure rust library for building and parsing RPMs"
 homepage = "https://github.com/rpm-rs/rpm-rs"
 repository = "https://github.com/rpm-rs/rpm-rs"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
+rust-version = "1.57.0"
 
 [lib]
 name = "rpm"
