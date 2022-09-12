@@ -93,7 +93,7 @@ mod pgp {
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
+        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
 
         [
             ("fedora:36", rpm_sig_check.as_str()),
@@ -190,7 +190,7 @@ mod pgp {
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
+        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
 
         [
             ("fedora:36", rpm_sig_check.as_str()),
@@ -281,10 +281,10 @@ mod pgp {
         let cmd = format!(
             r#"
 echo ">>> sign"
-rpm  -vv --addsign /out/{rpm_file} 2>&1
+rpm -vv --addsign /out/{rpm_file} 2>&1
 
 echo ">>> verify signature with rpm"
-rpm  -vv --checksig /out/{rpm_file} 2>&1
+rpm -vv --checksig /out/{rpm_file} 2>&1
 "#,
             rpm_file = out_file.file_name().unwrap().to_str().unwrap()
         );
@@ -316,7 +316,7 @@ rpm  -vv --checksig /out/{rpm_file} 2>&1
 echo "test" > /out/test.file
 
 echo ">>> sign like rpm"
-cmd="$(rpm  -vv --define "__signature_filename /out/test.file.sig" \
+cmd="$(rpm -vv --define "__signature_filename /out/test.file.sig" \
         --define "__plaintext_filename /out/test.file" \
         --define "_gpg_name Package Manager" \
         --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
