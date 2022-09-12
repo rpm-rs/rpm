@@ -98,7 +98,7 @@ mod pgp {
         [
             ("fedora:31", rpm_sig_check.as_str()),
             ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("centos:stream8", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
@@ -121,7 +121,7 @@ mod pgp {
 
         [
             ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("centos:stream8", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
@@ -195,7 +195,7 @@ mod pgp {
         [
             ("fedora:31", rpm_sig_check.as_str()),
             ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("centos:stream8", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
