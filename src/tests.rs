@@ -1,3 +1,7 @@
+use std::{fs, process};
+
+use crate::signature::pgp::{Signer, Verifier};
+
 use super::*;
 
 fn test_rpm_file_path() -> std::path::PathBuf {
@@ -38,6 +42,85 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
         ],
     );
 
+    Ok(())
+}
+
+fn wait_and_print_helper(mut child: std::process::Child) -> std::io::Result<()> {
+    use std::io::BufRead;
+    use std::io::BufReader;
+    // not perfect, but gets it done
+    if let Some(ref mut stdout) = child.stdout {
+        if let Some(ref mut stderr) = child.stderr {
+            let stdout_rdr = BufReader::new(stdout);
+            let mut stdout_line = stdout_rdr.lines();
+
+            let stderr_rdr = BufReader::new(stderr);
+            let mut stderr_line = stderr_rdr.lines();
+
+            let mut done: bool = false;
+            while !done {
+                done = true;
+                // can not be written as for loop
+                while let Some(line) = stdout_line.next() {
+                    done = false;
+                    println!("[stdout] {}", line.unwrap().as_str());
+                }
+                while let Some(line) = stderr_line.next() {
+                    done = false;
+                    println!("[stderr] {}", line.unwrap().as_str());
+                }
+            }
+        } else {
+            unreachable!("Must have stderr");
+        }
+    } else {
+        unreachable!("Must have stdout");
+    }
+
+    let status = child.wait()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
+fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = file_signatures_test_rpm_file_path();
+    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
+    let mut buf_reader = std::io::BufReader::new(rpm_file);
+
+    let mut package = RPMPackage::parse(&mut buf_reader)?;
+    let metadata = &package.metadata;
+
+    let orig_signatures = metadata.signature.get_file_ima_signatures()?;
+    let orig_signatures_length = metadata.signature.get_file_ima_signature_length()?;
+
+    let skb = pgp::SecretKeyParamsBuilder::default()
+        .primary_user_id("Hans Peter <hp@hp.example>".to_owned())
+        .can_sign(true)
+        .key_type(pgp::KeyType::Rsa(2048))
+        .build()?;
+    println!("xxx");
+    let sk = skb.generate()?.sign(|| String::new())?;
+    println!("xxx2");
+
+    let signer = Signer { secret_key: sk };
+    println!("xxx3");
+
+    package.sign(&signer)?;
+    println!("xxx4");
+
+    let dp = "/tmp/xxx-modified-sig.rpm";
+    let mut dest = fs::File::create(&dp)?;
+    package.write(&mut dest)?;
+
+    use std::process::Stdio;
+    let handle = process::Command::new("rpm")
+        .arg("-Kv")
+        .arg(dp)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    wait_and_print_helper(handle)?;
     Ok(())
 }
 

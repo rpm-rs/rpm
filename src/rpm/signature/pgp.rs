@@ -23,7 +23,7 @@ fn now() -> ::chrono::DateTime<::chrono::Utc> {
 /// by i.e. `gpg`.
 #[derive(Clone, Debug)]
 pub struct Signer {
-    secret_key: ::pgp::composed::signed_key::SignedSecretKey,
+    pub(crate) secret_key: ::pgp::composed::signed_key::SignedSecretKey,
 }
 
 impl traits::Signing<traits::algorithm::RSA> for Signer {
