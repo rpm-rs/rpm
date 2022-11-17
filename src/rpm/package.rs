@@ -83,13 +83,14 @@ impl RPMPackage {
         let digest_md5 = {
             use md5::Digest;
             let mut hasher = md5::Md5::default();
-            {
-                // avoid loading it into memory all at once
-                // since the content could be multiple 100s of MBs
-                let mut buf = [0u8; 256];
-                while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
-                    hasher.update(&buf[0..n]);
+            // avoid loading it into memory all at once
+            // since the content could be multiple 100s of MBs
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
+                if n == 0 {
+                    break;
                 }
+                hasher.update(&buf[..n]);
             }
             let hash_result = hasher.finalize();
             hash_result.to_vec()
