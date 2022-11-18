@@ -1,4 +1,6 @@
 //! Cursor implementation over multiple slices
+use std::io::{Seek, SeekFrom};
+
 pub(crate) struct SeqCursor<'s> {
     cursors: Vec<std::io::Cursor<&'s [u8]>>,
     position: u64,
@@ -50,15 +52,17 @@ impl<'s> std::io::Read for SeqCursor<'s> {
             acc_offset += chunk_len;
             if self.position < acc_offset as u64 {
                 let remaining_in_chunk = (acc_offset as u64 - self.position) as usize;
+                let start = (chunk_len - remaining_in_chunk) as u64;
                 let fin = std::cmp::min(total_read + remaining_in_chunk, buf.len());
+                cursor.seek(SeekFrom::Start(start))?;
                 let read = cursor.read(&mut buf[total_read..fin])?;
+                self.position += read as u64;
                 total_read += read;
                 if total_read == buf.len() {
                     break;
                 }
             }
         }
-        self.position += total_read as u64;
         Ok(total_read)
     }
 }
@@ -72,7 +76,7 @@ impl<'s> std::io::Seek for SeqCursor<'s> {
                     .cursors
                     .iter()
                     .fold(0u64, |acc, cursor| acc + cursor.get_ref().len() as u64);
-                (total as i64 - rel) as u64
+                (total as i64 + rel) as u64
             }
             std::io::SeekFrom::Current(rel) => (self.position as i64 + rel) as u64,
         };
@@ -105,5 +109,55 @@ mod test {
         sq.seek(std::io::SeekFrom::Current(12)).unwrap();
         sq.read(&mut buf[4..8]).unwrap();
         assert_eq!(buf[4..8].to_vec(), vec![2u8, 2u8, 3u8, 3u8]);
+    }
+
+    #[test]
+    fn sequential_cursor_with_short_buffer() {
+        let c1 = vec![1u8, 2u8];
+        let c2 = vec![3u8, 4u8];
+        let mut sq = SeqCursor::new(&[c1.as_slice(), c2.as_slice()]);
+
+        //read with a short buffer
+        let mut buf = vec![0u8; 1];
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![1u8]);
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![2u8]);
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![3u8]);
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![4u8]);
+    }
+
+    #[test]
+    fn sequential_cursor_with_seek() {
+        let c1 = vec![1u8; 2];
+        let c2 = vec![2u8; 2];
+        let c3 = vec![3u8; 2];
+
+        let mut buf = vec![0u8; 6];
+        // without seek
+        let mut sq = SeqCursor::new(&[c1.as_slice(), c2.as_slice(), c3.as_slice()]);
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![1u8, 1u8, 2u8, 2u8, 3u8, 3u8]);
+
+        // seek with start
+        let mut buf = vec![0u8; 5];
+        sq.seek(SeekFrom::Start(1)).unwrap();
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![1u8, 2u8, 2u8, 3u8, 3u8]);
+
+        //seek with current
+        let mut buf = vec![0u8; 5];
+        sq.seek(SeekFrom::Start(0)).unwrap();
+        sq.seek(SeekFrom::Current(1)).unwrap();
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![1u8, 2u8, 2u8, 3u8, 3u8]);
+
+        //seek with end
+        let mut buf = vec![0u8; 3];
+        sq.seek(SeekFrom::End(-3)).unwrap();
+        sq.read(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![2u8, 3u8, 3u8]);
     }
 }
