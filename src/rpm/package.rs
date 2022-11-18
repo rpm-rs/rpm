@@ -110,8 +110,7 @@ impl RPMPackage {
         let rsa_signature_spanning_header_and_archive =
             signer.sign(&mut header_and_content_cursor)?;
 
-        // TODO FIXME verify this is the size we want, I don't think it is
-        // TODO maybe use signature_size instead of size
+        // NOTE: size stands for the combined size of header and payload.
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
             header_and_content_cursor.len() as i32,
             &digest_md5,

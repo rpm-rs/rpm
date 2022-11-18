@@ -538,7 +538,7 @@ impl Header<IndexTag> {
                         group: group.to_owned(),
                     },
                     mode: mode.into(),
-                    modified_at: utc.timestamp(mtime as i64, 0u32),
+                    modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(),
                     digest,
                     category: FileCategory::from_i32(flags).unwrap_or_default(),
                     size: size as usize,

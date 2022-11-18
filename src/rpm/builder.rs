@@ -369,10 +369,10 @@ impl RPMBuilder {
         let digest_md5 = {
             use md5::Digest;
 
-            // accross header index and content (compressed or uncompressed, depends on configuration)
+            // across header index and content (compressed or uncompressed, depends on configuration)
             let mut hasher = md5::Md5::default();
-            hasher.update(&header);
-            hasher.update(&content);
+            hasher.update(header);
+            hasher.update(content);
             let digest_md5 = hasher.finalize();
             digest_md5.to_vec()
         };
@@ -382,7 +382,7 @@ impl RPMBuilder {
             use sha1::Digest;
 
             let mut hasher = sha1::Sha1::default();
-            hasher.update(&header);
+            hasher.update(header);
             let digest_sha1 = hasher.finalize();
             hex::encode(digest_sha1)
         };

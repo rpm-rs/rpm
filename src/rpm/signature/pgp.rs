@@ -11,7 +11,9 @@ fn now() -> ::chrono::DateTime<::chrono::Utc> {
     // accuracy of serialized format is only down to seconds
     use ::chrono::offset::TimeZone;
     let now = ::chrono::offset::Utc::now();
-    ::chrono::offset::Utc.timestamp(now.timestamp(), 0u32)
+    ::chrono::offset::Utc
+        .timestamp_opt(now.timestamp(), 0u32)
+        .unwrap()
 }
 
 /// Signer implementation using the `pgp` crate.
