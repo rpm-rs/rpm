@@ -97,7 +97,7 @@ impl FileMode {
     }
 
     /// Usually this should be done with TryFrom, but since we already have a `From` implementation,
-    /// we run into this issue: `<https://github.com/rust-lang/rust/issues/50133>`
+    /// we run into this issue: <https://github.com/rust-lang/rust/issues/50133>
     pub fn try_from_raw(raw: i32) -> Result<Self, errors::RPMError> {
         let mode: FileMode = raw.into();
         mode.to_result()
