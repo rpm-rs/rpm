@@ -56,13 +56,13 @@ where
     T: ConstructionStage,
 {
     /// Construct the complete signature header.
-    pub fn build(mut self, signature_size: i32) -> Header<IndexSignatureTag> {
+    pub fn build(mut self, headers_plus_payload_size: i32) -> Header<IndexSignatureTag> {
         self.entries.insert(
             0,
             IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SIZE,
                 0i32, // externally filled
-                IndexData::Int32(vec![signature_size]),
+                IndexData::Int32(vec![headers_plus_payload_size]),
             ),
         );
 

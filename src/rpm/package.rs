@@ -75,6 +75,7 @@ impl RPMPackage {
         // create a temporary byte repr of the header
         // and re-create all hashes
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
 
         let mut header_and_content_cursor =
