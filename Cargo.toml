@@ -1,10 +1,10 @@
 [package]
-name = "rpm-rs"
-version = "0.8.1"
+name = "rpm"
+version = "0.0.1"
 authors = [
-    "René Richter <richterrettich@gmail.com>",
-    "Bernhard Schuster <bernhard@ahoi.io>",
-    "Max Dymond <cmeister2@gmail.com>",
+  "René Richter <richterrettich@gmail.com>",
+  "Bernhard Schuster <bernhard@ahoi.io>",
+  "Max Dymond <cmeister2@gmail.com>",
 ]
 edition = "2018"
 license = "Apache-2.0"
