@@ -227,6 +227,7 @@ where
             })
     }
 
+    #[allow(unused)]
     pub(crate) fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -411,18 +412,9 @@ impl Header<IndexSignatureTag> {
 
 impl Header<IndexTag> {
     #[inline]
-    pub fn get_payload_format(&self) -> Result<&str, RPMError> {
-        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADFORMAT)
-    }
-
-    #[inline]
-    pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
-        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
-    }
-
-    #[inline]
-    pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
-        self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
+    pub fn is_source_package(&self) -> bool {
+        self.get_entry_data_as_u32(IndexTag::RPMTAG_SOURCEPACKAGE)
+            .is_ok()
     }
 
     #[inline]
@@ -451,8 +443,60 @@ impl Header<IndexTag> {
     }
 
     #[inline]
-    pub fn get_install_time(&self) -> Result<u64, RPMError> {
-        self.get_entry_data_as_u64(IndexTag::RPMTAG_INSTALLTIME)
+    pub fn get_vendor(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_VENDOR)
+    }
+
+    #[inline]
+    pub fn get_url(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_URL)
+    }
+
+    #[inline]
+    pub fn get_license(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)
+    }
+
+    // TODO: internationalized strings
+    // get_summary, get_description, get_group
+
+    #[inline]
+    pub fn get_packager(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_PACKAGER)
+    }
+
+    #[inline]
+    pub fn get_build_time(&self) -> Result<u64, RPMError> {
+        self.get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME).map(|x| x as u64)
+    }
+
+    #[inline]
+    pub fn get_build_host(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_BUILDHOST)
+    }
+
+    #[inline]
+    pub fn get_source_rpm(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
+    }
+
+    // TODO: get_provides, get_requires, etc.
+    // TODO: get_header_byte_range
+    // TODO: get_archive_size, get_installed_size
+
+    #[inline]
+    pub fn get_payload_format(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADFORMAT)
+    }
+
+    #[inline]
+    pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
+        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
+    }
+
+    #[inline]
+    pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
+        self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
     }
 
     /// Extract a the set of contained file names.
@@ -565,6 +609,8 @@ impl Header<IndexTag> {
         )?;
         Ok(v)
     }
+
+    // TODO: get_changelog_entries()
 }
 
 /// User facing accessor type representing ownership of a file
@@ -1097,13 +1143,7 @@ impl IndexData {
 
     pub(crate) fn as_u32(&self) -> Option<u32> {
         match self {
-            IndexData::Int32(s) => {
-                if !s.is_empty() {
-                    Some(s[0])
-                } else {
-                    None
-                }
-            }
+            IndexData::Int32(s) => s.first().copied(),
             _ => None,
         }
     }
@@ -1114,15 +1154,10 @@ impl IndexData {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn as_u64(&self) -> Option<u64> {
         match self {
-            IndexData::Int64(s) => {
-                if !s.is_empty() {
-                    Some(s[0])
-                } else {
-                    None
-                }
-            }
+            IndexData::Int64(s) => s.first().copied(),
             _ => None,
         }
     }

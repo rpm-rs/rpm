@@ -84,9 +84,66 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
-    assert_eq!(7, metadata.signature.index_entries.len());
-    assert!(metadata.signature.index_entries[0].num_items == 16);
-    assert_eq!(1156, metadata.signature.index_header.header_size);
+    assert_eq!(metadata.signature.index_entries.len(), 7);
+    assert_eq!(metadata.signature.index_entries[0].num_items, 16);
+    assert_eq!(metadata.signature.index_header.header_size, 1156);
+
+    assert_eq!(
+        package.metadata.header.get_name().unwrap(),
+        "389-ds-base-devel"
+    );
+    assert!(package.metadata.header.get_epoch().is_err());
+    assert_eq!(package.metadata.header.get_version().unwrap(), "1.3.8.4");
+    assert_eq!(package.metadata.header.get_release().unwrap(), "15.el7");
+    assert_eq!(package.metadata.header.get_arch().unwrap(), "x86_64");
+
+    assert_eq!(
+        package.metadata.header.get_url().unwrap(),
+        "https://www.port389.org/"
+    );
+    assert_eq!(
+        package.metadata.header.get_packager().unwrap(),
+        "CentOS BuildSystem <http://bugs.centos.org>"
+    );
+    assert_eq!(package.metadata.header.get_license().unwrap(), "GPLv3+");
+    assert_eq!(package.metadata.header.get_vendor().unwrap(), "CentOS");
+
+    // TODO: internationalized strings
+    // assert_eq!(
+    //     package.metadata.header.get_summary().unwrap(),
+    //     "Development libraries for 389 Directory Server"
+    // );
+    // assert_eq!(
+    //     package.metadata.header.get_description().unwrap(),
+    //     "Development Libraries and headers for the 389 Directory Server base package."
+    // );
+    // assert_eq!(
+    //     package.metadata.header.get_group().unwrap(),
+    //     "Development/Libraries"
+    // );
+    assert_eq!(
+        package.metadata.header.get_source_rpm().unwrap(),
+        "389-ds-base-1.3.8.4-15.el7.src.rpm"
+    );
+    assert_eq!(
+        package.metadata.header.get_build_host().unwrap(),
+        "x86-01.bsys.centos.org"
+    );
+    assert_eq!(
+        package.metadata.header.get_build_time().unwrap(),
+        1540945151
+    );
+
+    assert_eq!(
+        package.metadata.header.get_payload_compressor().unwrap(),
+        "xz"
+    );
+    assert_eq!(
+        package.metadata.header.get_payload_format().unwrap(),
+        "cpio"
+    );
+
+    assert_eq!(package.metadata.header.is_source_package(), false);
 
     let expected_data = vec![
         (
