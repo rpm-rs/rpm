@@ -1,4 +1,17 @@
 use super::*;
+use crate::signature::pgp::{Signer, Verifier};
+
+fn test_private_key_path() -> std::path::PathBuf {
+    let mut rpm_path = cargo_manifest_dir();
+    rpm_path.push("test_assets/secret_key.asc");
+    rpm_path
+}
+
+fn test_public_key_path() -> std::path::PathBuf {
+    let mut rpm_path = cargo_manifest_dir();
+    rpm_path.push("test_assets/public_key.asc");
+    rpm_path
+}
 
 fn test_rpm_file_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
@@ -38,6 +51,27 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
         ],
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = file_signatures_test_rpm_file_path();
+    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
+    let mut buf_reader = std::io::BufReader::new(rpm_file);
+
+    let mut package = RPMPackage::parse(&mut buf_reader)?;
+
+    let private_key_content = std::fs::read(test_private_key_path())?;
+    let signer = Signer::load_from_asc_bytes(&private_key_content)?;
+
+    package.sign(&signer)?;
+
+    let public_key_content = std::fs::read(test_public_key_path())?;
+    let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
+    package
+        .verify_signature(&verifier)
+        .expect("failed to verify signature");
     Ok(())
 }
 

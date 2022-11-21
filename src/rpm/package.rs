@@ -88,6 +88,9 @@ impl RPMPackage {
                 // since the content could be multiple 100s of MBs
                 let mut buf = [0u8; 256];
                 while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
+                    if n == 0 {
+                        break;
+                    }
                     hasher.update(&buf[0..n]);
                 }
             }
