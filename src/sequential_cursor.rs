@@ -50,15 +50,20 @@ impl<'s> std::io::Read for SeqCursor<'s> {
         for cursor in self.cursors.iter_mut() {
             let chunk_len = cursor.get_ref().len();
             acc_offset += chunk_len;
-            if self.position < acc_offset as u64 {
-                let remaining_in_chunk = (acc_offset as u64 - self.position) as usize;
-                let start = (chunk_len - remaining_in_chunk) as u64;
-                let fin = std::cmp::min(total_read + remaining_in_chunk, buf.len());
-                cursor.seek(SeekFrom::Start(start))?;
+            if self.position <= acc_offset as u64 {
+                // remaining unread bytes
+                let rem_unread_in_chunk = (acc_offset as u64 - self.position) as usize;
+                // seek to the beginning of the currently first unread byte in the
+                // iterations cursor
+                cursor.seek(SeekFrom::Start(
+                    chunk_len as u64 - rem_unread_in_chunk as u64,
+                ))?;
+                let fin = std::cmp::min(total_read + rem_unread_in_chunk, buf.len());
                 let read = cursor.read(&mut buf[total_read..fin])?;
                 self.position += read as u64;
                 total_read += read;
-                if total_read == buf.len() {
+                if total_read >= buf.len() {
+                    debug_assert_eq!(total_read, buf.len(), "Always equal. qed");
                     break;
                 }
             }

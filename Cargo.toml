@@ -1,16 +1,16 @@
 [package]
-name = "rpm-rs"
-version = "0.8.1"
+name = "rpm"
+version = "0.0.1"
 authors = [
-    "René Richter <richterrettich@gmail.com>",
-    "Bernhard Schuster <bernhard@ahoi.io>",
-    "Max Dymond <cmeister2@gmail.com>",
+  "René Richter <richterrettich@gmail.com>",
+  "Bernhard Schuster <bernhard@ahoi.io>",
+  "Max Dymond <cmeister2@gmail.com>",
 ]
 edition = "2018"
 license = "Apache-2.0"
 description = "A pure rust library for building and parsing RPMs"
-homepage = "https://github.com/rpm-rs/rpm-rs"
-repository = "https://github.com/rpm-rs/rpm-rs"
+homepage = "https://github.com/rpm-rs/rpm"
+repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
