@@ -390,7 +390,7 @@ impl Header<IndexSignatureTag> {
     pub fn get_file_ima_signature_length(&self) -> Result<i32, RPMError> {
         self.get_entry_i32_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
     }
-    
+
     pub fn clear(&mut self) {
         self.index_entries.clear();
         self.index_header.header_size = 0;
