@@ -93,12 +93,12 @@ mod pgp {
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
+        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
 
         [
-            ("fedora:31", rpm_sig_check.as_str()),
-            ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("fedora:36", rpm_sig_check.as_str()),
+            ("fedora:36", dnf_cmd),
+            ("centos:stream9", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
@@ -120,8 +120,8 @@ mod pgp {
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
 
         [
-            ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("fedora:36", dnf_cmd),
+            ("centos:stream9", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
@@ -190,12 +190,12 @@ mod pgp {
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm  -vv --checksig /out/test.rpm 2>&1;".to_string();
+        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
 
         [
-            ("fedora:31", rpm_sig_check.as_str()),
-            ("fedora:31", dnf_cmd),
-            ("centos:8", yum_cmd),
+            ("fedora:36", rpm_sig_check.as_str()),
+            ("fedora:36", dnf_cmd),
+            ("centos:stream9", yum_cmd),
             ("centos:7", yum_cmd),
         ]
         .iter()
@@ -281,15 +281,15 @@ mod pgp {
         let cmd = format!(
             r#"
 echo ">>> sign"
-rpm  -vv --addsign /out/{rpm_file} 2>&1
+rpm -vv --addsign /out/{rpm_file} 2>&1
 
 echo ">>> verify signature with rpm"
-rpm  -vv --checksig /out/{rpm_file} 2>&1
+rpm -vv --checksig /out/{rpm_file} 2>&1
 "#,
             rpm_file = out_file.file_name().unwrap().to_str().unwrap()
         );
 
-        podman_container_launcher(cmd.as_str(), "fedora:31", vec![])?;
+        podman_container_launcher(cmd.as_str(), "fedora:36", vec![])?;
 
         let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(out_file);
@@ -316,7 +316,7 @@ rpm  -vv --checksig /out/{rpm_file} 2>&1
 echo "test" > /out/test.file
 
 echo ">>> sign like rpm"
-cmd="$(rpm  -vv --define "__signature_filename /out/test.file.sig" \
+cmd="$(rpm -vv --define "__signature_filename /out/test.file.sig" \
         --define "__plaintext_filename /out/test.file" \
         --define "_gpg_name Package Manager" \
         --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
@@ -339,7 +339,7 @@ gpg --verify /out/test.file.sig /out/test.file 2>&1
 
 "#.to_owned();
 
-        podman_container_launcher(cmd.as_str(), "fedora:31", vec![])
+        podman_container_launcher(cmd.as_str(), "fedora:36", vec![])
             .expect("Container execution must be flawless");
 
         let verifier =
