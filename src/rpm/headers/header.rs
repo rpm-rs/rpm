@@ -310,7 +310,7 @@ impl Header<IndexSignatureTag> {
     /// Please use the [`builder`](Self::builder()) which has modular and safe API.
     #[cfg(feature = "signature-meta")]
     pub(crate) fn new_signature_header(
-        size: i32,
+        headers_plus_payload_size: i32,
         md5sum: &[u8],
         sha1: String,
         rsa_spanning_header: &[u8],
@@ -319,7 +319,7 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::new()
             .add_digest(sha1.as_str(), md5sum)
             .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
-            .build(size)
+            .build(headers_plus_payload_size)
     }
 
     #[cfg(feature = "signature-meta")]
@@ -389,6 +389,13 @@ impl Header<IndexSignatureTag> {
     #[inline]
     pub fn get_file_ima_signature_length(&self) -> Result<i32, RPMError> {
         self.get_entry_i32_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+    }
+
+    pub fn clear(&mut self) {
+        self.index_entries.clear();
+        self.index_header.header_size = 0;
+        self.index_header.num_entries = 0;
+        self.store.clear()
     }
 }
 
@@ -723,7 +730,7 @@ mod tests2 {
     }
 }
 
-/// A header keeping track of all other headerr records.
+/// A header keeping track of all other header records.
 #[derive(Debug, PartialEq)]
 pub(crate) struct IndexHeader {
     /// rpm specific magic header
