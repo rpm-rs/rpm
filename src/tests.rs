@@ -325,6 +325,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     test_rpm_header_base(package)
 }
 
+#[cfg(feature = "signature-meta")]
 #[test]
 fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
     let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);

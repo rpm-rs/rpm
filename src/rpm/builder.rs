@@ -294,15 +294,14 @@ impl RPMBuilder {
 
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
-        let header = header;
-
-        let (header_digest_sha1, header_and_content_digest_md5) =
-            Self::derive_hashes(header.as_slice(), content.as_slice())?;
-
-        let header_and_content_len = header.len() + content.len();
 
         #[cfg(feature = "signature-meta")]
         let digest_header = {
+            let header = header;
+            let (header_digest_sha1, header_and_content_digest_md5) =
+                Self::derive_hashes(header.as_slice(), content.as_slice())?;
+            let header_and_content_len = header.len() + content.len();
+
             Header::<IndexSignatureTag>::builder()
                 .add_digest(
                     header_digest_sha1.as_str(),
@@ -370,6 +369,7 @@ impl RPMBuilder {
     }
 
     /// use prepared data but make sure the signatures are
+    #[cfg(feature = "signature-meta")]
     fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
         let digest_md5 = {
             use md5::Digest;

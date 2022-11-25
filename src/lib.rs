@@ -67,6 +67,7 @@ pub use crate::errors::*;
 pub(crate) mod constants;
 pub use crate::constants::*;
 
+#[cfg(feature = "signature-meta")]
 mod sequential_cursor;
 
 mod rpm;

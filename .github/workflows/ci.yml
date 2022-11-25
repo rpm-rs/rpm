@@ -70,6 +70,11 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
+      # Do a clippy check with warnings turned into errors.
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --no-default-features -- -D warnings
       - uses: actions-rs/cargo@v1
         with:
           command: test

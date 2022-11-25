@@ -166,6 +166,7 @@ where
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
     }
 
+    #[cfg(feature = "signature-meta")]
     pub(crate) fn get_entry_binary_data(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -1135,6 +1136,7 @@ impl IndexData {
         }
     }
 
+    #[cfg(feature = "signature-meta")]
     pub(crate) fn as_binary(&self) -> Option<&[u8]> {
         match self {
             IndexData::Bin(d) => Some(d.as_slice()),
