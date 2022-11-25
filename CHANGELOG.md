@@ -15,5 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Take dependabot updates
 - Fix up most issues when compiling with --no-default-features.
+- Fixed an issue with improper package signing
 
 [Unreleased]: https://github.com/rpm-rs/rpm-rs/compare/vTODO...HEAD

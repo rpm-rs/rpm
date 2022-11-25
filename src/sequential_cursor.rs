@@ -76,13 +76,7 @@ impl<'s> std::io::Seek for SeqCursor<'s> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         self.position = match pos {
             std::io::SeekFrom::Start(rel) => rel,
-            std::io::SeekFrom::End(rel) => {
-                let total = self
-                    .cursors
-                    .iter()
-                    .fold(0u64, |acc, cursor| acc + cursor.get_ref().len() as u64);
-                (total as i64 + rel) as u64
-            }
+            std::io::SeekFrom::End(rel) => (self.len as i64 + rel) as u64,
             std::io::SeekFrom::Current(rel) => (self.position as i64 + rel) as u64,
         };
         Ok(self.position)
