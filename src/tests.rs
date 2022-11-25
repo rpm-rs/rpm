@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "signature-meta")]
 use crate::signature::pgp::{Signer, Verifier};
 
 fn test_private_key_path() -> std::path::PathBuf {
@@ -29,6 +30,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+#[cfg(feature = "signature-meta")]
 #[test]
 fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
@@ -54,6 +56,7 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "signature-meta")]
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
@@ -303,6 +306,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+#[cfg(feature = "async-tokio")]
 #[tokio::test]
 async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = test_rpm_file_path();
