@@ -56,6 +56,25 @@ jobs:
         with:
           command: test
 
+  test-no-default-features:
+    name: Test Suite (no-default-features)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
