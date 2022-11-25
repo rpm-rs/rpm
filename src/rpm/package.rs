@@ -14,7 +14,6 @@ use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
-use std::io::Read;
 #[cfg(feature = "signature-meta")]
 use std::io::{Seek, SeekFrom};
 
@@ -85,6 +84,7 @@ impl RPMPackage {
             use md5::Digest;
             let mut hasher = md5::Md5::default();
             {
+                use std::io::Read;
                 // avoid loading it into memory all at once
                 // since the content could be multiple 100s of MBs
                 let mut buf = [0u8; 256];
