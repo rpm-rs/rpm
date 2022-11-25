@@ -301,12 +301,17 @@ impl RPMBuilder {
 
         let header_and_content_len = header.len() + content.len();
 
-        let digest_header = Header::<IndexSignatureTag>::builder()
-            .add_digest(
-                header_digest_sha1.as_str(),
-                header_and_content_digest_md5.as_slice(),
-            )
-            .build(header_and_content_len as i32);
+        #[cfg(feature = "signature-meta")]
+        let digest_header = {
+            Header::<IndexSignatureTag>::builder()
+                .add_digest(
+                    header_digest_sha1.as_str(),
+                    header_and_content_digest_md5.as_slice(),
+                )
+                .build(header_and_content_len as i32)
+        };
+        #[cfg(not(feature = "signature-meta"))]
+        let digest_header = { Header::<IndexSignatureTag>::new_empty() };
 
         let metadata = RPMPackageMetadata {
             lead,

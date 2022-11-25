@@ -7,6 +7,7 @@
 //!
 //! ```rust
 //!
+//! # #[cfg(feature = "signature-meta")]
 //! use rpm::{
 //!     signature::pgp::{
 //!         Signer,
@@ -16,6 +17,8 @@
 //! use std::str::FromStr;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # #[cfg(feature = "signature-meta")]
+//! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
 //!             .compression(rpm::Compressor::from_str("gzip")?)
@@ -53,6 +56,7 @@
 //! let pkg = rpm::RPMPackage::parse(&mut buf_reader)?;
 //! // verifying
 //! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
+//! # }
 //! # Ok(())
 //! # }
 //! ```

@@ -126,6 +126,7 @@ where
             store,
         })
     }
+
     pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; 16] = [0; 16];
         input.read_exact(&mut buf)?;
@@ -389,6 +390,14 @@ impl Header<IndexSignatureTag> {
     #[inline]
     pub fn get_file_ima_signature_length(&self) -> Result<i32, RPMError> {
         self.get_entry_i32_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+    }
+
+    pub fn new_empty() -> Self {
+        Self {
+            index_header: IndexHeader::new(0, 0),
+            index_entries: vec![],
+            store: vec![],
+        }
     }
 
     pub fn clear(&mut self) {
@@ -677,6 +686,7 @@ where
 mod tests2 {
     use super::*;
 
+    #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
         let size: i32 = 209_348;
