@@ -3,12 +3,12 @@ use crate::{constants::*, errors};
 
 /// Describes a file present in the rpm file.
 pub struct RPMFileEntry {
-    pub(crate) size: i32,
+    pub(crate) size: u32,
     pub(crate) mode: FileMode,
-    pub(crate) modified_at: i32,
+    pub(crate) modified_at: u32,
     pub(crate) sha_checksum: String,
     pub(crate) link: String,
-    pub(crate) flag: i32,
+    pub(crate) flag: u32, // @todo: https://github.com/rpm-rs/rpm/issues/52
     pub(crate) user: String,
     pub(crate) group: String,
     pub(crate) base_name: String,
@@ -35,6 +35,7 @@ const PERMISSIONS_BIT_MASK: u16 = 0o7777; // bit representation = "0000111111111
 const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
 const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
 
+// @todo: https://github.com/rpm-rs/rpm/issues/52
 impl From<u16> for FileMode {
     fn from(raw_mode: u16) -> Self {
         // example
@@ -57,12 +58,6 @@ impl From<u16> for FileMode {
                 reason: "unknown file type",
             },
         }
-    }
-}
-
-impl From<i16> for FileMode {
-    fn from(raw: i16) -> Self {
-        Self::from(raw as u16)
     }
 }
 
@@ -155,18 +150,6 @@ impl From<FileMode> for u32 {
     }
 }
 
-impl From<FileMode> for i32 {
-    fn from(mode: FileMode) -> Self {
-        mode.raw_mode() as i32
-    }
-}
-
-impl From<FileMode> for i16 {
-    fn from(mode: FileMode) -> Self {
-        mode.raw_mode() as i16
-    }
-}
-
 impl From<FileMode> for u16 {
     fn from(mode: FileMode) -> Self {
         mode.raw_mode() as u16
@@ -182,7 +165,7 @@ pub struct RPMFileOptions {
     pub(crate) group: String,
     pub(crate) symlink: String,
     pub(crate) mode: FileMode,
-    pub(crate) flag: i32,
+    pub(crate) flag: u32,
     pub(crate) inherit_permissions: bool,
 }
 
@@ -230,12 +213,12 @@ impl RPMFileOptionsBuilder {
     }
 
     pub fn is_doc(mut self) -> Self {
-        self.inner.flag = RPMFILE_DOC;
+        self.inner.flag = RPMFILE_DOC as u32;
         self
     }
 
     pub fn is_config(mut self) -> Self {
-        self.inner.flag = RPMFILE_CONFIG;
+        self.inner.flag = RPMFILE_CONFIG as u32;
         self
     }
 }

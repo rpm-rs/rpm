@@ -1,5 +1,5 @@
 use nom::bytes::complete;
-use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
+use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
 
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -82,16 +82,16 @@ where
                     parse_entry_data_number(remaining, entry.num_items, chars, be_u8)?;
                 }
                 IndexData::Int8(ref mut ints) => {
-                    parse_entry_data_number(remaining, entry.num_items, ints, be_i8)?;
+                    parse_entry_data_number(remaining, entry.num_items, ints, be_u8)?;
                 }
                 IndexData::Int16(ref mut ints) => {
-                    parse_entry_data_number(remaining, entry.num_items, ints, be_i16)?;
+                    parse_entry_data_number(remaining, entry.num_items, ints, be_u16)?;
                 }
                 IndexData::Int32(ref mut ints) => {
-                    parse_entry_data_number(remaining, entry.num_items, ints, be_i32)?;
+                    parse_entry_data_number(remaining, entry.num_items, ints, be_u32)?;
                 }
                 IndexData::Int64(ref mut ints) => {
-                    parse_entry_data_number(remaining, entry.num_items, ints, be_i64)?;
+                    parse_entry_data_number(remaining, entry.num_items, ints, be_u64)?;
                 }
                 IndexData::StringTag(ref mut string) => {
                     let (_rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
@@ -167,7 +167,7 @@ where
     }
 
     #[cfg(feature = "signature-meta")]
-    pub(crate) fn get_entry_binary_data(&self, tag: T) -> Result<&[u8], RPMError> {
+    pub(crate) fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -179,7 +179,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_string_data(&self, tag: T) -> Result<&str, RPMError> {
+    pub(crate) fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -191,67 +191,67 @@ where
             })
     }
 
-    pub(crate) fn get_entry_i16_array_data(&self, tag: T) -> Result<Vec<i16>, RPMError> {
+    pub(crate) fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
-            .as_i16_array()
+            .as_u16_array()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
-                expected_data_type: "i64 array",
+                expected_data_type: "uint16 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub(crate) fn get_entry_i32_data(&self, tag: T) -> Result<i32, RPMError> {
+    pub(crate) fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
-            .as_i32()
+            .as_u32()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
-                expected_data_type: "i32",
+                expected_data_type: "uint32",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub(crate) fn get_entry_i32_array_data(&self, tag: T) -> Result<Vec<i32>, RPMError> {
+    pub(crate) fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
-            .as_i32_array()
+            .as_u32_array()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
-                expected_data_type: "i32 array",
+                expected_data_type: "uint32 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub(crate) fn get_entry_i64_data(&self, tag: T) -> Result<i64, RPMError> {
+    pub(crate) fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
-            .as_i64()
+            .as_u64()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
-                expected_data_type: "i64",
+                expected_data_type: "uint64",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub(crate) fn get_entry_i64_array_data(&self, tag: T) -> Result<Vec<i64>, RPMError> {
+    pub(crate) fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
-            .as_i64_array()
+            .as_u64_array()
             .ok_or_else(|| RPMError::UnexpectedTagDataType {
-                expected_data_type: "i64 array",
+                expected_data_type: "uint64 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub(crate) fn get_entry_string_array_data(&self, tag: T) -> Result<&[String], RPMError> {
+    pub(crate) fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -312,7 +312,7 @@ impl Header<IndexSignatureTag> {
     /// Please use the [`builder`](Self::builder()) which has modular and safe API.
     #[cfg(feature = "signature-meta")]
     pub(crate) fn new_signature_header(
-        headers_plus_payload_size: i32,
+        headers_plus_payload_size: u32,
         md5sum: &[u8],
         sha1: String,
         rsa_spanning_header: &[u8],
@@ -385,12 +385,12 @@ impl Header<IndexSignatureTag> {
 
     #[inline]
     pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
-        self.get_entry_string_array_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
+        self.get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
     }
 
     #[inline]
-    pub fn get_file_ima_signature_length(&self) -> Result<i32, RPMError> {
-        self.get_entry_i32_data(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+    pub fn get_file_ima_signature_length(&self) -> Result<u32, RPMError> {
+        self.get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
     }
 
     pub fn new_empty() -> Self {
@@ -412,55 +412,55 @@ impl Header<IndexSignatureTag> {
 impl Header<IndexTag> {
     #[inline]
     pub fn get_payload_format(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADFORMAT)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADFORMAT)
     }
 
     #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
     }
 
     #[inline]
     pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
-        self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)
+        self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
     }
 
     #[inline]
     pub fn get_name(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_NAME)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
     }
 
     #[inline]
-    pub fn get_epoch(&self) -> Result<i32, RPMError> {
-        self.get_entry_i32_data(IndexTag::RPMTAG_EPOCH)
+    pub fn get_epoch(&self) -> Result<u32, RPMError> {
+        self.get_entry_data_as_u32(IndexTag::RPMTAG_EPOCH)
     }
 
     #[inline]
     pub fn get_version(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_VERSION)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_VERSION)
     }
 
     #[inline]
     pub fn get_release(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_RELEASE)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_RELEASE)
     }
 
     #[inline]
     pub fn get_arch(&self) -> Result<&str, RPMError> {
-        self.get_entry_string_data(IndexTag::RPMTAG_ARCH)
+        self.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
     }
 
     #[inline]
-    pub fn get_install_time(&self) -> Result<i64, RPMError> {
-        self.get_entry_i64_data(IndexTag::RPMTAG_INSTALLTIME)
+    pub fn get_install_time(&self) -> Result<u64, RPMError> {
+        self.get_entry_data_as_u64(IndexTag::RPMTAG_INSTALLTIME)
     }
 
     /// Extract a the set of contained file names.
     pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, RPMError> {
         // reconstruct the messy de-constructed paths
-        let base = self.get_entry_string_array_data(IndexTag::RPMTAG_BASENAMES)?;
-        let biject = self.get_entry_i32_array_data(IndexTag::RPMTAG_DIRINDEXES)?;
-        let dirs = self.get_entry_string_array_data(IndexTag::RPMTAG_DIRNAMES)?;
+        let base = self.get_entry_data_as_string_array(IndexTag::RPMTAG_BASENAMES)?;
+        let biject = self.get_entry_data_as_u32_array(IndexTag::RPMTAG_DIRINDEXES)?;
+        let dirs = self.get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
 
         let n = dirs.len();
         let v = base
@@ -476,7 +476,7 @@ impl Header<IndexTag> {
                     } else {
                         Err(RPMError::InvalidTagIndex {
                             tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
-                            index: dir_index as u32,
+                            index: dir_index,
                             bound: n as u32,
                         })
                     }
@@ -490,12 +490,12 @@ impl Header<IndexTag> {
     /// Note that this is not necessarily the same as the digest
     /// used for headers.
     pub fn get_file_digest_algorithm(&self) -> Result<FileDigestAlgorithm, RPMError> {
-        self.get_entry_i32_data(IndexTag::RPMTAG_FILEDIGESTALGO)
+        self.get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
             .and_then(|x| {
-                FileDigestAlgorithm::from_i32(x).ok_or_else(|| {
+                FileDigestAlgorithm::from_u32(x).ok_or_else(|| {
                     RPMError::InvalidTagValueEnumVariant {
                         tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
-                        variant: x as u32,
+                        variant: x,
                     }
                 })
             })
@@ -506,23 +506,23 @@ impl Header<IndexTag> {
         // rpm does not encode it, if it is the default md5
         let algorithm = self.get_file_digest_algorithm().unwrap_or_default();
         //
-        let modes = self.get_entry_i16_array_data(IndexTag::RPMTAG_FILEMODES)?;
-        let users = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEUSERNAME)?;
-        let groups = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEGROUPNAME)?;
-        let digests = self.get_entry_string_array_data(IndexTag::RPMTAG_FILEDIGESTS)?;
-        let mtimes = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEMTIMES)?;
+        let modes = self.get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES)?;
+        let users = self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME)?;
+        let groups = self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME)?;
+        let digests = self.get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)?;
+        let mtimes = self.get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES)?;
         let sizes = self
-            .get_entry_i64_array_data(IndexTag::RPMTAG_LONGFILESIZES)
+            .get_entry_data_as_u64_array(IndexTag::RPMTAG_LONGFILESIZES)
             .or_else(|_e| {
-                self.get_entry_i32_array_data(IndexTag::RPMTAG_FILESIZES)
+                self.get_entry_data_as_u32_array(IndexTag::RPMTAG_FILESIZES)
                     .map(|file_sizes| {
                         file_sizes
                             .into_iter()
                             .map(|file_size| file_size as _)
-                            .collect::<Vec<i64>>()
+                            .collect::<Vec<u64>>()
                     })
             })?;
-        let flags = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILEFLAGS)?;
+        let flags = self.get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS)?;
         // @todo
         // let caps = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILECAPS)?;
 
@@ -557,7 +557,7 @@ impl Header<IndexTag> {
                     mode: mode.into(),
                     modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(),
                     digest,
-                    category: FileCategory::from_i32(flags).unwrap_or_default(),
+                    category: FileCategory::from_u32(flags).unwrap_or_default(),
                     size: size as usize,
                 });
                 Ok(acc)
@@ -575,7 +575,6 @@ pub struct FileOwnership {
 }
 
 /// Declaration what category this file belongs to
-/// @todo must be bitflags
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, enum_primitive_derive::Primitive)]
 #[repr(i32)]
 pub enum FileCategory {
@@ -690,7 +689,7 @@ mod tests2 {
     #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
-        let size: i32 = 209_348;
+        let size: u32 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
         let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
         let rsa_spanning_header: &[u8] = b"111222333444";
@@ -906,10 +905,10 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
 pub(crate) enum IndexData {
     Null,
     Char(Vec<u8>),
-    Int8(Vec<i8>),
-    Int16(Vec<i16>),
-    Int32(Vec<i32>),
-    Int64(Vec<i64>),
+    Int8(Vec<u8>),
+    Int16(Vec<u16>),
+    Int32(Vec<u32>),
+    Int64(Vec<u64>),
     StringTag(String),
     Bin(Vec<u8>),
     StringArray(Vec<String>),
@@ -1060,6 +1059,12 @@ impl IndexData {
         }
     }
 
+    // @todo: find some way to better distinguish the `as_` functions from the `to_` functions,
+    // or at least document it well.
+    // Ideas:
+    // * try_as_u32 / extract<u32>, like PyO3
+    // * fold these into `get_entry_..._data` functions because we don't use them elsewhere anyway
+
     pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
             IndexData::StringTag(s) => Some(s),
@@ -1076,21 +1081,21 @@ impl IndexData {
     }
 
     #[allow(unused)]
-    pub(crate) fn as_i8_array(&self) -> Option<Vec<i8>> {
+    pub(crate) fn as_u8_array(&self) -> Option<Vec<u8>> {
         match self {
             IndexData::Int8(s) => Some(s.to_vec()),
             _ => None,
         }
     }
 
-    pub(crate) fn as_i16_array(&self) -> Option<Vec<i16>> {
+    pub(crate) fn as_u16_array(&self) -> Option<Vec<u16>> {
         match self {
             IndexData::Int16(s) => Some(s.to_vec()),
             _ => None,
         }
     }
 
-    pub(crate) fn as_i32(&self) -> Option<i32> {
+    pub(crate) fn as_u32(&self) -> Option<u32> {
         match self {
             IndexData::Int32(s) => {
                 if !s.is_empty() {
@@ -1102,14 +1107,14 @@ impl IndexData {
             _ => None,
         }
     }
-    pub(crate) fn as_i32_array(&self) -> Option<Vec<i32>> {
+    pub(crate) fn as_u32_array(&self) -> Option<Vec<u32>> {
         match self {
             IndexData::Int32(s) => Some(s.to_vec()),
             _ => None,
         }
     }
 
-    pub(crate) fn as_i64(&self) -> Option<i64> {
+    pub(crate) fn as_u64(&self) -> Option<u64> {
         match self {
             IndexData::Int64(s) => {
                 if !s.is_empty() {
@@ -1122,7 +1127,7 @@ impl IndexData {
         }
     }
 
-    pub(crate) fn as_i64_array(&self) -> Option<Vec<i64>> {
+    pub(crate) fn as_u64_array(&self) -> Option<Vec<u64>> {
         match self {
             IndexData::Int64(s) => Some(s.to_vec()),
             _ => None,

@@ -56,7 +56,7 @@ where
     T: ConstructionStage,
 {
     /// Construct the complete signature header.
-    pub fn build(mut self, headers_plus_payload_size: i32) -> Header<IndexSignatureTag> {
+    pub fn build(mut self, headers_plus_payload_size: u32) -> Header<IndexSignatureTag> {
         self.entries.insert(
             0,
             IndexEntry::new(
@@ -138,7 +138,7 @@ mod test {
         let header = builder
             .add_digest("", &digest_header_and_archive[..])
             .add_signature(&rsa_sig_header_only[..], &rsa_sig_header_and_archive[..])
-            .build(32i32);
+            .build(32);
 
         assert!(header
             .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_RSA)

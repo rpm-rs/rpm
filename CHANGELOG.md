@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 - Bump MSRV to 1.60.0
+- Changed a couple of APIs to use unsigned integers instead of signed integers where appropriate
 
 ### Added
 - Forked from `rpm-rs` at version 0.8.1.
