@@ -1,4 +1,8 @@
 use super::*;
+
+#[cfg(feature = "async-futures")]
+use tokio_util::compat::TokioAsyncReadCompatExt;
+
 #[cfg(feature = "signature-meta")]
 use crate::signature::pgp::{Signer, Verifier};
 
@@ -306,18 +310,19 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-#[cfg(feature = "async-tokio")]
+#[cfg(feature = "async-futures")]
 #[tokio::test]
 async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = test_rpm_file_path();
-
-    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?;
+    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
     let package = RPMPackage::parse_async(&mut rpm_file).await?;
     test_rpm_header_base(package)
 }
 
-#[cfg(feature = "async-tokio")]
+#[cfg(feature = "async-futures")]
 #[tokio::test]
+// By running this test inside the tokio runtime it validates that
+// the internal use of `async_std::fs::File` works.
 async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
@@ -372,7 +377,7 @@ fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
 
     let data = possible_binary.unwrap();
 
-    let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(&data)?;
+    let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
 
     assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
     assert_eq!(entry.data.to_u32(), IndexData::Bin(Vec::new()).to_u32());

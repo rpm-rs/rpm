@@ -5,8 +5,8 @@ use std::convert::TryInto;
 use crate::constants::*;
 use crate::errors::*;
 
-#[cfg(feature = "async-tokio")]
-use tokio::io::AsyncWriteExt;
+#[cfg(feature = "async-futures")]
+use futures::io::{AsyncWrite, AsyncWriteExt};
 
 /// Lead of an rpm header.
 ///
@@ -107,8 +107,8 @@ impl Lead {
             reserved: rest.try_into().unwrap(),
         })
     }
-    #[cfg(feature = "async-tokio")]
-    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+    #[cfg(feature = "async-futures")]
+    pub(crate) async fn write_async<W: AsyncWrite + Unpin>(
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {

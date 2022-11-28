@@ -22,8 +22,11 @@ use crate::signature;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
-#[cfg(feature = "async-tokio")]
-use tokio::io::AsyncReadExt;
+#[cfg(feature = "with-file-async-tokio")]
+use tokio_util::compat::TokioAsyncReadCompatExt;
+
+#[cfg(feature = "async-futures")]
+use futures::io::{AsyncRead, AsyncReadExt};
 
 #[cfg(unix)]
 fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
@@ -35,13 +38,23 @@ fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-#[cfg(all(unix, feature = "async-tokio"))]
-async fn tokio_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
+#[cfg(all(unix, feature = "with-file-async-tokio"))]
+async fn async_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata().await?.permissions().mode())
 }
 
-#[cfg(all(windows, feature = "async-tokio"))]
-async fn tokio_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
+#[cfg(all(unix, feature = "with-file-async-async-std"))]
+async fn async_file_mode(file: &async_std::fs::File) -> Result<u32, RPMError> {
+    Ok(file.metadata().await?.permissions().mode())
+}
+
+#[cfg(all(windows, feature = "with-file-async-tokio"))]
+async fn async_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
+    Ok(0)
+}
+
+#[cfg(all(windows, feature = "with-file-async-async-std"))]
+async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
@@ -130,30 +143,65 @@ impl RPMBuilder {
         self
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub async fn with_file_async<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
+    #[cfg(feature = "with-file-async-tokio")]
+    pub async fn with_file_async<T, P>(self, source: P, options: T) -> Result<Self, RPMError>
     where
         P: AsRef<Path>,
         T: Into<RPMFileOptions>,
     {
-        let mut input = tokio::fs::File::open(source).await?;
-        let mut content = Vec::new();
-        input.read_to_end(&mut content).await?;
+        let input = tokio::fs::File::open(source).await?;
         let mut options = options.into();
         if options.inherit_permissions {
-            options.mode = (tokio_file_mode(&input).await? as i32).into();
+            options.mode = (async_file_mode(&input).await? as i32).into();
         }
-        self.add_data(
-            content,
-            input
-                .metadata()
-                .await?
-                .modified()?
-                .duration_since(UNIX_EPOCH)
-                .expect("something really wrong with your time")
-                .as_secs() as i32,
-            options,
-        )?;
+        let modified_at = input
+            .metadata()
+            .await?
+            .modified()?
+            .duration_since(UNIX_EPOCH)
+            .expect("something really wrong with your time")
+            .as_secs();
+
+        self.with_file_async_inner(input.compat(), modified_at as i32, options)
+            .await
+    }
+
+    #[cfg(feature = "with-file-async-async-std")]
+    pub async fn with_file_async<T, P>(self, source: P, options: T) -> Result<Self, RPMError>
+    where
+        P: AsRef<Path>,
+        T: Into<RPMFileOptions>,
+    {
+        let input = async_std::fs::File::open(source.as_ref()).await?;
+        let mut options = options.into();
+        if options.inherit_permissions {
+            options.mode = (async_file_mode(&input).await? as i32).into();
+        }
+        let modified_at = input
+            .metadata()
+            .await?
+            .modified()?
+            .duration_since(UNIX_EPOCH)
+            .expect("something really wrong with your time")
+            .as_secs();
+
+        self.with_file_async_inner(input, modified_at as i32, options)
+            .await
+    }
+
+    #[cfg(feature = "async-futures")]
+    async fn with_file_async_inner<P>(
+        mut self,
+        mut input: P,
+        modified_at: i32,
+        options: RPMFileOptions,
+    ) -> Result<Self, RPMError>
+    where
+        P: AsyncRead + Unpin,
+    {
+        let mut content = Vec::new();
+        input.read_to_end(&mut content).await?;
+        self.add_data(content, modified_at, options)?;
         Ok(self)
     }
 
