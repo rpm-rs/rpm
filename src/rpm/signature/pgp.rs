@@ -276,7 +276,7 @@ pub(crate) mod test {
         let (signer, verifier) = prep();
         let (signing_key, verification_key) = { (signer.secret_key, verifier.public_key) };
 
-        let passwd_fn = || String::new();
+        let passwd_fn = String::new;
 
         let digest = &RPM_SHA2_256[..];
 
@@ -330,7 +330,7 @@ pub(crate) mod test {
         let data = [1u8; 322];
         let data = &data[..];
 
-        let passwd_fn = || String::new();
+        let passwd_fn = String::new;
 
         let now = now();
 

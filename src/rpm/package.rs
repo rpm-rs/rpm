@@ -1,5 +1,5 @@
-#[cfg(feature = "async-tokio")]
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+#[cfg(feature = "async-futures")]
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::headers::*;
 
@@ -32,7 +32,7 @@ pub struct RPMPackage {
 }
 
 impl RPMPackage {
-    #[cfg(feature = "async-tokio")]
+    #[cfg(feature = "async-futures")]
     pub async fn parse_async<I: AsyncRead + Unpin>(input: &mut I) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse_async(input).await?;
         let mut content = Vec::new();
@@ -53,11 +53,8 @@ impl RPMPackage {
         Ok(())
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
+    #[cfg(feature = "async-futures")]
+    pub async fn write_async<W: AsyncWrite + Unpin>(&self, out: &mut W) -> Result<(), RPMError> {
         self.metadata.write_async(out).await?;
         out.write_all(&self.content).await?;
         Ok(())
@@ -175,7 +172,7 @@ pub struct RPMPackageMetadata {
 }
 
 impl RPMPackageMetadata {
-    #[cfg(feature = "async-tokio")]
+    #[cfg(feature = "async-futures")]
     pub async fn parse_async<T: AsyncRead + Unpin>(input: &mut T) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE];
         input.read_exact(&mut lead_buffer).await?;
@@ -209,11 +206,8 @@ impl RPMPackageMetadata {
         Ok(())
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
+    #[cfg(feature = "async-futures")]
+    pub async fn write_async<W: AsyncWrite + Unpin>(&self, out: &mut W) -> Result<(), RPMError> {
         self.lead.write_async(out).await?;
         self.signature.write_signature_async(out).await?;
         self.header.write_async(out).await?;

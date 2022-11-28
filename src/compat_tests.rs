@@ -25,7 +25,7 @@ use signature::{self, Verifying};
 mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
-    use tokio::io::AsyncWriteExt;
+    use AsyncWriteExt;
 
     #[tokio::test]
     #[serial_test::serial]

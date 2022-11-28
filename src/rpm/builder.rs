@@ -130,6 +130,8 @@ impl RPMBuilder {
         self
     }
 
+    // TODO: Should there be different providers of this interface? Currently
+    // requires a tokio runtime.
     #[cfg(feature = "async-tokio")]
     pub async fn with_file_async<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
     where
