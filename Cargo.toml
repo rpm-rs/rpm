@@ -42,7 +42,7 @@ itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
 zstd = "0.12.0"
 # Workaround for https://github.com/gyscos/zstd-rs/issues/177
-zstd-sys = "=2.0.1+zstd.1.5.2"
+zstd-sys = "=2.0.3+zstd.1.5.2"
 
 [dev-dependencies]
 rsa = { version = "0.7" }
