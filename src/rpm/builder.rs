@@ -463,8 +463,6 @@ impl RPMBuilder {
             ino_index += 1;
         }
 
-        self.requires.push(Dependency::any("/bin/sh".to_string()));
-
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
         self.provides.push(Dependency::eq(
