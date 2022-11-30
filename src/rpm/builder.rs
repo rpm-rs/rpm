@@ -22,8 +22,8 @@ use crate::signature;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
-#[cfg(feature = "async-tokio")]
-use tokio::io::AsyncReadExt;
+#[cfg(feature = "async-futures")]
+use futures::io::AsyncReadExt;
 
 #[cfg(unix)]
 fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
@@ -35,13 +35,13 @@ fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-#[cfg(all(unix, feature = "async-tokio"))]
-async fn tokio_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
+#[cfg(all(unix, feature = "async-futures"))]
+async fn async_file_mode(file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata().await?.permissions().mode())
 }
 
-#[cfg(all(windows, feature = "async-tokio"))]
-async fn tokio_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
+#[cfg(all(windows, feature = "async-futures"))]
+async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
@@ -130,20 +130,18 @@ impl RPMBuilder {
         self
     }
 
-    // TODO: Should there be different providers of this interface? Currently
-    // requires a tokio runtime.
-    #[cfg(feature = "async-tokio")]
+    #[cfg(feature = "async-futures")]
     pub async fn with_file_async<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
     where
         P: AsRef<Path>,
         T: Into<RPMFileOptions>,
     {
-        let mut input = tokio::fs::File::open(source).await?;
+        let mut input = async_std::fs::File::open(source.as_ref()).await?;
         let mut content = Vec::new();
         input.read_to_end(&mut content).await?;
         let mut options = options.into();
         if options.inherit_permissions {
-            options.mode = (tokio_file_mode(&input).await? as i32).into();
+            options.mode = (async_file_mode(&input).await? as i32).into();
         }
         self.add_data(
             content,

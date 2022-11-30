@@ -20,7 +20,6 @@ rust-version = "1.59.0"
 name = "rpm"
 
 [dependencies]
-tokio = {version = "1.11", optional = true }
 thiserror = "1"
 nom = "7"
 num-traits = "0.2"
@@ -44,6 +43,7 @@ zstd = "0.12.0"
 # Workaround for https://github.com/gyscos/zstd-rs/issues/177
 zstd-sys = "=2.0.1+zstd.1.5.2"
 futures = { version = "0.3.25", optional = true }
+async-std = { version = "1.12.0", optional = true, features = ["tokio1"] }
 
 [dev-dependencies]
 rsa = { version = "0.7" }
@@ -56,10 +56,9 @@ reqwest = { version = "0.11.10", features = ["blocking"] }
 
 
 [features]
-default = ["signature-pgp", "async-futures", "async-tokio"]
+default = ["signature-pgp", "async-futures"]
 
 signature-pgp = ["signature-meta", "pgp"]
 signature-meta = []
 test-with-podman = ["signature-meta"]
-async-tokio = ["tokio/fs"]
-async-futures = ["futures"]
+async-futures = ["futures", "async-std"]
