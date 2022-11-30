@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Forked from `rpm-rs` at version 0.8.1.
+- Obtained consent from all contributors to relicense as MIT + Apache 2.0
 
 ### Fixed
 - Take dependabot updates
