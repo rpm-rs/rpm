@@ -14,7 +14,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.59.0"
+rust-version = "1.60.0"
 
 [lib]
 name = "rpm"
@@ -41,13 +41,11 @@ log = "0.4"
 itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
 zstd = "0.12.0"
-# Workaround for https://github.com/gyscos/zstd-rs/issues/177
-zstd-sys = "=2.0.4+zstd.1.5.2"
 
 [dev-dependencies]
 rsa = { version = "0.7" }
 rsa-der = { version = "^0.3.0" }
-env_logger = "0.9.0"
+env_logger = "0.10.0"
 serial_test = "0.9"
 tokio = {version = "1", features = ["full"]}
 reqwest = { version = "0.11.10", features = ["blocking"] }

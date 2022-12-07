@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Breaking Changes
-- Bump MSRV to 1.57.0
+- Bump MSRV to 1.60.0
 
 ### Added
 - Forked from `rpm-rs` at version 0.8.1.
 - Obtained consent from all contributors to relicense as MIT + Apache 2.0
 
 ### Fixed
-- Take dependabot updates
+- Updated dependencies to latest versions
 - Fix up most issues when compiling with --no-default-features.
 - Fixed an issue with improper package signing
 
