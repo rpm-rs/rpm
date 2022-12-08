@@ -321,8 +321,6 @@ async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "async-futures")]
 #[tokio::test]
-// By running this test inside the tokio runtime it validates that
-// the internal use of `async_std::fs::File` works.
 async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
