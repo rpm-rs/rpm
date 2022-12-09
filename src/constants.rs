@@ -5,7 +5,7 @@
 
 use std::fmt::Display;
 
-// @todo: https://github.com/rpm-rs/rpm/issues/54
+// @todo: <https://github.com/rpm-rs/rpm/issues/54>
 pub const HEADER_IMAGE: isize = 61;
 pub const HEADER_SIGNATURES: isize = 62;
 pub const HEADER_IMMUTABLE: isize = 63;

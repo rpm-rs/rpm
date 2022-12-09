@@ -502,7 +502,7 @@ impl RPMBuilder {
                 .unwrap();
             dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
-            file_verify_flags.push(u32::MAX); // @todo: https://github.com/rpm-rs/rpm/issues/52
+            file_verify_flags.push(u32::MAX); // @todo: <https://github.com/rpm-rs/rpm/issues/52>
             let content = entry.content.to_owned().unwrap();
             let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())
@@ -614,7 +614,7 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringTag(self.license),
                 ),
-                // https://fedoraproject.org/wiki/RPMGroups
+                // <https://fedoraproject.org/wiki/RPMGroups>
                 // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_OS,
@@ -694,7 +694,7 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringTag(self.license),
                 ),
-                // https://fedoraproject.org/wiki/RPMGroups
+                // <https://fedoraproject.org/wiki/RPMGroups>
                 // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_OS,

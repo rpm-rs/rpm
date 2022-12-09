@@ -8,7 +8,7 @@ pub struct RPMFileEntry {
     pub(crate) modified_at: u32,
     pub(crate) sha_checksum: String,
     pub(crate) link: String,
-    pub(crate) flag: u32, // @todo: https://github.com/rpm-rs/rpm/issues/52
+    pub(crate) flag: u32, // @todo: <https://github.com/rpm-rs/rpm/issues/52>
     pub(crate) user: String,
     pub(crate) group: String,
     pub(crate) base_name: String,
@@ -29,13 +29,13 @@ pub enum FileMode {
 }
 
 // there are more file types but in the context of RPM, only regular and directory should be relevant.
-// See https://man7.org/linux/man-pages/man7/inode.7.html section "The file type and mode"
+// See <https://man7.org/linux/man-pages/man7/inode.7.html> section "The file type and mode"
 const FILE_TYPE_BIT_MASK: u16 = 0o170000; // bit representation = "1111000000000000"
 const PERMISSIONS_BIT_MASK: u16 = 0o7777; // bit representation = "0000111111111111"
 const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
 const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
 
-// @todo: https://github.com/rpm-rs/rpm/issues/52
+// @todo: <https://github.com/rpm-rs/rpm/issues/52>
 impl From<u16> for FileMode {
     fn from(raw_mode: u16) -> Self {
         // example
@@ -46,8 +46,8 @@ impl From<u16> for FileMode {
         //
         // we effectively extract the file type bits with an AND operation.
         // Here are two links for a quick refresh:
-        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_AND
-        // https://en.wikipedia.org/wiki/Bitwise_operation#AND
+        // <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_AND>
+        // <https://en.wikipedia.org/wiki/Bitwise_operation#AND>
         let file_type = raw_mode & FILE_TYPE_BIT_MASK;
         let permissions = raw_mode & PERMISSIONS_BIT_MASK;
         match file_type {
