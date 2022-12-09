@@ -1,8 +1,8 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i16, be_i32, be_i64, be_i8, be_u32, be_u8};
 
-#[cfg(feature = "async-tokio")]
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+#[cfg(feature = "async-futures")]
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::constants::{self, *};
 use chrono::offset::TimeZone;
@@ -45,7 +45,7 @@ impl<T> Header<T>
 where
     T: Tag,
 {
-    #[cfg(feature = "async-tokio")]
+    #[cfg(feature = "async-futures")]
     pub(crate) async fn parse_async<I: AsyncRead + Unpin>(
         input: &mut I,
     ) -> Result<Header<T>, RPMError> {
@@ -137,8 +137,8 @@ where
         Self::parse_header(index_header, &buf[..])
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+    #[cfg(feature = "async-futures")]
+    pub(crate) async fn write_async<W: AsyncWrite + Unpin>(
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {
@@ -329,7 +329,7 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::<Empty>::new()
     }
 
-    #[cfg(feature = "async-tokio")]
+    #[cfg(feature = "async-futures")]
     pub(crate) async fn parse_signature_async<I: AsyncRead + Unpin>(
         input: &mut I,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
@@ -359,8 +359,8 @@ impl Header<IndexSignatureTag> {
         Ok(result)
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub(crate) async fn write_signature_async<W: tokio::io::AsyncWrite + Unpin>(
+    #[cfg(feature = "async-futures")]
+    pub(crate) async fn write_signature_async<W: AsyncWrite + Unpin>(
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {
@@ -798,8 +798,8 @@ impl IndexHeader {
         Ok(())
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub(crate) async fn write_async<W: tokio::io::AsyncWrite + Unpin>(
+    #[cfg(feature = "async-futures")]
+    pub(crate) async fn write_async<W: AsyncWrite + Unpin>(
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {
@@ -869,8 +869,8 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         ))
     }
 
-    #[cfg(feature = "async-tokio")]
-    pub(crate) async fn write_index_async<W: tokio::io::AsyncWrite + Unpin>(
+    #[cfg(feature = "async-futures")]
+    pub(crate) async fn write_index_async<W: AsyncWrite + Unpin>(
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {

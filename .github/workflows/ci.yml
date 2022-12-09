@@ -55,14 +55,17 @@ jobs:
         with:
           command: test
 
-  test-no-default-features:
-    name: Test Suite (no-default-features)
+  test-feature-matrix:
+    name: Test Suite (feature-matrix)
     runs-on: ubuntu-latest
     strategy:
       matrix:
         rust:
           - stable
           - 1.60.0
+        flags:
+          - "--no-default-features"
+          - "--no-default-features --features signature-pgp,async-futures,with-file-async-async-std"
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -75,11 +78,11 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --no-default-features -- -D warnings
+          args: ${{ matrix.flags }} -- -D warnings
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features
+          args: ${{ matrix.flags }}
 
   fmt:
     name: Rustfmt

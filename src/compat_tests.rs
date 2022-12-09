@@ -24,8 +24,9 @@ use signature::{self, Verifying};
 #[cfg(feature = "signature-pgp")]
 mod pgp {
     use super::*;
+    use futures::io::AsyncWriteExt;
     use signature::pgp::{Signer, Verifier};
-    use tokio::io::AsyncWriteExt;
+    use tokio_util::compat::TokioAsyncReadCompatExt;
 
     #[tokio::test]
     #[serial_test::serial]
@@ -39,7 +40,7 @@ mod pgp {
         let cargo_file = cargo_manifest_dir().join("Cargo.toml");
         let out_file = cargo_out_dir().join("test.rpm");
 
-        let mut f = tokio::fs::File::create(out_file).await?;
+        let mut f = tokio::fs::File::create(out_file).await?.compat();
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(Compressor::from_str("gzip")?)
             .with_file_async(
