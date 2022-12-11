@@ -467,7 +467,8 @@ impl Header<IndexTag> {
 
     #[inline]
     pub fn get_build_time(&self) -> Result<u64, RPMError> {
-        self.get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME).map(|x| x as u64)
+        self.get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME)
+            .map(|x| x as u64)
     }
 
     #[inline]
@@ -891,11 +892,12 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         let (input, raw_tag_type) = be_u32(input)?;
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
-        let data =
-            IndexData::from_u32(raw_tag_type).ok_or_else(|| RPMError::InvalidTagDataType {
+        let data = IndexData::from_type_as_u32(raw_tag_type).ok_or_else(|| {
+            RPMError::InvalidTagDataType {
                 raw_data_type: raw_tag_type,
                 store_type: T::type_name(),
-            })?;
+            }
+        })?;
 
         //  next 4 bytes is the offset relative to the beginning of the store
         let (input, offset) = be_i32(input)?;
@@ -920,7 +922,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         out: &mut W,
     ) -> Result<(), RPMError> {
         let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes()).await?;
-        written += out.write(&self.data.to_u32().to_be_bytes()).await?;
+        written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
         written += out.write(&self.offset.to_be_bytes()).await?;
         written += out.write(&self.num_items.to_be_bytes()).await?;
         assert_eq!(16, written, "there should be 16 bytes written");
@@ -929,7 +931,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes())?;
-        written += out.write(&self.data.to_u32().to_be_bytes())?;
+        written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
         written += out.write(&self.num_items.to_be_bytes())?;
         assert_eq!(16, written, "there should be 16 bytes written");
@@ -1074,7 +1076,8 @@ impl IndexData {
             IndexData::Int64(items) => items.len() as u32,
         }
     }
-    pub(crate) fn from_u32(i: u32) -> Option<Self> {
+
+    pub(crate) fn from_type_as_u32(i: u32) -> Option<Self> {
         match i {
             0 => Some(IndexData::Null),
             1 => Some(IndexData::Char(Vec::new())),
@@ -1089,7 +1092,8 @@ impl IndexData {
             _ => None,
         }
     }
-    pub(crate) fn to_u32(&self) -> u32 {
+
+    pub(crate) fn type_as_u32(&self) -> u32 {
         match self {
             IndexData::Null => 0,
             IndexData::Char(_) => 1,
@@ -1104,12 +1108,6 @@ impl IndexData {
             IndexData::I18NString(_) => 9,
         }
     }
-
-    // @todo: find some way to better distinguish the `as_` functions from the `to_` functions,
-    // or at least document it well.
-    // Ideas:
-    // * try_as_u32 / extract<u32>, like PyO3
-    // * fold these into `get_entry_..._data` functions because we don't use them elsewhere anyway
 
     pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
