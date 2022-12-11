@@ -435,7 +435,10 @@ fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
     let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
 
     assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
-    assert_eq!(entry.data.to_u32(), IndexData::Bin(Vec::new()).to_u32());
+    assert_eq!(
+        entry.data.type_as_u32(),
+        IndexData::Bin(Vec::new()).type_as_u32()
+    );
     assert_eq!(-48, entry.offset);
 
     Ok(())
