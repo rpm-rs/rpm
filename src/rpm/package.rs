@@ -68,8 +68,12 @@ impl RPMPackage {
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
+        use std::convert::TryInto;
+        use std::io::Read;
+
         // create a temporary byte repr of the header
         // and re-create all hashes
+
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
@@ -81,7 +85,6 @@ impl RPMPackage {
             use md5::Digest;
             let mut hasher = md5::Md5::default();
             {
-                use std::io::Read;
                 // avoid loading it into memory all at once
                 // since the content could be multiple 100s of MBs
                 let mut buf = [0u8; 256];
@@ -113,7 +116,10 @@ impl RPMPackage {
 
         // NOTE: size stands for the combined size of header and payload.
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
-            header_and_content_cursor.len() as i32,
+            header_and_content_cursor
+                .len()
+                .try_into()
+                .expect("headers + payload can't be larger than 4gb"),
             &digest_md5,
             digest_sha1,
             rsa_signature_spanning_header_only.as_slice(),
@@ -139,14 +145,14 @@ impl RPMPackage {
         let signature_header_only = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_RSA)?;
+            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA)?;
 
         crate::signature::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
             .signature
-            .get_entry_binary_data(IndexSignatureTag::RPMSIGTAG_PGP)?;
+            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP)?;
 
         crate::signature::echo_signature(
             "signature_header(header and content)",

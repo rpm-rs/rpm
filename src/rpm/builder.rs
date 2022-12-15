@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::convert::TryInto;
 
 use std::io::{Read, Write};
 #[cfg(unix)]
@@ -63,7 +64,7 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
 /// Prefered method of creating a rpm file.
 pub struct RPMBuilder {
     name: String,
-    epoch: i32,
+    epoch: u32,
     version: String,
     license: String,
     arch: String,
@@ -89,7 +90,7 @@ pub struct RPMBuilder {
 
     changelog_authors: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<i32>,
+    changelog_times: Vec<u32>,
     compressor: Compressor,
 }
 
@@ -122,7 +123,7 @@ impl RPMBuilder {
         }
     }
 
-    pub fn epoch(mut self, epoch: i32) -> Self {
+    pub fn epoch(mut self, epoch: u32) -> Self {
         self.epoch = epoch;
         self
     }
@@ -132,7 +133,7 @@ impl RPMBuilder {
         self
     }
 
-    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: i32) -> Self
+    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: u32) -> Self
     where
         E: Into<String>,
         F: Into<String>,
@@ -162,7 +163,7 @@ impl RPMBuilder {
             .expect("something really wrong with your time")
             .as_secs();
 
-        self.with_file_async_inner(input.compat(), modified_at as i32, options)
+        self.with_file_async_inner(input.compat(), modified_at, options)
             .await
     }
 
@@ -185,7 +186,7 @@ impl RPMBuilder {
             .expect("something really wrong with your time")
             .as_secs();
 
-        self.with_file_async_inner(input, modified_at as i32, options)
+        self.with_file_async_inner(input, modified_at, options)
             .await
     }
 
@@ -193,7 +194,7 @@ impl RPMBuilder {
     async fn with_file_async_inner<P>(
         mut self,
         mut input: P,
-        modified_at: i32,
+        modified_at: u64,
         options: RPMFileOptions,
     ) -> Result<Self, RPMError>
     where
@@ -201,7 +202,10 @@ impl RPMBuilder {
     {
         let mut content = Vec::new();
         input.read_to_end(&mut content).await?;
-        self.add_data(content, modified_at, options)?;
+        let mtime = modified_at
+            .try_into()
+            .expect("file mtime is likely wrong, too large to be stored as uint32");
+        self.add_data(content, mtime, options)?;
         Ok(self)
     }
 
@@ -224,7 +228,9 @@ impl RPMBuilder {
                 .modified()?
                 .duration_since(UNIX_EPOCH)
                 .expect("something really wrong with your time")
-                .as_secs() as i32,
+                .as_secs()
+                .try_into()
+                .expect("file mtime is wrong, too large to be stored as uint32"),
             options,
         )?;
         Ok(self)
@@ -233,7 +239,7 @@ impl RPMBuilder {
     fn add_data(
         &mut self,
         content: Vec<u8>,
-        modified_at: i32,
+        modified_at: u32,
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
         use sha2::Digest;
@@ -272,7 +278,7 @@ impl RPMBuilder {
         let sha_checksum = hex::encode(hash_result); // encode as string
         let entry = RPMFileEntry {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
-            size: content.len() as i32,
+            size: content.len() as u32,
             content: Some(content),
             flag: options.flag,
             user: options.user,
@@ -355,7 +361,7 @@ impl RPMBuilder {
                     header_digest_sha1.as_str(),
                     header_and_content_digest_md5.as_slice(),
                 )
-                .build(header_and_content_len as i32)
+                .build(header_and_content_len.try_into().unwrap())
         };
         #[cfg(not(feature = "signature-meta"))]
         let digest_header = { Header::<IndexSignatureTag>::new_empty() };
@@ -404,7 +410,7 @@ impl RPMBuilder {
                     rsa_sig_header_only.as_ref(),
                     rsa_sig_header_and_archive.as_ref(),
                 )
-                .build(header_and_content_len as i32)
+                .build(header_and_content_len.try_into().unwrap())
         };
 
         let metadata = RPMPackageMetadata {
@@ -443,7 +449,7 @@ impl RPMBuilder {
         Ok((digest_sha1, digest_md5))
     }
 
-    /// prepapre all rpm headers including content
+    /// prepare all rpm headers including content
     ///
     /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
     fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
@@ -487,20 +493,20 @@ impl RPMBuilder {
             file_flags.push(entry.flag);
             file_usernames.push(entry.user.to_owned());
             file_groupnames.push(entry.group.to_owned());
-            file_inodes.push(ino_index as i32);
+            file_inodes.push(ino_index);
             file_langs.push("".to_string());
             let index = self
                 .directories
                 .iter()
                 .position(|d| d == &entry.dir)
                 .unwrap();
-            dir_indixes.push(index as i32);
+            dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
-            file_verify_flags.push(-1);
+            file_verify_flags.push(u32::MAX); // @todo: <https://github.com/rpm-rs/rpm/issues/52>
             let content = entry.content.to_owned().unwrap();
             let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())
-                .ino(ino_index as u32)
+                .ino(ino_index)
                 .uid(self.uid.unwrap_or(0))
                 .gid(self.gid.unwrap_or(0))
                 .write(&mut self.compressor, content.len() as u32);
@@ -524,7 +530,7 @@ impl RPMBuilder {
 
         for d in self.provides.into_iter() {
             provide_names.push(d.dep_name);
-            provide_flags.push(d.sense as i32);
+            provide_flags.push(d.sense);
             provide_versions.push(d.version);
         }
 
@@ -534,7 +540,7 @@ impl RPMBuilder {
 
         for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.dep_name);
-            obsolete_flags.push(d.sense as i32);
+            obsolete_flags.push(d.sense);
             obsolete_versions.push(d.version);
         }
 
@@ -544,7 +550,7 @@ impl RPMBuilder {
 
         for d in self.requires.into_iter() {
             require_names.push(d.dep_name);
-            require_flags.push(d.sense as i32);
+            require_flags.push(d.sense);
             require_versions.push(d.version);
         }
 
@@ -554,7 +560,7 @@ impl RPMBuilder {
 
         for d in self.conflicts.into_iter() {
             conflicts_names.push(d.dep_name);
-            conflicts_flags.push(d.sense as i32);
+            conflicts_flags.push(d.sense);
             conflicts_versions.push(d.version);
         }
 
@@ -608,7 +614,7 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringTag(self.license),
                 ),
-                // https://fedoraproject.org/wiki/RPMGroups
+                // <https://fedoraproject.org/wiki/RPMGroups>
                 // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_OS,
@@ -688,7 +694,7 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringTag(self.license),
                 ),
-                // https://fedoraproject.org/wiki/RPMGroups
+                // <https://fedoraproject.org/wiki/RPMGroups>
                 // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_OS,
