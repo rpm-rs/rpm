@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump MSRV to 1.60.0
 - Changed a couple of APIs to use unsigned integers instead of signed integers where appropriate
+- Moved pre-defined helpers for common package metadata (such as name, version, file lists, etc.)
+  from `$pkg.metadata.header` to `$pkg.metadata`
 
 ### Added
 
 - Forked from `rpm-rs` at version 0.8.1
 - Relicensed as MIT + Apache 2.0 after obtaining consent from all contributors
-- Added additional helper methods on the `Header` struct for retrieving commonly used metadata
+- Added additional helper methods for retrieving commonly used metadata
 
 ### Fixed
 

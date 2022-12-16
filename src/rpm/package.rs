@@ -1,13 +1,15 @@
+use std::path::PathBuf;
+
+use chrono::offset::TimeZone;
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use num_traits::FromPrimitive;
 
 use super::headers::*;
+use super::Lead;
 
 use crate::constants::*;
-
 use crate::errors::*;
-
-use super::Lead;
 
 #[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
@@ -219,4 +221,251 @@ impl RPMPackageMetadata {
         self.header.write_async(out).await?;
         Ok(())
     }
+
+    #[inline]
+    pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
+        self.signature
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
+    }
+
+    #[inline]
+    pub fn get_file_ima_signature_length(&self) -> Result<u32, RPMError> {
+        self.signature
+            .get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+    }
+
+    #[inline]
+    pub fn is_source_package(&self) -> bool {
+        self.header
+            .get_entry_data_as_u32(IndexTag::RPMTAG_SOURCEPACKAGE)
+            .is_ok()
+    }
+
+    #[inline]
+    pub fn get_name(&self) -> Result<&str, RPMError> {
+        self.header.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
+    }
+
+    #[inline]
+    pub fn get_epoch(&self) -> Result<u32, RPMError> {
+        self.header.get_entry_data_as_u32(IndexTag::RPMTAG_EPOCH)
+    }
+
+    #[inline]
+    pub fn get_version(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_VERSION)
+    }
+
+    #[inline]
+    pub fn get_release(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_RELEASE)
+    }
+
+    #[inline]
+    pub fn get_arch(&self) -> Result<&str, RPMError> {
+        self.header.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
+    }
+
+    #[inline]
+    pub fn get_vendor(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_VENDOR)
+    }
+
+    #[inline]
+    pub fn get_url(&self) -> Result<&str, RPMError> {
+        self.header.get_entry_data_as_string(IndexTag::RPMTAG_URL)
+    }
+
+    #[inline]
+    pub fn get_license(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)
+    }
+
+    // TODO: internationalized strings
+    // get_summary, get_description, get_group
+
+    #[inline]
+    pub fn get_packager(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PACKAGER)
+    }
+
+    #[inline]
+    pub fn get_build_time(&self) -> Result<u64, RPMError> {
+        self.header
+            .get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME)
+            .map(|x| x as u64)
+    }
+
+    #[inline]
+    pub fn get_build_host(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_BUILDHOST)
+    }
+
+    #[inline]
+    pub fn get_source_rpm(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
+    }
+
+    // TODO: get_provides, get_requires, etc.
+    // TODO: get_header_byte_range
+    // TODO: get_archive_size, get_installed_size
+
+    #[inline]
+    pub fn get_payload_format(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADFORMAT)
+    }
+
+    #[inline]
+    pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
+    }
+
+    #[inline]
+    pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
+        self.header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
+    }
+
+    /// Extract a the set of contained file names.
+    pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, RPMError> {
+        // reconstruct the messy de-constructed paths
+        let base = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_BASENAMES)?;
+        let biject = self
+            .header
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_DIRINDEXES)?;
+        let dirs = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
+
+        let n = dirs.len();
+        let v = base
+            .iter()
+            .zip(biject.into_iter())
+            .try_fold::<Vec<PathBuf>, _, _>(
+                Vec::<PathBuf>::with_capacity(base.len()),
+                |mut acc, item| {
+                    let (base, dir_index) = item;
+                    if let Some(dir) = dirs.get(dir_index as usize) {
+                        acc.push(PathBuf::from(dir).join(base));
+                        Ok(acc)
+                    } else {
+                        Err(RPMError::InvalidTagIndex {
+                            tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
+                            index: dir_index,
+                            bound: n as u32,
+                        })
+                    }
+                },
+            )?;
+        Ok(v)
+    }
+
+    /// The digest algorithm used per file.
+    ///
+    /// Note that this is not necessarily the same as the digest
+    /// used for headers.
+    pub fn get_file_digest_algorithm(&self) -> Result<FileDigestAlgorithm, RPMError> {
+        self.header
+            .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
+            .and_then(|x| {
+                FileDigestAlgorithm::from_u32(x).ok_or_else(|| {
+                    RPMError::InvalidTagValueEnumVariant {
+                        tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
+                        variant: x,
+                    }
+                })
+            })
+    }
+
+    /// Extract a the set of contained file names including the additional metadata.
+    pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, RPMError> {
+        // rpm does not encode it, if it is the default md5
+        let algorithm = self.get_file_digest_algorithm().unwrap_or_default();
+        //
+        let modes = self
+            .header
+            .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES)?;
+        let users = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME)?;
+        let groups = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME)?;
+        let digests = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)?;
+        let mtimes = self
+            .header
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES)?;
+        let sizes = self
+            .header
+            .get_entry_data_as_u64_array(IndexTag::RPMTAG_LONGFILESIZES)
+            .or_else(|_e| {
+                self.header
+                    .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILESIZES)
+                    .map(|file_sizes| {
+                        file_sizes
+                            .into_iter()
+                            .map(|file_size| file_size as _)
+                            .collect::<Vec<u64>>()
+                    })
+            })?;
+        let flags = self
+            .header
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS)?;
+        // @todo
+        // let caps = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILECAPS)?;
+
+        let paths = self.get_file_paths()?;
+        let n = paths.len();
+
+        let v = itertools::multizip((
+            paths.into_iter(),
+            users,
+            groups,
+            modes,
+            digests,
+            mtimes,
+            sizes,
+            flags,
+        ))
+        .try_fold::<Vec<FileEntry>, _, Result<_, RPMError>>(
+            Vec::with_capacity(n),
+            |mut acc, (path, user, group, mode, digest, mtime, size, flags)| {
+                let digest = if digest.is_empty() {
+                    None
+                } else {
+                    Some(FileDigest::load_from_str(algorithm, digest)?)
+                };
+                let utc = chrono::Utc;
+                acc.push(FileEntry {
+                    path,
+                    ownership: FileOwnership {
+                        user: user.to_owned(),
+                        group: group.to_owned(),
+                    },
+                    mode: mode.into(),
+                    modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(),
+                    digest,
+                    category: FileCategory::from_u32(flags).unwrap_or_default(),
+                    size: size as usize,
+                });
+                Ok(acc)
+            },
+        )?;
+        Ok(v)
+    }
+
+    // TODO: get_changelog_entries()
 }

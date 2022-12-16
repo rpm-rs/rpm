@@ -44,8 +44,8 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let package = RPMPackage::parse(&mut buf_reader)?;
     let metadata = &package.metadata;
 
-    let signatures = metadata.signature.get_file_ima_signatures()?;
-    let signatures_length = metadata.signature.get_file_ima_signature_length()?;
+    let signatures = metadata.get_file_ima_signatures()?;
+    let signatures_length = metadata.get_file_ima_signature_length()?;
 
     assert_eq!(signatures_length, 80);
     assert_eq!(
@@ -88,62 +88,50 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(metadata.signature.index_entries[0].num_items, 16);
     assert_eq!(metadata.signature.index_header.header_size, 1156);
 
-    assert_eq!(
-        package.metadata.header.get_name().unwrap(),
-        "389-ds-base-devel"
-    );
-    assert!(package.metadata.header.get_epoch().is_err());
-    assert_eq!(package.metadata.header.get_version().unwrap(), "1.3.8.4");
-    assert_eq!(package.metadata.header.get_release().unwrap(), "15.el7");
-    assert_eq!(package.metadata.header.get_arch().unwrap(), "x86_64");
+    assert_eq!(package.metadata.get_name().unwrap(), "389-ds-base-devel");
+    assert!(package.metadata.get_epoch().is_err());
+    assert_eq!(package.metadata.get_version().unwrap(), "1.3.8.4");
+    assert_eq!(package.metadata.get_release().unwrap(), "15.el7");
+    assert_eq!(package.metadata.get_arch().unwrap(), "x86_64");
 
     assert_eq!(
-        package.metadata.header.get_url().unwrap(),
+        package.metadata.get_url().unwrap(),
         "https://www.port389.org/"
     );
     assert_eq!(
-        package.metadata.header.get_packager().unwrap(),
+        package.metadata.get_packager().unwrap(),
         "CentOS BuildSystem <http://bugs.centos.org>"
     );
-    assert_eq!(package.metadata.header.get_license().unwrap(), "GPLv3+");
-    assert_eq!(package.metadata.header.get_vendor().unwrap(), "CentOS");
+    assert_eq!(package.metadata.get_license().unwrap(), "GPLv3+");
+    assert_eq!(package.metadata.get_vendor().unwrap(), "CentOS");
 
     // TODO: internationalized strings
     // assert_eq!(
-    //     package.metadata.header.get_summary().unwrap(),
+    //     package.metadata.get_summary().unwrap(),
     //     "Development libraries for 389 Directory Server"
     // );
     // assert_eq!(
-    //     package.metadata.header.get_description().unwrap(),
+    //     package.metadata.get_description().unwrap(),
     //     "Development Libraries and headers for the 389 Directory Server base package."
     // );
     // assert_eq!(
-    //     package.metadata.header.get_group().unwrap(),
+    //     package.metadata.get_group().unwrap(),
     //     "Development/Libraries"
     // );
     assert_eq!(
-        package.metadata.header.get_source_rpm().unwrap(),
+        package.metadata.get_source_rpm().unwrap(),
         "389-ds-base-1.3.8.4-15.el7.src.rpm"
     );
     assert_eq!(
-        package.metadata.header.get_build_host().unwrap(),
+        package.metadata.get_build_host().unwrap(),
         "x86-01.bsys.centos.org"
     );
-    assert_eq!(
-        package.metadata.header.get_build_time().unwrap(),
-        1540945151
-    );
+    assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
 
-    assert_eq!(
-        package.metadata.header.get_payload_compressor().unwrap(),
-        "xz"
-    );
-    assert_eq!(
-        package.metadata.header.get_payload_format().unwrap(),
-        "cpio"
-    );
+    assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
+    assert_eq!(package.metadata.get_payload_format().unwrap(), "cpio");
 
-    assert_eq!(package.metadata.header.is_source_package(), false);
+    assert_eq!(package.metadata.is_source_package(), false);
 
     let expected_data = vec![
         (
@@ -275,8 +263,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         assert_eq!(*tag, metadata.signature.index_entries[i].tag);
     }
 
-    assert_eq!("cpio", metadata.header.get_payload_format()?);
-    assert_eq!("xz", metadata.header.get_payload_compressor()?);
+    assert_eq!("cpio", metadata.get_payload_format()?);
+    assert_eq!("xz", metadata.get_payload_compressor()?);
 
     let expected_file_checksums = vec![
         "",
@@ -321,7 +309,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         "2c639c8768e323f2ad4ea96f1667989cb97d49947e9bcebcd449163d9c9bb85c",
     ];
 
-    let checksums = metadata.header.get_file_checksums()?;
+    let checksums = metadata.get_file_checksums()?;
 
     assert_eq!(expected_file_checksums, checksums);
 
