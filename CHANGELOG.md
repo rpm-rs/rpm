@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed a couple of APIs to use unsigned integers instead of signed integers where appropriate
 - Moved pre-defined helpers for common package metadata (such as name, version, file lists, etc.)
   from `$pkg.metadata.header` to `$pkg.metadata`
+- Removed the `$pkg.metadata.get_file_ima_signature_length()` function
 
 ### Added
 

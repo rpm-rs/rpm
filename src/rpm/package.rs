@@ -223,18 +223,6 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
-    pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
-        self.signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
-    }
-
-    #[inline]
-    pub fn get_file_ima_signature_length(&self) -> Result<u32, RPMError> {
-        self.signature
-            .get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
-    }
-
-    #[inline]
     pub fn is_source_package(&self) -> bool {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_SOURCEPACKAGE)
@@ -333,6 +321,12 @@ impl RPMPackageMetadata {
     pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
         self.header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
+    }
+
+    #[inline]
+    pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
+        self.signature
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
     }
 
     /// Extract a the set of contained file names.
