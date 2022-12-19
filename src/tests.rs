@@ -45,9 +45,7 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
 
     let signatures = metadata.get_file_ima_signatures()?;
-    let signatures_length = metadata.get_file_ima_signature_length()?;
 
-    assert_eq!(signatures_length, 80);
     assert_eq!(
         signatures,
         [
