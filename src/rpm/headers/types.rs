@@ -12,8 +12,9 @@ pub struct RPMFileEntry {
     pub(crate) user: String,
     pub(crate) group: String,
     pub(crate) base_name: String,
+    #[allow(unused)]
     pub(crate) dir: String,
-    pub(crate) content: Option<Vec<u8>>,
+    pub(crate) content: Vec<u8>,
 }
 
 #[non_exhaustive]
@@ -63,8 +64,8 @@ impl From<u16> for FileMode {
 
 impl From<i32> for FileMode {
     fn from(raw_mode: i32) -> Self {
-        // since we ultimatively only deal with 16bit integers
-        // we need to check if a safe convertion to 16bit is doable.
+        // since we ultimately only deal with 16bit integers
+        // we need to check if a safe conversion to 16bit is doable.
         if raw_mode > u16::MAX.into() || raw_mode < i16::MIN.into() {
             FileMode::Invalid {
                 raw_mode,

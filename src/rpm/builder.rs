@@ -160,7 +160,7 @@ impl RPMBuilder {
             .await?
             .modified()?
             .duration_since(UNIX_EPOCH)
-            .expect("something really wrong with your time")
+            .expect("system time predates the Unix epoch?")
             .as_secs();
 
         self.with_file_async_inner(input.compat(), modified_at, options)
@@ -183,7 +183,7 @@ impl RPMBuilder {
             .await?
             .modified()?
             .duration_since(UNIX_EPOCH)
-            .expect("something really wrong with your time")
+            .expect("system time predates the Unix epoch?")
             .as_secs();
 
         self.with_file_async_inner(input, modified_at, options)
@@ -227,7 +227,7 @@ impl RPMBuilder {
                 .metadata()?
                 .modified()?
                 .duration_since(UNIX_EPOCH)
-                .expect("something really wrong with your time")
+                .expect("system time predates the Unix epoch?")
                 .as_secs()
                 .try_into()
                 .expect("file mtime is wrong, too large to be stored as uint32"),
@@ -260,9 +260,11 @@ impl RPMBuilder {
                 path: dest.clone(),
                 desc: "no parent directory found",
             })?;
+
         let (cpio_path, dir) = if dest.starts_with('.') {
             (
                 dest.to_string(),
+                // strip_prefix() should never fail because we've checked the special cases already
                 format!("/{}/", parent.strip_prefix(".").unwrap().to_string_lossy()),
             )
         } else {
@@ -277,9 +279,10 @@ impl RPMBuilder {
         let hash_result = hasher.finalize();
         let sha_checksum = hex::encode(hash_result); // encode as string
         let entry = RPMFileEntry {
+            // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             size: content.len() as u32,
-            content: Some(content),
+            content,
             flag: options.flag,
             user: options.user,
             group: options.group,
@@ -361,7 +364,11 @@ impl RPMBuilder {
                     header_digest_sha1.as_str(),
                     header_and_content_digest_md5.as_slice(),
                 )
-                .build(header_and_content_len.try_into().unwrap())
+                .build(
+                    header_and_content_len
+                        .try_into()
+                        .expect("signature header + signature length must be <4gb"),
+                )
         };
         #[cfg(not(feature = "signature-meta"))]
         let digest_header = { Header::<IndexSignatureTag>::new_empty() };
@@ -410,7 +417,11 @@ impl RPMBuilder {
                     rsa_sig_header_only.as_ref(),
                     rsa_sig_header_and_archive.as_ref(),
                 )
-                .build(header_and_content_len.try_into().unwrap())
+                .build(
+                    header_and_content_len
+                        .try_into()
+                        .expect("signature header + signature length must be <4gb"),
+                )
         };
 
         let metadata = RPMPackageMetadata {
@@ -454,7 +465,7 @@ impl RPMBuilder {
     /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
     fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
         // signature depends on header and payload. So we build these two first.
-        // then the signature. Then we stitch all toghether.
+        // then the signature. Then we stitch all together.
         // Lead is not important. just build it here
 
         let lead = Lead::new(&self.name);
@@ -495,6 +506,8 @@ impl RPMBuilder {
             file_groupnames.push(entry.group.to_owned());
             file_inodes.push(ino_index);
             file_langs.push("".to_string());
+            // safe because indexes cannot change after this as the RpmBuilder is consumed
+            // the dir is guaranteed to be there - or else there is a logic error
             let index = self
                 .directories
                 .iter()
@@ -503,7 +516,7 @@ impl RPMBuilder {
             dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
             file_verify_flags.push(u32::MAX); // @todo: <https://github.com/rpm-rs/rpm/issues/52>
-            let content = entry.content.to_owned().unwrap();
+            let content = entry.content.to_owned();
             let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())
                 .ino(ino_index)
@@ -906,34 +919,35 @@ impl RPMBuilder {
             ));
         }
 
-        if self.pre_inst_script.is_some() {
+        if let Some(pre_inst_script) = self.pre_inst_script {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PREIN,
                 offset,
-                IndexData::StringTag(self.pre_inst_script.unwrap()),
+                IndexData::StringTag(pre_inst_script),
             ));
         }
-        if self.post_inst_script.is_some() {
+
+        if let Some(post_inst_script) = self.post_inst_script {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_POSTIN,
                 offset,
-                IndexData::StringTag(self.post_inst_script.unwrap()),
+                IndexData::StringTag(post_inst_script),
             ));
         }
 
-        if self.pre_uninst_script.is_some() {
+        if let Some(pre_uninst_script) = self.pre_uninst_script {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PREUN,
                 offset,
-                IndexData::StringTag(self.pre_uninst_script.unwrap()),
+                IndexData::StringTag(pre_uninst_script),
             ));
         }
 
-        if self.post_uninst_script.is_some() {
+        if let Some(post_uninst_script) = self.post_uninst_script {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_POSTUN,
                 offset,
-                IndexData::StringTag(self.post_uninst_script.unwrap()),
+                IndexData::StringTag(post_uninst_script),
             ));
         }
 

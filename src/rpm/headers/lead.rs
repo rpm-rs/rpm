@@ -94,9 +94,8 @@ impl Lead {
         let mut name_arr: [u8; 66] = [0; 66];
         name_arr.copy_from_slice(name);
 
-        //save unwrap here since we've checked length of slices.
         Ok(Lead {
-            magic: magic.try_into().unwrap(),
+            magic: RPM_MAGIC,
             major,
             minor,
             package_type: pkg_type,
@@ -104,7 +103,7 @@ impl Lead {
             name: name_arr,
             os,
             signature_type: sigtype,
-            reserved: rest.try_into().unwrap(),
+            reserved: rest.try_into().unwrap(), // safe unwrap here since we've checked length of slices.
         })
     }
     #[cfg(feature = "async-futures")]

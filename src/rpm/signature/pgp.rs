@@ -13,7 +13,7 @@ fn now() -> ::chrono::DateTime<::chrono::Utc> {
     let now = ::chrono::offset::Utc::now();
     ::chrono::offset::Utc
         .timestamp_opt(now.timestamp(), 0u32)
-        .unwrap()
+        .unwrap() // shouldn't fail as we are using 0 nanoseconds.
 }
 
 /// Signer implementation using the `pgp` crate.

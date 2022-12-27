@@ -450,7 +450,7 @@ impl RPMPackageMetadata {
                         group: group.to_owned(),
                     },
                     mode: mode.into(),
-                    modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(),
+                    modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
                     digest,
                     category: FileCategory::from_u32(flags).unwrap_or_default(),
                     size: size as usize,

@@ -44,7 +44,7 @@ impl Compressor {
         match self {
             Compressor::None(data) => Ok(data),
             Compressor::Gzip(encoder) => Ok(encoder.finish().into_result()?),
-            Compressor::Zstd(encoder) => Ok(encoder.finish().unwrap()),
+            Compressor::Zstd(encoder) => Ok(encoder.finish()?),
         }
     }
 

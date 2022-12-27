@@ -5,7 +5,6 @@ use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::constants::{self, *};
-use std::convert::TryInto;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -267,7 +266,7 @@ where
         let mut hie = IndexEntry::new(tag, (records_count + 1) * -16, IndexData::Bin(Vec::new()));
         hie.num_items = 16;
         hie.write_index(&mut header_immutable_index_data)
-            .expect("unabel to write to memory buffer");
+            .expect("unable to write to memory buffer");
         IndexEntry::new(tag, offset, IndexData::Bin(header_immutable_index_data))
     }
 
@@ -612,7 +611,7 @@ impl IndexHeader {
         let (_rest, header_size) = be_u32(rest)?;
 
         Ok(IndexHeader {
-            magic: magic.try_into().unwrap(),
+            magic: HEADER_MAGIC,
             version: 1,
             num_entries,
             header_size,
@@ -705,6 +704,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         &self,
         out: &mut W,
     ) -> Result<(), RPMError> {
+        // unwrap() is safe because tags are predefined and are all within u32 range.
         let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes()).await?;
         written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
         written += out.write(&self.offset.to_be_bytes()).await?;
@@ -714,6 +714,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
     }
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+        // unwrap() is safe because tags are predefined.
         let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
