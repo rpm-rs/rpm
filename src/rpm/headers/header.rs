@@ -314,7 +314,7 @@ impl Header<IndexSignatureTag> {
     /// Please use the [`builder`](Self::builder()) which has modular and safe API.
     #[cfg(feature = "signature-meta")]
     pub(crate) fn new_signature_header(
-        headers_plus_payload_size: u32,
+        headers_plus_payload_size: usize,
         md5sum: &[u8],
         sha1: &str,
         rsa_spanning_header: &[u8],
@@ -962,7 +962,7 @@ mod test {
     #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
-        let size: u32 = 209_348;
+        let size: u64 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
         let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
         let rsa_spanning_header: &[u8] = b"111222333444";
@@ -972,9 +972,9 @@ mod test {
             let offset = 0;
             let entries = vec![
                 IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_SIZE,
+                    IndexSignatureTag::RPMSIGTAG_LONGSIZE,
                     offset,
-                    IndexData::Int32(vec![size]),
+                    IndexData::Int64(vec![size]),
                 ),
                 // TODO consider dropping md5 in favour of sha256
                 IndexEntry::new(
@@ -1002,7 +1002,7 @@ mod test {
         };
 
         let built = Header::<IndexSignatureTag>::new_signature_header(
-            size,
+            size as usize,
             md5sum,
             sha1,
             rsa_spanning_header,

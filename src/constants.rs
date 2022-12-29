@@ -54,6 +54,8 @@ pub enum IndexTag {
     RPMTAG_LONGARCHIVESIZE = RPMTAG_SIG_BASE + 15,
 
     RPMTAG_SHA256HEADER = RPMTAG_SIG_BASE + 17,
+    RPMTAG_VERITYSIGNATURES = RPMTAG_SIG_BASE + 20,
+    RPMTAG_VERITYSIGNATUREALGO = RPMTAG_SIG_BASE + 21,
 
     RPMTAG_NAME = 1000,
     RPMTAG_VERSION = 1001,
@@ -394,10 +396,10 @@ pub enum IndexSignatureTag {
     RPMSIGTAG_RSA = 268,
 
     /// Size of combined header and payload if > 4GB.
-    RPMSIGTAG_LONGSIGSIZE = 270,
+    RPMSIGTAG_LONGSIZE = 270,
 
     /// (Compressed) payload size when > 4GB.
-    RPMSIGTAG_LONGARCHIVESIZE = 271,
+    RPMSIGTAG_LONGARCHIVESIZE = IndexTag::RPMTAG_LONGARCHIVESIZE as u32,
 
     /// The tag contains the file signature of a file.
     /// The data is formatted as a hex-encoded string.
@@ -407,6 +409,11 @@ pub enum IndexSignatureTag {
     /// The tag contains the length of the file signatures in total.
     /// If this tag is present, then the SIGTAG_FILESIGNATURE shall also be present.
     RPMSIGTAG_FILESIGNATURE_LENGTH = 275,
+
+    /// FSVerity signatures of files.
+    RPMSIGTAG_VERITYSIGNATURES = IndexTag::RPMTAG_VERITYSIGNATURES as u32,
+    /// Algorithm used for FSVerity signatures.
+    RPMSIGTAG_VERITYSIGNATUREALGO = IndexTag::RPMTAG_VERITYSIGNATUREALGO as u32,
 
     /// This tag specifies the RSA signature of the combined Header and Payload sections.
     /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.

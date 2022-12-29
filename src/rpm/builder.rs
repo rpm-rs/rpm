@@ -366,7 +366,7 @@ impl RPMBuilder {
         let entry = RPMFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
-            size: content.len() as u32,
+            size: content.len() as u64,
             content,
             flag: options.flag,
             user: options.user,
@@ -510,11 +510,7 @@ impl RPMBuilder {
                     header_digest_sha1.as_str(),
                     header_and_content_digest_md5.as_slice(),
                 )
-                .build(
-                    header_and_content_len
-                        .try_into()
-                        .expect("signature header + signature length must be <4gb"),
-                )
+                .build(header_and_content_len)
         };
 
         let metadata = RPMPackageMetadata {
@@ -566,11 +562,7 @@ impl RPMBuilder {
                     rsa_sig_header_only.as_ref(),
                     rsa_sig_header_and_archive.as_ref(),
                 )
-                .build(
-                    header_and_content_len
-                        .try_into()
-                        .expect("signature header + signature length must be <4gb"),
-                )
+                .build(header_and_content_len)
         };
 
         let metadata = RPMPackageMetadata {
@@ -617,7 +609,7 @@ impl RPMBuilder {
         let mut dir_indixes = Vec::new();
         let mut base_names = Vec::new();
 
-        let mut combined_file_sizes = 0;
+        let mut combined_file_sizes: u64 = 0;
 
         for (cpio_path, entry) in self.files.iter() {
             combined_file_sizes += entry.size;
@@ -810,9 +802,9 @@ impl RPMBuilder {
                 IndexData::I18NString(vec![self.desc]),
             ),
             IndexEntry::new(
-                IndexTag::RPMTAG_SIZE,
+                IndexTag::RPMTAG_LONGSIZE,
                 offset,
-                IndexData::Int32(vec![combined_file_sizes]),
+                IndexData::Int64(vec![combined_file_sizes]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_LICENSE,
@@ -869,9 +861,9 @@ impl RPMBuilder {
         if !self.files.is_empty() {
             actual_records.extend([
                 IndexEntry::new(
-                    IndexTag::RPMTAG_FILESIZES,
+                    IndexTag::RPMTAG_LONGFILESIZES,
                     offset,
-                    IndexData::Int32(file_sizes),
+                    IndexData::Int64(file_sizes),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEMODES,

@@ -164,10 +164,7 @@ impl RPMPackage {
 
         // NOTE: size stands for the combined size of header and payload.
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
-            header_and_content_cursor
-                .len()
-                .try_into()
-                .expect("headers + payload can't be larger than 4gb"),
+            header_and_content_cursor.len(),
             &header_and_content_digest,
             &header_digest,
             rsa_signature_spanning_header_only.as_slice(),
@@ -329,6 +326,7 @@ impl RPMPackageMetadata {
         let lead = Lead::parse(&lead_buffer)?;
         let signature_header = Header::parse_signature(input)?;
         let header = Header::parse(input)?;
+
         Ok(RPMPackageMetadata {
             lead,
             signature: signature_header,
@@ -638,6 +636,17 @@ impl RPMPackageMetadata {
             header: header_start as u64,
             payload: payload_start as u64,
         }
+    }
+
+    /// Get the sum of the sizes of all files present in the package payload
+    pub fn get_installed_size(&self) -> Result<u64, RPMError> {
+        self.header
+            .get_entry_data_as_u64(IndexTag::RPMTAG_LONGSIZE)
+            .or_else(|_e| {
+                self.header
+                    .get_entry_data_as_u32(IndexTag::RPMTAG_SIZE)
+                    .map(|v| v as u64)
+            })
     }
 
     #[inline]

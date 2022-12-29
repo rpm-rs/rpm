@@ -15,7 +15,7 @@ pub struct RPMPackageSegmentOffsets {
 
 /// Describes a file present in the rpm file.
 pub struct RPMFileEntry {
-    pub(crate) size: u32,
+    pub(crate) size: u64,
     pub(crate) mode: FileMode,
     pub(crate) modified_at: u32,
     pub(crate) sha_checksum: String,
