@@ -241,6 +241,7 @@ impl RPMPackageMetadata {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
     }
 
+    // TODO: infalliable?  default to 0
     #[inline]
     pub fn get_epoch(&self) -> Result<u32, RPMError> {
         self.header.get_entry_data_as_u32(IndexTag::RPMTAG_EPOCH)
