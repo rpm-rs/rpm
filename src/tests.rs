@@ -128,6 +128,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_payload_format().unwrap(), "cpio");
 
     assert_eq!(package.metadata.is_source_package(), false);
+    // @todo: add a test where this is true
+    // also https://github.com/rpm-rs/rpm/issues/66
 
     let expected_data = vec![
         (

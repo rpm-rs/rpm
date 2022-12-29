@@ -161,6 +161,8 @@ where
             .iter()
             .find(|entry| &entry.tag == tag)
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
+        // @todo: this could be more efficient, if the tag is an integer, we can just pass around
+        // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
     #[cfg(feature = "signature-meta")]
@@ -371,6 +373,7 @@ impl Header<IndexSignatureTag> {
         Ok(())
     }
 
+    // @todo: share padding code
     pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.write(out)?;
         let modulo = self.index_header.header_size % 8;
@@ -579,7 +582,7 @@ pub(crate) struct IndexHeader {
     pub(crate) version: u8,
     /// number of header entries
     pub(crate) num_entries: u32,
-    /// total header size excluding the fixed part ( I think )
+    /// total header size excluding the fixed part (@todo: verify this is correct)
     pub(crate) header_size: u32,
 }
 
