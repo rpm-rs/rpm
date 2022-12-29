@@ -232,7 +232,7 @@ impl RPMPackageMetadata {
     #[inline]
     pub fn is_source_package(&self) -> bool {
         self.header
-            .get_entry_data_as_u32(IndexTag::RPMTAG_SOURCEPACKAGE)
+            .find_entry_or_err(&IndexTag::RPMTAG_SOURCEPACKAGE)
             .is_ok()
     }
 
