@@ -60,7 +60,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         "x86-01.bsys.centos.org"
     );
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
-
+    assert_eq!(package.metadata.get_installed_size().unwrap(), 503853);
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
 
     assert_eq!(package.metadata.is_source_package(), false);

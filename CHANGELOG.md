@@ -37,7 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensured that digests are always added to built RPMs. Previously they would not be included unless
   the "signature-meta" (or "signature-pgp") features were enabled.
 - Added `PAYLOADDIGEST`, `PAYLOADDIGESTALT`, and `PAYLOADDIGESTALGO` tags to built packages.
-- To facilitate reproducible builds, stop writing `build_time` to the package by default.  Users can configure it with `RPMBuilder::build_time()`.
+- To facilitate reproducible builds, stop writing `build_time` to the package by default.
+  Users can configure it with `RPMBuilder::build_time()`.
+- Improved support for packages >4gb
 
 ### Breaking Changes
 
