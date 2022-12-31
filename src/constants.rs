@@ -5,16 +5,16 @@
 
 use std::fmt::Display;
 
-// @todo: <https://github.com/rpm-rs/rpm/issues/54>
-pub const HEADER_IMAGE: isize = 61;
-pub const HEADER_SIGNATURES: isize = 62;
-pub const HEADER_IMMUTABLE: isize = 63;
-pub const HEADER_REGIONS: isize = 64;
-pub const HEADER_I18NTABLE: isize = 100;
-pub const HEADER_SIGBASE: isize = 256;
-pub const HEADER_TAGBASE: isize = 1000;
-pub const RPMTAG_SIG_BASE: isize = HEADER_SIGBASE;
+pub const HEADER_IMAGE: u32 = 61;
+pub const HEADER_SIGNATURES: u32 = 62;
+pub const HEADER_IMMUTABLE: u32 = 63;
+pub const HEADER_REGIONS: u32 = 64;
+pub const HEADER_I18NTABLE: u32 = 100;
+pub const HEADER_SIGBASE: u32 = 256;
+pub const HEADER_TAGBASE: u32 = 1000;
+pub const RPMTAG_SIG_BASE: u32 = HEADER_SIGBASE;
 
+#[repr(u32)]
 #[derive(
     num_derive::FromPrimitive,
     num_derive::ToPrimitive,
@@ -359,6 +359,7 @@ pub enum IndexTag {
     RPMTAG_PAYLOADDIGESTALT = 5097,
 }
 
+#[repr(u32)]
 #[derive(
     num_derive::FromPrimitive,
     num_derive::ToPrimitive,
@@ -420,10 +421,10 @@ pub enum IndexSignatureTag {
 
     //This  index  contains  the  SHA256  checksum  of  the  entire  Header  Section,
     //including the Header Record, Index Records and Header store.
-    RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as isize,
+    RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
     // A silly tag for a date.
-    RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as isize,
+    RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as u32,
 }
 
 pub trait TypeName {
@@ -480,28 +481,27 @@ pub const RPMSENSE_EQUAL: u32 = 1 << 3;
 // const RPMSENSE_KEYRING: u32 = (1 << 26);
 // const RPMSENSE_CONFIG: u32 = (1 << 28);
 
-pub const RPMFILE_CONFIG: i32 = 1;
-pub const RPMFILE_DOC: i32 = 1 << 1;
-// const RPMFILE_DONOTUSE: i32 = (1 << 2);
-// const RPMFILE_MISSINGOK: i32 = (1 << 3);
-// const RPMFILE_NOREPLACE: i32 = (1 << 4);
-// const RPMFILE_SPECFILE: i32 = (1 << 5);
-// const RPMFILE_GHOST: i32 = (1 << 6);
-// const RPMFILE_LICENSE: i32 = (1 << 7);
-// const RPMFILE_README: i32 = (1 << 8);
-// const RPMFILE_EXCLUDE: i32 = (1 << 9);
+pub const RPMFILE_CONFIG: u32 = 1;
+pub const RPMFILE_DOC: u32 = 1 << 1;
+// pub const RPMFILE_DONOTUSE: u32 = 1 << 2;
+// pub const RPMFILE_MISSINGOK: u32 = 1 << 3;
+// pub const RPMFILE_NOREPLACE: u32 = 1 << 4;
+// pub const RPMFILE_SPECFILE: u32 = 1 << 5;
+// pub const RPMFILE_GHOST: u32 = 1 << 6;
+// pub const RPMFILE_LICENSE: u32 = 1 << 7;
+// pub const RPMFILE_README: u32 = 1 << 8;
+// pub const RPMFILE_EXCLUDE: u32 = 1 << 9;
 
-// copied from rpmpgp.h
 // should be technically equiv to
 // `pgp::crypto::hash::HashAlgorithm`
 // but that is only available with feature `signature`
-pub const PGPHASHALGO_MD5: i32 = 1;
-pub const PGPHASHALGO_SHA1: i32 = 2;
-pub const PGPHASHALGO_RIPEMD160: i32 = 3;
-pub const PGPHASHALGO_MD2: i32 = 5;
-pub const PGPHASHALGO_TIGER192: i32 = 6;
-pub const PGPHASHALGO_HAVAL_5_160: i32 = 7;
-pub const PGPHASHALGO_SHA256: i32 = 8;
-pub const PGPHASHALGO_SHA384: i32 = 9;
-pub const PGPHASHALGO_SHA512: i32 = 10;
-pub const PGPHASHALGO_SHA224: i32 = 11;
+pub const PGPHASHALGO_MD5: u32 = 1;
+pub const PGPHASHALGO_SHA1: u32 = 2;
+pub const PGPHASHALGO_RIPEMD160: u32 = 3;
+pub const PGPHASHALGO_MD2: u32 = 5;
+pub const PGPHASHALGO_TIGER192: u32 = 6;
+pub const PGPHASHALGO_HAVAL_5_160: u32 = 7;
+pub const PGPHASHALGO_SHA256: u32 = 8;
+pub const PGPHASHALGO_SHA384: u32 = 9;
+pub const PGPHASHALGO_SHA512: u32 = 10;
+pub const PGPHASHALGO_SHA224: u32 = 11;

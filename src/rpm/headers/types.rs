@@ -214,12 +214,12 @@ impl RPMFileOptionsBuilder {
     }
 
     pub fn is_doc(mut self) -> Self {
-        self.inner.flag = RPMFILE_DOC as u32;
+        self.inner.flag = RPMFILE_DOC;
         self
     }
 
     pub fn is_config(mut self) -> Self {
-        self.inner.flag = RPMFILE_CONFIG as u32;
+        self.inner.flag = RPMFILE_CONFIG;
         self
     }
 }
