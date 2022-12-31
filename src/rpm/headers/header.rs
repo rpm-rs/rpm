@@ -405,10 +405,10 @@ pub struct FileOwnership {
 }
 
 /// Declaration what category this file belongs to
+#[repr(u32)]
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, enum_primitive_derive::Primitive)]
-#[repr(i32)]
 pub enum FileCategory {
-    None = 0i32,
+    None = 0,
     Config = constants::RPMFILE_CONFIG,
     Doc = constants::RPMFILE_DOC,
 }
@@ -419,7 +419,7 @@ impl Default for FileCategory {
     }
 }
 
-#[repr(i32)]
+#[repr(u32)]
 #[derive(Debug, Clone, Copy, enum_primitive_derive::Primitive)]
 pub enum FileDigestAlgorithm {
     // broken and very broken
