@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use crate::FileDigestAlgorithm;
+use crate::DigestAlgorithm;
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
@@ -77,8 +77,8 @@ pub enum RPMError {
     #[error("unknown compressor type {0} - only gzip and none are supported")]
     UnknownCompressorType(String),
 
-    #[error("unsupported file digest algorithm {0:?}")]
-    UnsupportedFileDigestAlgorithm(FileDigestAlgorithm),
+    #[error("unsupported digest algorithm {0:?}")]
+    UnsupportedDigestAlgorithm(DigestAlgorithm),
 
     #[error("invalid file mode {raw_mode} - {reason}")]
     InvalidFileMode { raw_mode: i32, reason: &'static str },

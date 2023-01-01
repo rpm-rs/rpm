@@ -1,12 +1,12 @@
-use nom::bytes::complete;
-use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
-
-use crate::constants::{self, *};
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
+use nom::bytes::complete;
+use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
+
 use super::*;
+use crate::constants::*;
 use crate::errors::*;
 
 #[derive(Debug, PartialEq)]
@@ -394,48 +394,6 @@ pub struct FileOwnership {
     pub group: String,
 }
 
-/// Declaration what category this file belongs to
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, enum_primitive_derive::Primitive)]
-pub enum FileCategory {
-    None = 0,
-    Config = constants::RPMFILE_CONFIG,
-    Doc = constants::RPMFILE_DOC,
-}
-
-impl Default for FileCategory {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, enum_primitive_derive::Primitive)]
-pub enum FileDigestAlgorithm {
-    // broken and very broken
-    Md5 = constants::PGPHASHALGO_MD5,
-    // Sha1 = constants::PGPHASHALGO_SHA1,
-    // Md2 = constants::PGPHASHALGO_MD2,
-
-    // // not proven to be broken, weaker variants broken
-    // #[allow(non_camel_case_types)]
-    // Haval_5_160 = constants::PGPHASHALGO_HAVAL_5_160, // not part of PGP
-    // Ripemd160 = constants::PGPHASHALGO_RIPEMD160,
-
-    // Tiger192 = constants::PGPHASHALGO_TIGER192, // not part of PGP
-    Sha2_256 = constants::PGPHASHALGO_SHA256,
-    Sha2_384 = constants::PGPHASHALGO_SHA384,
-    Sha2_512 = constants::PGPHASHALGO_SHA512,
-    Sha2_224 = constants::PGPHASHALGO_SHA224,
-}
-
-impl Default for FileDigestAlgorithm {
-    fn default() -> Self {
-        // if the entry is missing, this is the default fallback
-        Self::Md5
-    }
-}
-
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum FileDigest {
     Md5(Vec<u8>),
@@ -448,18 +406,18 @@ pub enum FileDigest {
 
 impl FileDigest {
     pub fn load_from_str(
-        algorithm: FileDigestAlgorithm,
+        algorithm: DigestAlgorithm,
         stringly_data: impl AsRef<str>,
     ) -> Result<Self, RPMError> {
         let hex: Vec<u8> = hex::decode(stringly_data.as_ref())?;
         Ok(match algorithm {
-            FileDigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
-            FileDigestAlgorithm::Sha2_256 if hex.len() == 32 => FileDigest::Sha2_256(hex),
-            FileDigestAlgorithm::Sha2_224 if hex.len() == 30 => FileDigest::Sha2_224(hex),
-            FileDigestAlgorithm::Sha2_384 if hex.len() == 48 => FileDigest::Sha2_384(hex),
-            FileDigestAlgorithm::Sha2_512 if hex.len() == 64 => FileDigest::Sha2_512(hex),
+            DigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
+            DigestAlgorithm::Sha2_256 if hex.len() == 32 => FileDigest::Sha2_256(hex),
+            DigestAlgorithm::Sha2_224 if hex.len() == 30 => FileDigest::Sha2_224(hex),
+            DigestAlgorithm::Sha2_384 if hex.len() == 48 => FileDigest::Sha2_384(hex),
+            DigestAlgorithm::Sha2_512 if hex.len() == 64 => FileDigest::Sha2_512(hex),
             // @todo disambiguate mismatch of length from unsupported algorithm
-            digest_algo => return Err(RPMError::UnsupportedFileDigestAlgorithm(digest_algo)),
+            digest_algo => return Err(RPMError::UnsupportedDigestAlgorithm(digest_algo)),
         })
     }
 }
@@ -485,8 +443,8 @@ pub struct FileEntry {
     pub modified_at: chrono::DateTime<chrono::Utc>,
     /// The size of this file, dirs have the inode size (which is insane)
     pub size: usize,
-    /// Categorizes the file or directory into three groups.
-    pub category: FileCategory,
+    /// Flags describing the file or directory into three groups.
+    pub flags: FileFlags,
     // @todo SELinux context? how is that done?
     pub digest: Option<FileDigest>,
 }

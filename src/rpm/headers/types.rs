@@ -20,7 +20,7 @@ pub struct RPMFileEntry {
     pub(crate) modified_at: u32,
     pub(crate) sha_checksum: String,
     pub(crate) link: String,
-    pub(crate) flag: u32, // @todo: <https://github.com/rpm-rs/rpm/issues/52>
+    pub(crate) flags: FileFlags,
     pub(crate) user: String,
     pub(crate) group: String,
     pub(crate) base_name: String,
@@ -178,7 +178,7 @@ pub struct RPMFileOptions {
     pub(crate) group: String,
     pub(crate) symlink: String,
     pub(crate) mode: FileMode,
-    pub(crate) flag: u32,
+    pub(crate) flag: FileFlags,
     pub(crate) inherit_permissions: bool,
 }
 
@@ -192,7 +192,7 @@ impl RPMFileOptions {
                 group: "root".to_string(),
                 symlink: "".to_string(),
                 mode: FileMode::regular(0o664),
-                flag: 0,
+                flag: FileFlags::empty(),
                 inherit_permissions: true,
             },
         }
@@ -226,12 +226,27 @@ impl RPMFileOptionsBuilder {
     }
 
     pub fn is_doc(mut self) -> Self {
-        self.inner.flag = RPMFILE_DOC;
+        self.inner.flag = FileFlags::DOC;
         self
     }
 
     pub fn is_config(mut self) -> Self {
-        self.inner.flag = RPMFILE_CONFIG;
+        self.inner.flag = FileFlags::CONFIG;
+        self
+    }
+
+    pub fn is_ghost(mut self) -> Self {
+        self.inner.flag = FileFlags::GHOST;
+        self
+    }
+
+    pub fn is_license(mut self) -> Self {
+        self.inner.flag = FileFlags::LICENSE;
+        self
+    }
+
+    pub fn is_readme(mut self) -> Self {
+        self.inner.flag = FileFlags::README;
         self
     }
 }
@@ -246,7 +261,7 @@ impl From<RPMFileOptionsBuilder> for RPMFileOptions {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Dependency {
     pub(crate) dep_name: String,
-    pub(crate) sense: u32, // @todo: https://github.com/rpm-rs/rpm/issues/52
+    pub(crate) flags: DependencyFlags,
     pub(crate) version: String,
 }
 
@@ -256,7 +271,7 @@ impl Dependency {
         T: Into<String>,
         E: Into<String>,
     {
-        Self::new(dep_name.into(), RPMSENSE_LESS, version.into())
+        Self::new(dep_name.into(), DependencyFlags::LESS, version.into())
     }
 
     pub fn less_eq<E, T>(dep_name: T, version: E) -> Self
@@ -266,7 +281,7 @@ impl Dependency {
     {
         Self::new(
             dep_name.into(),
-            RPMSENSE_LESS | RPMSENSE_EQUAL,
+            DependencyFlags::LESS | DependencyFlags::EQUAL,
             version.into(),
         )
     }
@@ -276,7 +291,7 @@ impl Dependency {
         T: Into<String>,
         E: Into<String>,
     {
-        Self::new(dep_name.into(), RPMSENSE_EQUAL, version.into())
+        Self::new(dep_name.into(), DependencyFlags::EQUAL, version.into())
     }
 
     pub fn greater<E, T>(dep_name: T, version: E) -> Self
@@ -284,7 +299,7 @@ impl Dependency {
         T: Into<String>,
         E: Into<String>,
     {
-        Self::new(dep_name.into(), RPMSENSE_GREATER, version.into())
+        Self::new(dep_name.into(), DependencyFlags::GREATER, version.into())
     }
 
     pub fn greater_eq<E, T>(dep_name: T, version: E) -> Self
@@ -294,7 +309,7 @@ impl Dependency {
     {
         Self::new(
             dep_name.into(),
-            RPMSENSE_GREATER | RPMSENSE_EQUAL,
+            DependencyFlags::GREATER | DependencyFlags::EQUAL,
             version.into(),
         )
     }
@@ -303,7 +318,7 @@ impl Dependency {
     where
         T: Into<String>,
     {
-        Self::new(dep_name.into(), RPMSENSE_ANY, "".to_string())
+        Self::new(dep_name.into(), DependencyFlags::ANY, "".to_string())
     }
 
     pub fn rpmlib<E, T>(dep_name: T, version: E) -> Self
@@ -313,15 +328,15 @@ impl Dependency {
     {
         Self::new(
             dep_name.into(),
-            RPMSENSE_RPMLIB | RPMSENSE_EQUAL,
+            DependencyFlags::RPMLIB | DependencyFlags::EQUAL,
             version.into(),
         )
     }
 
-    fn new(dep_name: String, sense: u32, version: String) -> Self {
+    fn new(dep_name: String, flags: DependencyFlags, version: String) -> Self {
         Dependency {
             dep_name,
-            sense,
+            flags,
             version,
         }
     }

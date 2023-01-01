@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `flate2` crate is now used in place of `libflate`. `flate2` is faster in both compression
   and decompression and has better ratios, and includes features which `libflate` does not
   such as configurable compression levels.
+- Moved many constants to the bitflag-like types `DependencyFlags`, `FileVerifyFlags` and `FileFlags`
+- Changed the `FileEntry.category` field to `FileEntry.flags` and changed its type from an
+  enum to a bitflag-like type.
+- Renamed `FileDigestAlgorithm` to `DigestAlgorithm`, renamed `UnsupportedFileDigestAlgorithm`
+  to `UnsupportedDigestAlgorithm`
 
 ### Fixed
 

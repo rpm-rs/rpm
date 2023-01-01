@@ -5,6 +5,8 @@
 
 use std::fmt::Display;
 
+use bitflags::bitflags;
+
 pub const HEADER_IMAGE: u32 = 61;
 pub const HEADER_SIGNATURES: u32 = 62;
 pub const HEADER_IMMUTABLE: u32 = 63;
@@ -472,57 +474,96 @@ pub const RPM_MAGIC: [u8; 4] = [0xed, 0xab, 0xee, 0xdb];
 /// header magic recognition (not the lead!)
 pub const HEADER_MAGIC: [u8; 3] = [0x8e, 0xad, 0xe8];
 
-pub const RPMSENSE_ANY: u32 = 0;
-pub const RPMSENSE_LESS: u32 = 1 << 1;
-pub const RPMSENSE_GREATER: u32 = 1 << 2;
-pub const RPMSENSE_EQUAL: u32 = 1 << 3;
+bitflags! {
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct DependencyFlags: u32 {
+        const ANY = 0;
+        const LESS = 1 << 1;
+        const GREATER = 1 << 2;
+        const EQUAL = 1 << 3;
 
-// there is no use yet for those constants. But they are part of the official package
-// so I will leave them in in case we need them later.
+        const LE = Self::LESS.bits() | Self::EQUAL.bits();
+        const GE = Self::GREATER.bits() | Self::EQUAL.bits();
 
-// const RPMSENSE_POSTTRANS: u32 = (1 << 5);
-// const RPMSENSE_PREREQ: u32 = (1 << 6);
-// const RPMSENSE_PRETRANS: u32 = (1 << 7);
-// const RPMSENSE_INTERP: u32 = (1 << 8);
-// const RPMSENSE_SCRIPT_PRE: u32 = (1 << 9);
-// const RPMSENSE_SCRIPT_POST: u32 = (1 << 10);
-// const RPMSENSE_SCRIPT_PREUN: u32 = (1 << 11);
-// const RPMSENSE_SCRIPT_POSTUN: u32 = (1 << 12);
-// const RPMSENSE_SCRIPT_VERIFY: u32 = (1 << 13);
-// const RPMSENSE_FIND_REQUIRES: u32 = (1 << 14);
-// const RPMSENSE_FIND_PROVIDES: u32 = (1 << 15);
-// const RPMSENSE_TRIGGERIN: u32 = (1 << 16);
-// const RPMSENSE_TRIGGERUN: u32 = (1 << 17);
-// const RPMSENSE_TRIGGERPOSTUN: u32 = (1 << 18);
-// const RPMSENSE_MISSINGOK: u32 = (1 << 19);
+        // bit 4 unused
+        const POSTTRANS = 1 << 5;  // %posttrans dependency
+        const PREREQ = 1 << 6;     // legacy prereq dependency
+        const PRETRANS = 1 << 7;   // pre-transaction dependency
+        const INTERP = 1 << 8;     // interpreter used by scriptlet
+        const SCRIPT_PRE = 1 << 9;  // %pre dependency
+        const SCRIPT_POST = 1 << 10;  // %post dependency
+        const SCRIPT_PREUN = 1 << 11;  // %preun dependency
+        const SCRIPT_POSTUN = 1 << 12;  // %postun dependency
+        const SCRIPT_VERIFY = 1 << 13;  // %verify dependency
+        const FIND_REQUIRES = 1 << 14;  // find-requires generated depenency
+        const FIND_PROVIDES = 1 << 15;  // find-provides generated dependency
+        const TRIGGERIN = 1 << 16;  // %triggerin dependency
+        const TRIGGERUN = 1 << 17;  // %triggerun dependency
+        const TRIGGERPOSTUN = 1 << 18;  // %triggerpostun dependency
+        const MISSINGOK = 1 << 19;  //suggests/enhances hint
+        const PREUNTRANS	= 1 << 20;	// %preuntrans dependency
+        const POSTUNTRANS = 1 << 21;	// %postuntrans dependency
+        // bits 22-23 unused
+        const RPMLIB = 1 << 24;	      // rpmlib(feature) dependency.
+        const TRIGGERPREIN = 1 << 25;  // %triggerprein dependency
+        const KEYRING	= 1 << 26;
+        // bit 27 unused
+        const CONFIG	= 1 << 28;
+        const META	= 1 << 29;	      // meta dependency
+    }
+}
 
-// // for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
-pub const RPMSENSE_RPMLIB: u32 = 1 << 24;
-// const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
-// const RPMSENSE_KEYRING: u32 = (1 << 26);
-// const RPMSENSE_CONFIG: u32 = (1 << 28);
+bitflags! {
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct FileVerifyFlags: u32 {
+        const VERIFY_NONE 	= 0;
+        const VERIFY_MD5 	= 1 << 0;	   // from %verify(md5) - obsolete */
+        const VERIFY_FILEDIGEST = 1 << 0;   // from %verify(filedigest) */
+        const VERIFY_FILESIZE 	= 1 << 1;  // from %verify(size) */
+        const VERIFY_LINKTO 	= 1 << 2;	   // from %verify(link)
+        const VERIFY_USER 	= 1 << 3;	   // from %verify(user)
+        const VERIFY_GROUP 	= 1 << 4;	   // from %verify(group)
+        const VERIFY_MTIME 	= 1 << 5;	   // from %verify(mtime)
+        const VERIFY_MODE 	= 1 << 6;	   // from %verify(mode)
+        const VERIFY_RDEV 	= 1 << 7;	   // from %verify(rdev)
+        const VERIFY_CAPS 	= 1 << 8;	   // from %verify(caps)
+        // bits 9-14 unused, reserved for rpmVerifyAttrs
+        const VERIFY_CONTEXTS	= 1 << 15;	// verify: from --nocontexts
+        // bits 16-22 used in rpmVerifyFlags
+        // bits 23-27 used in rpmQueryFlags
+        const VERIFY_READLINKFAIL= 1 << 28;	// readlink failed
+        const VERIFY_READFAIL	= 1 << 29;	// file read failed
+        const VERIFY_LSTATFAIL	= 1 << 30;	// lstat failed
+        const VERIFY_LGETFILECONFAIL	= 1 << 31;	// lgetfilecon failed
+    }
+}
 
-pub const RPMFILE_CONFIG: u32 = 1;
-pub const RPMFILE_DOC: u32 = 1 << 1;
-// pub const RPMFILE_DONOTUSE: u32 = 1 << 2;
-// pub const RPMFILE_MISSINGOK: u32 = 1 << 3;
-// pub const RPMFILE_NOREPLACE: u32 = 1 << 4;
-// pub const RPMFILE_SPECFILE: u32 = 1 << 5;
-// pub const RPMFILE_GHOST: u32 = 1 << 6;
-// pub const RPMFILE_LICENSE: u32 = 1 << 7;
-// pub const RPMFILE_README: u32 = 1 << 8;
-// pub const RPMFILE_EXCLUDE: u32 = 1 << 9;
+bitflags! {
+    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+    pub struct FileFlags: u32 {
+        const CONFIG = 1;  // %%config
+        const DOC = 1 << 1;  // %%doc
+        const DONOTUSE = 1 << 2;  // %%donotuse
+        const MISSINGOK = 1 << 3;  // %%config(missingok)
+        const NOREPLACE = 1 << 4;  // %%config(noreplace)
+        // const SPECFILE = 1 << 5;  // first file in SRPM?
+        const GHOST = 1 << 6;  // %%ghost
+        const LICENSE = 1 << 7;  // %%license
+        const README = 1 << 8;  // %%readme
+        // bits 9-10 unused
+        const PUBKEY = 1 << 11;	// %%pubkey
+        const ARTIFACT	= 1 << 12;	// %%artifact
+    }
+}
 
-// should be technically equiv to
-// `pgp::crypto::hash::HashAlgorithm`
-// but that is only available with feature `signature`
-pub const PGPHASHALGO_MD5: u32 = 1;
-pub const PGPHASHALGO_SHA1: u32 = 2;
-pub const PGPHASHALGO_RIPEMD160: u32 = 3;
-pub const PGPHASHALGO_MD2: u32 = 5;
-pub const PGPHASHALGO_TIGER192: u32 = 6;
-pub const PGPHASHALGO_HAVAL_5_160: u32 = 7;
-pub const PGPHASHALGO_SHA256: u32 = 8;
-pub const PGPHASHALGO_SHA384: u32 = 9;
-pub const PGPHASHALGO_SHA512: u32 = 10;
-pub const PGPHASHALGO_SHA224: u32 = 11;
+// should be equivalent the value mapping used by `pgp::crypto::hash::HashAlgorithm`
+// but we have to copy it as not everyone uses the `signature` feature
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, enum_primitive_derive::Primitive)]
+pub enum DigestAlgorithm {
+    Md5 = 1,
+    Sha2_256 = 8,
+    Sha2_384 = 9,
+    Sha2_512 = 10,
+    Sha2_224 = 11,
+}
