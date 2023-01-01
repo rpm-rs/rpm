@@ -242,15 +242,17 @@ impl RPMPackage {
         if let (Ok(payload_digest_val), Ok(payload_digest_algo)) =
             (payload_digest_val, payload_digest_algo)
         {
-            let payload_digest_algo = FileDigestAlgorithm::from_u32(payload_digest_algo)
+            let payload_digest_algo = DigestAlgorithm::from_u32(payload_digest_algo)
                 .expect("Completely unknown payload digest algorithm");
 
-            // @todo: UnsupportedFileDigestAlgorithm is awkward, if a number is outside the range of the expected
-            // variants to begin with, we can't even return it, as it carries a FileDigestAlgorithm
+            // @todo: UnsupportedDigestAlgorithm is awkward, if a number is outside the range of the expected
+            // variants to begin with, we can't even return it, as it carries a DigestAlgorithm. But also, in
+            // this case even when it is "supported" by the library in general it is not supported here in particular
+            // Not that that should happen here for a while to come.
 
             let mut hasher = match payload_digest_algo {
-                FileDigestAlgorithm::Sha2_256 => sha2::Sha256::default(),
-                a => return Err(RPMError::UnsupportedFileDigestAlgorithm(a)),
+                DigestAlgorithm::Sha2_256 => sha2::Sha256::default(),
+                a => return Err(RPMError::UnsupportedDigestAlgorithm(a)),
                 // At the present moment even rpmbuild only supports sha256
             };
             let payload_digest = {
@@ -449,7 +451,7 @@ impl RPMPackageMetadata {
                 let v = Vec::from_iter(itertools::multizip((names, flags, versions)).map(
                     |(name, flags, version)| Dependency {
                         dep_name: name.to_owned(),
-                        sense: flags,
+                        flags: DependencyFlags::from_bits_retain(flags),
                         version: version.to_owned(),
                     },
                 ));
@@ -699,15 +701,13 @@ impl RPMPackageMetadata {
     ///
     /// Note that this is not necessarily the same as the digest
     /// used for headers.
-    pub fn get_file_digest_algorithm(&self) -> Result<FileDigestAlgorithm, RPMError> {
+    pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, RPMError> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
             .and_then(|x| {
-                FileDigestAlgorithm::from_u32(x).ok_or_else(|| {
-                    RPMError::InvalidTagValueEnumVariant {
-                        tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
-                        variant: x,
-                    }
+                DigestAlgorithm::from_u32(x).ok_or_else(|| RPMError::InvalidTagValueEnumVariant {
+                    tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
+                    variant: x,
                 })
             })
     }
@@ -715,7 +715,9 @@ impl RPMPackageMetadata {
     /// Extract a the set of contained file names including the additional metadata.
     pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, RPMError> {
         // rpm does not encode it, if it is the default md5
-        let algorithm = self.get_file_digest_algorithm().unwrap_or_default();
+        let algorithm = self
+            .get_file_digest_algorithm()
+            .unwrap_or(DigestAlgorithm::Md5);
         //
         let modes = self
             .header
@@ -784,7 +786,7 @@ impl RPMPackageMetadata {
                             mode: mode.into(),
                             modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
                             digest,
-                            category: FileCategory::from_u32(flags).unwrap_or_default(),
+                            flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,
                         });
                         Ok(acc)

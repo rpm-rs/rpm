@@ -32,6 +32,7 @@ required-features = ["signature-meta"]
 path = "tests/signatures.rs"
 
 [dependencies]
+bitflags = "2"
 thiserror = "1"
 nom = "7"
 num-traits = "0.2"

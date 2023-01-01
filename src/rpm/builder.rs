@@ -317,7 +317,7 @@ impl RPMBuilder {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             size: content.len() as u64,
             content,
-            flag: options.flag,
+            flags: options.flag,
             user: options.user,
             group: options.group,
             mode: options.mode,
@@ -565,7 +565,7 @@ impl RPMBuilder {
             file_mtimes.push(entry.modified_at);
             file_hashes.push(entry.sha_checksum.to_owned());
             file_linktos.push(entry.link.to_owned());
-            file_flags.push(entry.flag);
+            file_flags.push(entry.flags.bits());
             file_usernames.push(entry.user.to_owned());
             file_groupnames.push(entry.group.to_owned());
             file_inodes.push(ino_index);
@@ -579,7 +579,8 @@ impl RPMBuilder {
                 .unwrap();
             dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
-            file_verify_flags.push(u32::MAX); // @todo: <https://github.com/rpm-rs/rpm/issues/52>
+            // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
+            file_verify_flags.push(FileVerifyFlags::all().bits());
             let content = entry.content.to_owned();
             let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())
@@ -630,7 +631,7 @@ impl RPMBuilder {
 
         for d in self.provides.into_iter() {
             provide_names.push(d.dep_name);
-            provide_flags.push(d.sense);
+            provide_flags.push(d.flags.bits());
             provide_versions.push(d.version);
         }
 
@@ -640,7 +641,7 @@ impl RPMBuilder {
 
         for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.dep_name);
-            obsolete_flags.push(d.sense);
+            obsolete_flags.push(d.flags.bits());
             obsolete_versions.push(d.version);
         }
 
@@ -650,7 +651,7 @@ impl RPMBuilder {
 
         for d in self.requires.into_iter() {
             require_names.push(d.dep_name);
-            require_flags.push(d.sense);
+            require_flags.push(d.flags.bits());
             require_versions.push(d.version);
         }
 
@@ -660,7 +661,7 @@ impl RPMBuilder {
 
         for d in self.conflicts.into_iter() {
             conflicts_names.push(d.dep_name);
-            conflicts_flags.push(d.sense);
+            conflicts_flags.push(d.flags.bits());
             conflicts_versions.push(d.version);
         }
 
@@ -670,7 +671,7 @@ impl RPMBuilder {
 
         for d in self.recommends.into_iter() {
             recommends_names.push(d.dep_name);
-            recommends_flags.push(d.sense);
+            recommends_flags.push(d.flags.bits());
             recommends_versions.push(d.version);
         }
 
@@ -680,7 +681,7 @@ impl RPMBuilder {
 
         for d in self.suggests.into_iter() {
             suggests_names.push(d.dep_name);
-            suggests_flags.push(d.sense);
+            suggests_flags.push(d.flags.bits());
             suggests_versions.push(d.version);
         }
 
@@ -690,7 +691,7 @@ impl RPMBuilder {
 
         for d in self.enhances.into_iter() {
             enhances_names.push(d.dep_name);
-            enhances_flags.push(d.sense);
+            enhances_flags.push(d.flags.bits());
             enhances_versions.push(d.version);
         }
 
@@ -700,7 +701,7 @@ impl RPMBuilder {
 
         for d in self.supplements.into_iter() {
             supplements_names.push(d.dep_name);
-            supplements_flags.push(d.sense);
+            supplements_flags.push(d.flags.bits());
             supplements_versions.push(d.version);
         }
 
@@ -871,7 +872,7 @@ impl RPMBuilder {
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEDIGESTALGO,
                     offset,
-                    IndexData::Int32(vec![FileDigestAlgorithm::Sha2_256 as u32]),
+                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEVERIFYFLAGS,
@@ -929,7 +930,7 @@ impl RPMBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADDIGESTALGO,
                 offset,
-                IndexData::Int32(vec![FileDigestAlgorithm::Sha2_256 as u32]),
+                IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADDIGESTALT,
