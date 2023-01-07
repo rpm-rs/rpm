@@ -89,7 +89,7 @@ mod pgp {
 
         pkg.write_async(&mut f).await?;
         f.flush().await?;
-        let epoch = pkg.metadata.header.get_epoch()?;
+        let epoch = pkg.metadata.get_epoch()?;
         assert_eq!(1, epoch);
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
@@ -186,7 +186,7 @@ mod pgp {
             .build_and_sign(signer)?;
 
         pkg.write(&mut f)?;
-        let epoch = pkg.metadata.header.get_epoch()?;
+        let epoch = pkg.metadata.get_epoch()?;
         assert_eq!(1, epoch);
 
         let yum_cmd = "yum --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
@@ -244,7 +244,7 @@ mod pgp {
             .build_and_sign(&signer)?;
 
             pkg.write(&mut f)?;
-            let epoch = pkg.metadata.header.get_epoch()?;
+            let epoch = pkg.metadata.get_epoch()?;
             assert_eq!(3, epoch);
         }
 
