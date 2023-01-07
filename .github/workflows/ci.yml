@@ -84,6 +84,25 @@ jobs:
           command: test
           args: ${{ matrix.flags }}
 
+  compat-tests:
+    name: Compatibility Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features test-with-podman
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
