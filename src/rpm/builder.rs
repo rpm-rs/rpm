@@ -92,6 +92,10 @@ pub struct RPMBuilder {
     changelog_entries: Vec<String>,
     changelog_times: Vec<u32>,
     compressor: Compressor,
+
+    vendor: Option<String>,
+    url: Option<String>,
+    vcs: Option<String>,
 }
 
 impl RPMBuilder {
@@ -120,7 +124,24 @@ impl RPMBuilder {
             changelog_times: Vec::new(),
             compressor: Compressor::None(Vec::new()),
             directories: BTreeSet::new(),
+            vendor: None,
+            url: None,
+            vcs: None,
         }
+    }
+
+    pub fn vendor<T: Into<String>>(mut self, content: T) -> Self {
+        self.vendor = Some(content.into());
+        self
+    }
+    pub fn url<T: Into<String>>(mut self, content: T) -> Self {
+        self.url = Some(content.into());
+        self
+    }
+
+    pub fn vcs<T: Into<String>>(mut self, content: T) -> Self {
+        self.vcs = Some(content.into());
+        self
     }
 
     pub fn epoch(mut self, epoch: u32) -> Self {
@@ -948,6 +969,30 @@ impl RPMBuilder {
                 IndexTag::RPMTAG_POSTUN,
                 offset,
                 IndexData::StringTag(post_uninst_script),
+            ));
+        }
+
+        if let Some(vendor) = self.vendor {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_VENDOR,
+                offset,
+                IndexData::StringTag(vendor),
+            ));
+        }
+
+        if let Some(url) = self.url {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_URL,
+                offset,
+                IndexData::StringTag(url),
+            ));
+        }
+
+        if let Some(vcs) = self.vcs {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_VCS,
+                offset,
+                IndexData::StringTag(vcs),
             ));
         }
 
