@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Forked from `rpm-rs` at version 0.8.1
 - Relicensed as MIT + Apache 2.0 after obtaining consent from all contributors
 - Added additional helper methods for retrieving commonly used metadata
+- Add vendor and repository metadata optional fields to RPMBuilder
 
 ### Fixed
 
