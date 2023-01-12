@@ -96,6 +96,13 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         package.metadata.get_url().unwrap(),
         "https://www.port389.org/"
     );
+
+    // TODO: vcs
+    // assert_eq!(
+    //     package.metadata.get_vcs().unwrap(),
+    //     "git://pkgs.fedoraproject.org/389-ds-base.git"
+    // );
+
     assert_eq!(
         package.metadata.get_packager().unwrap(),
         "CentOS BuildSystem <http://bugs.centos.org>"
@@ -391,6 +398,9 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
         .add_changelog_entry("me", "was awesome, eh?", 123123123)
         .add_changelog_entry("you", "yeah, it was", 12312312)
         .requires(Dependency::any("wget"))
+        .vendor("dummy vendor")
+        .url("dummy url")
+        .vcs("dummy vcs")
         .build()?;
 
     pkg.write(&mut buff)?;
