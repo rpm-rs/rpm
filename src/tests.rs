@@ -96,6 +96,13 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         package.metadata.get_url().unwrap(),
         "https://www.port389.org/"
     );
+
+    // TODO: vcs
+    // assert_eq!(
+    //     package.metadata.get_vcs().unwrap(),
+    //     "git://pkgs.fedoraproject.org/389-ds-base.git"
+    // );
+
     assert_eq!(
         package.metadata.get_packager().unwrap(),
         "CentOS BuildSystem <http://bugs.centos.org>"
