@@ -44,7 +44,11 @@ async fn async_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata().await?.permissions().mode())
 }
 
-#[cfg(all(unix, feature = "with-file-async-async-std"))]
+#[cfg(all(
+    unix,
+    feature = "with-file-async-async-std",
+    not(feature = "with-file-async-tokio")
+))]
 async fn async_file_mode(file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata().await?.permissions().mode())
 }
@@ -54,7 +58,11 @@ async fn async_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-#[cfg(all(windows, feature = "with-file-async-async-std"))]
+#[cfg(all(
+    windows,
+    feature = "with-file-async-async-std",
+    not(feature = "with-file-async-tokio")
+))]
 async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
@@ -188,7 +196,10 @@ impl RPMBuilder {
             .await
     }
 
-    #[cfg(feature = "with-file-async-async-std")]
+    #[cfg(all(
+        feature = "with-file-async-async-std",
+        not(feature = "with-file-async-tokio")
+    ))]
     pub async fn with_file_async<T, P>(self, source: P, options: T) -> Result<Self, RPMError>
     where
         P: AsRef<Path>,
