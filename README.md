@@ -53,7 +53,8 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
             .requires(Dependency::any("wget"))
             .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)
             .vendor("corporation or individual")
-            .repository("www.github.com/repo")
+            .url("www.github.com/repo")
+            .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
 let mut f = std::fs::File::create("./awesome.rpm")?;
 pkg.write(&mut f)?;
 

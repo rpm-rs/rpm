@@ -268,6 +268,12 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
+    pub fn get_vcs(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_VCS)
+    }
+
+    #[inline]
     pub fn get_license(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)

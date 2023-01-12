@@ -86,7 +86,8 @@ mod pgp {
             .add_changelog_entry("you", "yeah, it was", 12_312_312)
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
-            .repository("dummy repo")
+            .url("dummy url")
+            .vcs("dummy vcs")
             .build_and_sign(signer)?;
 
         pkg.write_async(&mut f).await?;
@@ -186,7 +187,8 @@ mod pgp {
             .add_changelog_entry("you", "yeah, it was", 12_312_312)
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
-            .repository("dummy repo")
+            .url("dummy repo")
+            .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
             .build_and_sign(signer)?;
 
         pkg.write(&mut f)?;

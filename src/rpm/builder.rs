@@ -94,7 +94,8 @@ pub struct RPMBuilder {
     compressor: Compressor,
 
     vendor: Option<String>,
-    repository: Option<String>,
+    url: Option<String>,
+    vcs: Option<String>,
 }
 
 impl RPMBuilder {
@@ -124,7 +125,8 @@ impl RPMBuilder {
             compressor: Compressor::None(Vec::new()),
             directories: BTreeSet::new(),
             vendor: None,
-            repository: None,
+            url: None,
+            vcs: None,
         }
     }
 
@@ -132,8 +134,13 @@ impl RPMBuilder {
         self.vendor = Some(content.into());
         self
     }
-    pub fn repository<T: Into<String>>(mut self, content: T) -> Self {
-        self.repository = Some(content.into());
+    pub fn url<T: Into<String>>(mut self, content: T) -> Self {
+        self.url = Some(content.into());
+        self
+    }
+
+    pub fn vcs<T: Into<String>>(mut self, content: T) -> Self {
+        self.vcs = Some(content.into());
         self
     }
 
@@ -973,11 +980,19 @@ impl RPMBuilder {
             ));
         }
 
-        if let Some(repository) = self.repository {
+        if let Some(url) = self.url {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_URL,
                 offset,
-                IndexData::StringTag(repository),
+                IndexData::StringTag(url),
+            ));
+        }
+
+        if let Some(vcs) = self.vcs {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_VCS,
+                offset,
+                IndexData::StringTag(vcs),
             ));
         }
 

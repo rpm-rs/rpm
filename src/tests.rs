@@ -392,7 +392,8 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
         .add_changelog_entry("you", "yeah, it was", 12312312)
         .requires(Dependency::any("wget"))
         .vendor("dummy vendor")
-        .repository("dummy repo")
+        .url("dummy url")
+        .vcs("dummy vcs")
         .build()?;
 
     pkg.write(&mut buff)?;
