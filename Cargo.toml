@@ -51,7 +51,7 @@ tokio-util = { version = "0.7.4", features = ["compat"], optional = true}
 rsa = { version = "0.7" }
 rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
-serial_test = "0.10"
+serial_test = "1.0"
 reqwest = { version = "0.11.10", features = ["blocking"] }
 
 # Use for testing async files when async-futures enabled
