@@ -48,7 +48,7 @@ tokio = {version = "1", optional = true}
 tokio-util = { version = "0.7.4", features = ["compat"], optional = true}
 
 [dev-dependencies]
-rsa = { version = "0.7" }
+rsa = { version = "0.8" }
 rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
 serial_test = "0.10"
