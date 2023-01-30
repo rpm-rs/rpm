@@ -17,7 +17,7 @@ use crate::sequential_cursor::SeqCursor;
 use crate::signature;
 
 #[cfg(feature = "signature-meta")]
-use std::io::{Seek, SeekFrom};
+use std::io::Seek;
 
 /// A complete rpm file.
 ///
@@ -101,7 +101,7 @@ impl RPMPackage {
             hash_result.to_vec()
         };
 
-        header_and_content_cursor.seek(SeekFrom::Start(0))?;
+        header_and_content_cursor.rewind()?;
 
         let digest_sha1 = {
             use sha1::Digest;

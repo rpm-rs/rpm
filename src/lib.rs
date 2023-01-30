@@ -61,6 +61,8 @@
 //! # }
 //! ```
 
+#![allow(unknown_lints, clippy::uninlined_format_args)]
+
 mod errors;
 pub use crate::errors::*;
 
