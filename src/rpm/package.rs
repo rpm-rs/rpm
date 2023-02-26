@@ -240,6 +240,12 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
+    pub fn get_buildtime(&self) -> Result<u32, RPMError> {
+        self.header
+            .get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME)
+    }
+
+    #[inline]
     pub fn get_version(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_VERSION)
