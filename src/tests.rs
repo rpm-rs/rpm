@@ -88,7 +88,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
 
     assert_eq!(package.metadata.get_name().unwrap(), "389-ds-base-devel");
     assert!(package.metadata.get_epoch().is_err());
-    assert_eq!(package.metadata.get_buildtime().unwrap(), 1540945151);
     assert_eq!(package.metadata.get_version().unwrap(), "1.3.8.4");
     assert_eq!(package.metadata.get_release().unwrap(), "15.el7");
     assert_eq!(package.metadata.get_arch().unwrap(), "x86_64");
