@@ -43,7 +43,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.60.0
+          - 1.63.0
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -62,7 +62,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.60.0
+          - 1.63.0
         flags:
           - "--all-features"
           - "--no-default-features"
