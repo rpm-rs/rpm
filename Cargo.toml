@@ -15,7 +15,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 [lib]
 name = "rpm"
