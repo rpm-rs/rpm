@@ -1,3 +1,5 @@
+[![crates.io](https://img.shields.io/crates/v/rpm.svg)](https://crates.io/crates/rpm)
+
 ## RPM-RS
 
 A pure rust library for parsing and creating RPM files.
