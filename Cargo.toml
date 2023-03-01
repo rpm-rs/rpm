@@ -7,7 +7,7 @@ authors = [
   "Max Dymond <cmeister2@gmail.com>",
   "Daniel Alley <dalley@redhat.com>"
 ]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "A pure rust library for building and parsing RPMs"
 homepage = "https://github.com/rpm-rs/rpm"

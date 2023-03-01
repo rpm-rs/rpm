@@ -749,7 +749,7 @@ pub(crate) enum IndexData {
 }
 
 impl fmt::Display for IndexData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let rep = match self {
             IndexData::Null => "Null",
             IndexData::Bin(_) => "Bin",
