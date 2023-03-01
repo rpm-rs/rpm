@@ -5,6 +5,7 @@ authors = [
   "René Richter <richterrettich@gmail.com>",
   "Bernhard Schuster <bernhard@ahoi.io>",
   "Max Dymond <cmeister2@gmail.com>",
+  "Daniel Alley <dalley@redhat.com>"
 ]
 edition = "2018"
 license = "Apache-2.0 OR MIT"
