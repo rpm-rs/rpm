@@ -70,7 +70,6 @@ impl RPMPackage {
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
-        use std::convert::TryInto;
         use std::io::Read;
 
         // create a temporary byte repr of the header

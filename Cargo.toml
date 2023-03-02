@@ -5,8 +5,9 @@ authors = [
   "René Richter <richterrettich@gmail.com>",
   "Bernhard Schuster <bernhard@ahoi.io>",
   "Max Dymond <cmeister2@gmail.com>",
+  "Daniel Alley <dalley@redhat.com>"
 ]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 OR MIT"
 description = "A pure rust library for building and parsing RPMs"
 homepage = "https://github.com/rpm-rs/rpm"
@@ -14,7 +15,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 [lib]
 name = "rpm"

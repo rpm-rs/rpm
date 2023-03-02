@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::*;
 
@@ -73,6 +73,7 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
 pub struct RPMBuilder {
     name: String,
     epoch: u32,
+    build_time: u32, // because rpm_time_t is an uint32
     version: String,
     license: String,
     arch: String,
@@ -111,6 +112,10 @@ impl RPMBuilder {
         RPMBuilder {
             name: name.to_string(),
             epoch: 0,
+            build_time: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
@@ -630,6 +635,11 @@ impl RPMBuilder {
                     IndexData::Int32(vec![self.epoch]),
                 ),
                 IndexEntry::new(
+                    IndexTag::RPMTAG_BUILDTIME,
+                    offset,
+                    IndexData::Int32(vec![self.build_time]),
+                ),
+                IndexEntry::new(
                     IndexTag::RPMTAG_VERSION,
                     offset,
                     IndexData::StringTag(self.version),
@@ -708,6 +718,11 @@ impl RPMBuilder {
                     IndexTag::RPMTAG_EPOCH,
                     offset,
                     IndexData::Int32(vec![self.epoch]),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_BUILDTIME,
+                    offset,
+                    IndexData::Int32(vec![self.build_time]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_VERSION,
