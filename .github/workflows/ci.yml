@@ -71,7 +71,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: clippy
 
-      - run: cargo clippy ${{ matrix.flags }} -- -D warnings 
+      - run: cargo clippy ${{ matrix.flags }} -- -D warnings
       - run: cargo test ${{ matrix.flags }}
 
   compat-tests:
@@ -86,7 +86,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - run: cargo test --features test-with-podman
+      - run: cargo test --features test-with-podman,with-file-async-tokio
 
   fmt:
     name: Rustfmt
