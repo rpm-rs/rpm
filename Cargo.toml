@@ -31,7 +31,7 @@ enum-display-derive = "0.1"
 cpio = "0.2"
 # consider migrating to flate2
 libflate = "1"
-sha2 = "0.10.2"
+sha2 = "0.10"
 md-5 = "0.10"
 sha1 = "0.10"
 rand = { version = "0.8" }
@@ -53,7 +53,6 @@ rsa = { version = "0.8" }
 rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
 serial_test = "1.0"
-reqwest = { version = "0.11.10", features = ["blocking"] }
 
 # Use for testing async files when async-futures enabled
 tokio = {version = "1", features = ["full"]}
