@@ -638,166 +638,84 @@ impl RPMBuilder {
 
         let offset = 0;
 
-        let mut actual_records = if self.files.is_empty() {
-            // if we have an empty RPM, we have to leave out all file related index entries.
-            vec![
-                IndexEntry::new(
-                    IndexTag::RPMTAG_HEADERI18NTABLE,
-                    offset,
-                    IndexData::StringTag("C".to_string()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_NAME,
-                    offset,
-                    IndexData::StringTag(self.name),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_EPOCH,
-                    offset,
-                    IndexData::Int32(vec![self.epoch]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_BUILDTIME,
-                    offset,
-                    IndexData::Int32(vec![self.build_time]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_VERSION,
-                    offset,
-                    IndexData::StringTag(self.version),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_RELEASE,
-                    offset,
-                    IndexData::StringTag(self.release),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_DESCRIPTION,
-                    offset,
-                    IndexData::StringTag(self.desc.clone()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_SUMMARY,
-                    offset,
-                    IndexData::StringTag(self.desc),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_SIZE,
-                    offset,
-                    IndexData::Int32(vec![combined_file_sizes]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_LICENSE,
-                    offset,
-                    IndexData::StringTag(self.license),
-                ),
-                // <https://fedoraproject.org/wiki/RPMGroups>
-                // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_OS,
-                    offset,
-                    IndexData::StringTag("linux".to_string()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_GROUP,
-                    offset,
-                    IndexData::I18NString(vec!["Unspecified".to_string()]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_ARCH,
-                    offset,
-                    IndexData::StringTag(self.arch),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOADFORMAT,
-                    offset,
-                    IndexData::StringTag("cpio".to_string()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PROVIDEVERSION,
-                    offset,
-                    IndexData::StringArray(provide_versions),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PROVIDEFLAGS,
-                    offset,
-                    IndexData::Int32(provide_flags),
-                ),
-            ]
-        } else {
-            vec![
-                IndexEntry::new(
-                    IndexTag::RPMTAG_HEADERI18NTABLE,
-                    offset,
-                    IndexData::StringTag("C".to_string()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_NAME,
-                    offset,
-                    IndexData::StringTag(self.name),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_EPOCH,
-                    offset,
-                    IndexData::Int32(vec![self.epoch]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_BUILDTIME,
-                    offset,
-                    IndexData::Int32(vec![self.build_time]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_VERSION,
-                    offset,
-                    IndexData::StringTag(self.version),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_RELEASE,
-                    offset,
-                    IndexData::StringTag(self.release),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_DESCRIPTION,
-                    offset,
-                    IndexData::StringTag(self.desc.clone()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_SUMMARY,
-                    offset,
-                    IndexData::StringTag(self.desc),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_SIZE,
-                    offset,
-                    IndexData::Int32(vec![combined_file_sizes]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_LICENSE,
-                    offset,
-                    IndexData::StringTag(self.license),
-                ),
-                // <https://fedoraproject.org/wiki/RPMGroups>
-                // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_OS,
-                    offset,
-                    IndexData::StringTag("linux".to_string()),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_GROUP,
-                    offset,
-                    IndexData::I18NString(vec!["Unspecified".to_string()]),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_ARCH,
-                    offset,
-                    IndexData::StringTag(self.arch),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOADFORMAT,
-                    offset,
-                    IndexData::StringTag("cpio".to_string()),
-                ),
+        let mut actual_records = vec![
+            IndexEntry::new(
+                IndexTag::RPMTAG_HEADERI18NTABLE,
+                offset,
+                IndexData::StringTag("C".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_NAME,
+                offset,
+                IndexData::StringTag(self.name),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_EPOCH,
+                offset,
+                IndexData::Int32(vec![self.epoch]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_BUILDTIME,
+                offset,
+                IndexData::Int32(vec![self.build_time]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_VERSION,
+                offset,
+                IndexData::StringTag(self.version),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_RELEASE,
+                offset,
+                IndexData::StringTag(self.release),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_DESCRIPTION,
+                offset,
+                IndexData::StringTag(self.desc.clone()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SUMMARY,
+                offset,
+                IndexData::StringTag(self.desc),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_SIZE,
+                offset,
+                IndexData::Int32(vec![combined_file_sizes]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_LICENSE,
+                offset,
+                IndexData::StringTag(self.license),
+            ),
+            // <https://fedoraproject.org/wiki/RPMGroups>
+            // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
+            IndexEntry::new(
+                IndexTag::RPMTAG_OS,
+                offset,
+                IndexData::StringTag("linux".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_GROUP,
+                offset,
+                IndexData::I18NString(vec!["Unspecified".to_string()]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_ARCH,
+                offset,
+                IndexData::StringTag(self.arch),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADFORMAT,
+                offset,
+                IndexData::StringTag("cpio".to_string()),
+            ),
+        ];
+
+        // if we have an empty RPM, we have to leave out all file related index entries.
+        if !self.files.is_empty() {
+            actual_records.extend([
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILESIZES,
                     offset,
@@ -888,18 +806,21 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringArray(provide_names),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PROVIDEVERSION,
-                    offset,
-                    IndexData::StringArray(provide_versions),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PROVIDEFLAGS,
-                    offset,
-                    IndexData::Int32(provide_flags),
-                ),
-            ]
-        };
+            ]);
+        }
+
+        actual_records.extend([
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEVERSION,
+                offset,
+                IndexData::StringArray(provide_versions),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDEFLAGS,
+                offset,
+                IndexData::Int32(provide_flags),
+            ),
+        ]);
 
         let possible_compression_details = self.compressor.get_details();
 
