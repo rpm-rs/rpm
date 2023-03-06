@@ -69,7 +69,7 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
 
 /// Builder pattern for a full rpm file.
 ///
-/// Prefered method of creating a rpm file.
+/// Preferred method of creating a rpm file.
 pub struct RPMBuilder {
     name: String,
     epoch: u32,
