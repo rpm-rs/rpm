@@ -707,6 +707,11 @@ impl RPMBuilder {
                 IndexData::StringTag(self.arch),
             ),
             IndexEntry::new(
+                IndexTag::RPMTAG_ENCODING,
+                offset,
+                IndexData::StringTag("utf-8".to_string()),
+            ),
+            IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFORMAT,
                 offset,
                 IndexData::StringTag("cpio".to_string()),
