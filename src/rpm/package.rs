@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
 #[cfg(feature = "async-futures")]
@@ -34,6 +35,13 @@ pub struct RPMPackage {
 }
 
 impl RPMPackage {
+    /// Open and parse a file at the provided path as an RPM package.
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+        let rpm_file = std::fs::File::open(path.as_ref())?;
+        let mut buf_reader = BufReader::new(rpm_file);
+        Self::parse(&mut buf_reader)
+    }
+
     #[cfg(feature = "async-futures")]
     pub async fn parse_async<I: AsyncRead + Unpin>(input: &mut I) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse_async(input).await?;
