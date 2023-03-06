@@ -1,8 +1,5 @@
 use super::*;
 
-#[cfg(feature = "async-futures")]
-use tokio_util::compat::TokioAsyncReadCompatExt;
-
 #[cfg(feature = "signature-meta")]
 use crate::signature::pgp::{Signer, Verifier};
 
@@ -38,10 +35,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 #[test]
 fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
-    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
-    let mut buf_reader = std::io::BufReader::new(rpm_file);
-
-    let package = RPMPackage::parse(&mut buf_reader)?;
+    let package = RPMPackage::open(rpm_file_path)?;
     let metadata = &package.metadata;
 
     let signatures = metadata.get_file_ima_signatures()?;
@@ -62,10 +56,7 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
-    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
-    let mut buf_reader = std::io::BufReader::new(rpm_file);
-
-    let mut package = RPMPackage::parse(&mut buf_reader)?;
+    let mut package = RPMPackage::open(rpm_file_path)?;
 
     let private_key_content = std::fs::read(test_private_key_path())?;
     let signer = Signer::load_from_asc_bytes(&private_key_content)?;
@@ -363,6 +354,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
 #[cfg(feature = "async-futures")]
 #[tokio::test]
 async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
+    use tokio_util::compat::TokioAsyncReadCompatExt;
+
     let rpm_file_path = test_rpm_file_path();
     let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
     let package = RPMPackage::parse_async(&mut rpm_file).await?;
@@ -411,9 +404,7 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = test_rpm_file_path();
-    let rpm_file = std::fs::File::open(rpm_file_path).expect("should be able to open rpm file");
-    let mut buf_reader = std::io::BufReader::new(rpm_file);
-    let package = RPMPackage::parse(&mut buf_reader)?;
+    let package = RPMPackage::open(rpm_file_path)?;
     test_rpm_header_base(package)
 }
 
