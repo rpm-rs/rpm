@@ -46,7 +46,7 @@ pub enum RPMError {
     #[error("invalid tag array index {tag} with {index} while bounded at {bound}")]
     InvalidTagIndex { tag: String, index: u32, bound: u32 },
 
-    #[error("invalid tag value enum varaint for {tag} with {variant}")]
+    #[error("invalid tag value enum variant for {tag} with {variant}")]
     InvalidTagValueEnumVariant { tag: String, variant: u32 },
 
     #[error("unsupported lead major version {0} - only version 3 is supported")]

@@ -650,7 +650,7 @@ impl IndexHeader {
     }
 }
 
-/// A singel entry within the [`IndexHeader`](self::IndexHeader)
+/// A single entry within the [`IndexHeader`](self::IndexHeader)
 #[derive(Debug, PartialEq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: T,

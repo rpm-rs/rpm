@@ -352,8 +352,8 @@ gpg --verify /out/test.file.sig /out/test.file 2>&1
         let verifier =
             Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("Must load");
 
-        let raw_sig = std::fs::read(&test_file_sig).expect("must laod signature");
-        let data = std::fs::read(&test_file).expect("must laod file");
+        let raw_sig = std::fs::read(&test_file_sig).expect("must load signature");
+        let data = std::fs::read(&test_file).expect("must load file");
         verifier.verify(data.as_slice(), raw_sig.as_slice())?;
 
         Ok(())
@@ -480,7 +480,7 @@ cat ~/.rpmmacros
 #EOF
 #gpg --batch --generate-key gpgkeyspec  2>&1
 
-### or (which has a couple of advantages regarding reproducability)
+### or (which has a couple of advantages regarding reproducibility)
 
 export PK=/assets/public_key.asc
 export SK=/assets/secret_key.asc

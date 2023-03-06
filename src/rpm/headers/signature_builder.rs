@@ -74,7 +74,7 @@ where
 }
 
 impl SignatureHeaderBuilder<Empty> {
-    /// add a digest over the header and a signature accross header and source excluding the static lead
+    /// add a digest over the header and a signature across header and source excluding the static lead
     pub fn add_digest(
         mut self,
         digest_header_only: &str,
@@ -99,7 +99,7 @@ impl SignatureHeaderBuilder<Empty> {
 }
 
 impl SignatureHeaderBuilder<WithDigest> {
-    /// add a signature over the header and a signature accross header and source excluding the static lead
+    /// add a signature over the header and a signature across header and source excluding the static lead
     pub fn add_signature(
         mut self,
         rsa_sig_header_only: &[u8],
