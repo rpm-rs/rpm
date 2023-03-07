@@ -17,6 +17,10 @@ on:
 
 name: Continuous integration
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check
@@ -27,14 +31,11 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+
+      - run: cargo check
 
   test:
     name: Test Suite
@@ -46,14 +47,10 @@ jobs:
           - 1.63.0
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo test
 
   test-feature-matrix:
     name: Test Suite (feature-matrix)
@@ -69,21 +66,13 @@ jobs:
           - "--no-default-features --features signature-pgp,async-futures,with-file-async-async-std"
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      # Do a clippy check with warnings turned into errors.
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: ${{ matrix.flags }} -- -D warnings
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: ${{ matrix.flags }}
+          components: clippy
+
+      - run: cargo clippy ${{ matrix.flags }} -- -D warnings 
+      - run: cargo test ${{ matrix.flags }}
 
   compat-tests:
     name: Compatibility Test Suite
@@ -94,15 +83,10 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features test-with-podman
+      - run: cargo test --features test-with-podman
 
   fmt:
     name: Rustfmt
@@ -113,16 +97,12 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+          components: rustfmt
+
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -133,16 +113,12 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+          components: clippy
+
+      - run: cargo clippy -- -D warnings
 
   tarpaulin:
     name: Tarpaulin
@@ -153,16 +129,12 @@ jobs:
           - stable
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-tarpaulin
-      - uses: actions-rs/cargo@v1
-        with:
-          command: tarpaulin
-          args: --out xml
+          components: clippy
+
+
+      - run: cargo install cargo-tarpaulin
+      - run: cargo tarpaulin --out xml
+
