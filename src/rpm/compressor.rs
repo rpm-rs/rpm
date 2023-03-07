@@ -1,25 +1,47 @@
 use crate::errors::*;
 use std::io::Write;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub enum CompressionType {
+    #[default]
+    None,
+    Gzip,
+    Zstd,
+}
+
+// 19 is used here as its 19 for fedora
+impl std::str::FromStr for CompressionType {
+    type Err = RPMError;
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        match raw {
+            "none" => Ok(CompressionType::None),
+            "gzip" => Ok(CompressionType::Gzip),
+            "zstd" => Ok(CompressionType::Zstd),
+            _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
+        }
+    }
+}
+
 pub enum Compressor {
     None(Vec<u8>),
     Gzip(libflate::gzip::Encoder<Vec<u8>>),
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
 }
 
-impl Default for Compressor {
-    fn default() -> Self {
-        Self::None(Default::default())
-    }
-}
+impl TryFrom<CompressionType> for Compressor {
+    type Error = RPMError;
 
-impl std::fmt::Debug for Compressor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::None(_) => "Uncompressed",
-            Self::Gzip(_) => "compressed/gzip",
-            Self::Zstd(_) => "compressed/zstd",
-        })
+    fn try_from(value: CompressionType) -> Result<Self, Self::Error> {
+        match value {
+            CompressionType::None => Ok(Compressor::None(Vec::new())),
+            CompressionType::Gzip => {
+                Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?))
+            }
+            CompressionType::Zstd => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
+                Vec::new(),
+                19,
+            )?)),
+        }
     }
 }
 
@@ -36,21 +58,6 @@ impl Write for Compressor {
             Compressor::None(data) => data.flush(),
             Compressor::Gzip(encoder) => encoder.flush(),
             Compressor::Zstd(encoder) => encoder.flush(),
-        }
-    }
-}
-// 19 is used here as its 19 for fedora
-impl std::str::FromStr for Compressor {
-    type Err = RPMError;
-    fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        match raw {
-            "none" => Ok(Compressor::None(Vec::new())),
-            "gzip" => Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?)),
-            "zstd" => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
-                Vec::new(),
-                19,
-            )?)),
-            _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
         }
     }
 }

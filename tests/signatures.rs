@@ -2,8 +2,6 @@ use rpm::chrono::TimeZone;
 use rpm::signature::pgp::{Signer, Verifier};
 use rpm::*;
 
-use std::str::FromStr;
-
 mod common;
 
 #[test]
@@ -43,7 +41,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
             "x86_64",
             "spins round and round",
         )
-        .compression(Compressor::from_str("gzip")?)
+        .compression(CompressionType::Gzip)
         .with_file(
             cargo_file.to_str().unwrap(),
             RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and provenance of packages.
 - Added `get_package_segment_boundaries()` to `RPMPackage` to enable reading the raw bytes of the
   different components (header, payload, etc.) from an on-disk package.
+- Added `CompressionType`.
 
 ### Fixed
 
@@ -50,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `$pkg.metadata.get_payload_format()`. It is still possible to fetch manually, but
   practically speaking it is not meaningful. rpmbuild has written a misleading value here for
   10 years.
+- Added support for parsing `CompressionType` string in `RPMPackageMetadata`.
+- Changed signature for `RPMBuilder::compression`.
 
 ## 0.9.0
 

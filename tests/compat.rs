@@ -12,7 +12,6 @@ use signature::{self, Verifying};
 mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
-    use std::str::FromStr;
 
     #[serial_test::serial]
     fn create_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,7 +26,7 @@ mod pgp {
 
         let mut f = File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(Compressor::from_str("gzip")?)
+            .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/foo.toml"),
@@ -134,7 +133,7 @@ mod pgp {
 
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(Compressor::from_str("gzip")?)
+            .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/foo.toml"),
@@ -223,7 +222,7 @@ mod pgp {
                 "x86_64",
                 "spins round and round",
             )
-            .compression(Compressor::from_str("gzip")?)
+            .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
