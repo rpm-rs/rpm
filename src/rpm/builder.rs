@@ -18,9 +18,9 @@ use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
-use crate::Digests;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
+use crate::{CompressionType, Digests};
 
 #[cfg(feature = "with-file-async-tokio")]
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -116,7 +116,7 @@ pub struct RPMBuilder {
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
-    compressor: Compressor,
+    compressor: CompressionType,
 
     vendor: Option<String>,
     url: Option<String>,
@@ -204,7 +204,7 @@ impl RPMBuilder {
         self
     }
 
-    pub fn compression(mut self, comp: Compressor) -> Self {
+    pub fn compression(mut self, comp: CompressionType) -> Self {
         self.compressor = comp;
         self
     }
@@ -583,13 +583,12 @@ impl RPMBuilder {
         // Lead is not important. just build it here
 
         let lead = Lead::new(&self.name);
-        let possible_compression_details = self.compressor.get_details();
 
-        // Make the borrow checker happy
-        let is_zstd = matches!(self.compressor, Compressor::Zstd(_));
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
-        let mut archive = Sha256Writer::new(&mut self.compressor);
+        let mut compressor: Compressor = self.compressor.try_into()?;
+        let possible_compression_details = compressor.get_details();
+        let mut archive = Sha256Writer::new(&mut compressor);
 
         let mut ino_index = 1;
 
@@ -674,7 +673,7 @@ impl RPMBuilder {
             "4.0-1".to_string(),
         ));
 
-        if is_zstd {
+        if matches!(self.compressor, CompressionType::Zstd) {
             self.requires.push(Dependency::rpmlib(
                 "rpmlib(PayloadIsZstd)".to_string(),
                 "5.4.18-1".to_string(),
@@ -968,7 +967,7 @@ impl RPMBuilder {
 
         // digest of the uncompressed raw archive calculated on the inner writer
         let raw_archive_digest_sha256 = hex::encode(archive.into_digest());
-        let payload = self.compressor.finish_compression()?;
+        let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
         let payload_digest_sha256 = {

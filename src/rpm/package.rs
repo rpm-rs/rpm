@@ -2,6 +2,7 @@ use std::io::BufReader;
 #[cfg(feature = "signature-meta")]
 use std::io::Seek;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use chrono::offset::TimeZone;
 
@@ -10,16 +11,15 @@ use digest::Digest;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use num_traits::FromPrimitive;
 
-use super::headers::*;
-use super::Lead;
-
 use crate::constants::*;
 use crate::errors::*;
-
 use crate::sequential_cursor::SeqCursor;
-
 #[cfg(feature = "signature-meta")]
 use crate::signature;
+use crate::CompressionType;
+
+use super::headers::*;
+use super::Lead;
 
 /// Combined digest of signature header tags `RPMSIGTAG_MD5` and `RPMSIGTAG_SHA1`
 ///
@@ -650,9 +650,11 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
-    pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
-        self.header
-            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
+    pub fn get_payload_compressor(&self) -> Result<CompressionType, RPMError> {
+        let comp_str = self
+            .header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)?;
+        CompressionType::from_str(comp_str)
     }
 
     #[inline]

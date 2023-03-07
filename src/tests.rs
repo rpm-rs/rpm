@@ -61,7 +61,11 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     );
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
     assert_eq!(package.metadata.get_installed_size().unwrap(), 503853);
-    assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
+    assert!(matches!(
+        package.metadata.get_payload_compressor(),
+        Err(RPMError::UnknownCompressorType(xz)) if xz == "xz"
+    ));
+
 
     assert_eq!(package.metadata.is_source_package(), false);
 
@@ -205,7 +209,11 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
             payload: 148172
         }
     );
-    assert_eq!(metadata.get_payload_compressor()?, "xz");
+    assert!(matches!(
+        metadata.get_payload_compressor(),
+        Err(RPMError::UnknownCompressorType(xz)) if xz == "xz"
+    ));
+
 
     let expected_file_checksums = vec![
         "",
@@ -314,12 +322,10 @@ async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
 async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
     use chrono::TimeZone;
 
-    use std::str::FromStr;
-
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
-    let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-        .compression(rpm::Compressor::from_str("gzip")?)
+    let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+        .compression(CompressionType::Gzip)
         .with_file_async(
             "Cargo.toml",
             RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
