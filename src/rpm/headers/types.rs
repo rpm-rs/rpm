@@ -293,6 +293,18 @@ impl Dependency {
         Self::new(dep_name.into(), RPMSENSE_ANY, "".to_string())
     }
 
+    pub fn rpmlib<E, T>(dep_name: T, version: E) -> Self
+    where
+        T: Into<String>,
+        E: Into<String>,
+    {
+        Self::new(
+            dep_name.into(),
+            RPMSENSE_RPMLIB | RPMSENSE_EQUAL,
+            version.into(),
+        )
+    }
+
     fn new(dep_name: String, sense: u32, version: String) -> Self {
         Dependency {
             dep_name,

@@ -476,7 +476,7 @@ pub const RPMSENSE_EQUAL: u32 = 1 << 3;
 // const RPMSENSE_MISSINGOK: u32 = (1 << 19);
 
 // // for some weird reason, centos packages have another value for rpm lib sense. We have to observe this.
-// const RPMSENSE_RPMLIB: u32 = (1 << 24); //0o100000012;
+pub const RPMSENSE_RPMLIB: u32 = 1 << 24;
 // const RPMSENSE_TRIGGERPREIN: u32 = (1 << 25);
 // const RPMSENSE_KEYRING: u32 = (1 << 26);
 // const RPMSENSE_CONFIG: u32 = (1 << 28);

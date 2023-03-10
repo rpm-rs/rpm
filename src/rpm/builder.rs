@@ -574,6 +574,28 @@ impl RPMBuilder {
             self.version.clone(),
         ));
 
+        self.requires.push(Dependency::rpmlib(
+            "rpmlib(PayloadFilesHavePrefix)".to_string(),
+            "4.0-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::rpmlib(
+            "rpmlib(CompressedFileNames)".to_string(),
+            "3.0.4-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::rpmlib(
+            "rpmlib(FileDigests)".to_string(),
+            "4.6.0-1".to_string(),
+        ));
+
+        if matches!(self.compressor, Compressor::Zstd(_)) {
+            self.requires.push(Dependency::rpmlib(
+                "rpmlib(PayloadIsZstd)".to_string(),
+                "5.4.18-1".to_string(),
+            ));
+        }
+
         let mut provide_names = Vec::new();
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
@@ -1023,34 +1045,6 @@ impl RPMBuilder {
         }
 
         let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
-
-        //those parts seem to break on fedora installations, but it does not seem to matter for centos.
-        // if it turns out that those parts are not really required, we will delete the following comments
-
-        // self.requires.push(Dependency::rpm_lib(
-        //     "rpmlib(VersionedDependencies)".to_string(),
-        //     "3.0.3-1".to_string(),
-        // ));
-
-        // self.requires.push(Dependency::rpm_lib(
-        //     "rpmlib(PayloadFilesHavePrefix)".to_string(),
-        //     "4.0-1".to_string(),
-        // ));
-
-        // self.requires.push(Dependency::rpm_lib(
-        //     "rpmlib(CompressedFileNames)".to_string(),
-        //     "3.0.4-1".to_string(),
-        // ));
-
-        // self.requires.push(Dependency::rpm_lib(
-        //     "rpmlib(PayloadIsXz)".to_string(),
-        //     "5.2-1".to_string(),
-        // ));
-        // self.requires.push(Dependency::rpm_lib(
-        //     "rpmlib(FileDigests)".to_string(),
-        //     "4.6.0-1".to_string(),
-        // ));
-
         self.compressor = cpio::newc::trailer(self.compressor)?;
         let content = self.compressor.finish_compression()?;
 

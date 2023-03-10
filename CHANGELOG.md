@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added a `RPMPackage::open()` helper for working with files
+
+### Fixed
+
+- Added `rpmlib()` dependencies to built packages as appropriate
+
 ### Breaking Changes
 
 - Bump MSRV to 1.63.0
