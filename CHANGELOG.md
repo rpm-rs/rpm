@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump MSRV to 1.63.0
 - Removed async support from default features
+- Removed `Lead` from the public API. `Lead` is long-deprecated and shouldn't be relied on.
+  Restricted the data we write to `Lead` to the bare minimum required for compatibility.
 
 ## 0.9.0
 

@@ -3,7 +3,7 @@ mod lead;
 mod types;
 
 pub use header::*;
-pub use lead::*;
+pub(crate) use lead::*;
 pub use types::*;
 
 #[cfg(feature = "signature-meta")]

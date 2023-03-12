@@ -10,12 +10,10 @@ use futures::io::{AsyncWrite, AsyncWriteExt};
 
 /// Lead of an rpm header.
 ///
-/// Used to contain valid data,
-/// now only a very limited subset is used
-/// and the remaining data is set to fixed values
-/// such that compatibility is kept.
-/// This is also used by magic and other libraries
-/// to detect rpm files.
+/// Used to contain valid data, now only a very limited subset is used
+/// and the remaining data is set to fixed values such that compatibility is kept.
+/// Only the "magic number" is still relevant as it is used to detect rpm files.
+#[derive(Eq)]
 pub struct Lead {
     magic: [u8; 4],
     major: u8,
@@ -58,38 +56,12 @@ impl Lead {
             }
         }
         let (rest, major) = be_u8(rest)?;
-        if major != 3 {
-            return Err(RPMError::InvalidLeadMajorVersion(major));
-        }
         let (rest, minor) = be_u8(rest)?;
-        if minor != 0 {
-            return Err(RPMError::InvalidLeadMinorVersion(minor));
-        }
         let (rest, pkg_type) = be_u16(rest)?;
-
-        if pkg_type > 1 {
-            return Err(RPMError::InvalidLeadPKGType(pkg_type));
-        }
-
         let (rest, arch) = be_u16(rest)?;
         let (rest, name) = complete::take(66usize)(rest)?;
-
         let (rest, os) = be_u16(rest)?;
-        if os != 1 {
-            return Err(RPMError::InvalidLeadOSType(os));
-        }
-
         let (rest, sigtype) = be_u16(rest)?;
-        if sigtype != 5 {
-            return Err(RPMError::InvalidLeadSignatureType(sigtype));
-        }
-
-        if rest.len() != 16 {
-            return Err(RPMError::InvalidReservedSpaceSize {
-                expected: 16,
-                actual: rest.len(),
-            });
-        }
 
         let mut name_arr: [u8; 66] = [0; 66];
         name_arr.copy_from_slice(name);
