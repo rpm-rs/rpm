@@ -1,5 +1,5 @@
 [![crates.io](https://img.shields.io/crates/v/rpm.svg)](https://crates.io/crates/rpm)
-[![docs.rs](https://docs.rs/rom/badge.svg)](https://docs.rs/rpm)
+[![docs.rs](https://docs.rs/rpm/badge.svg)](https://docs.rs/rpm)
 [![MSRV](https://img.shields.io/badge/rustc-1.63.0+-ab6000.svg)](https://blog.rust-lang.org/2022/08/11/Rust-1.63.0.html)
 ![status](https://github.com/rpm-rs/rpm/actions/workflows/ci.yml/badge.svg)
 
@@ -32,6 +32,8 @@ This library does not build software like rpmbuild. It is meant for finished art
 ### Examples
 
 ```rust
+use std::str::FromStr;
+
 use rpm;
 use rpm::signature::pgp::{Signer,Verifier};
 
@@ -40,34 +42,34 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
             .compression(rpm::Compressor::from_str("gzip")?)
             .with_file(
                 "./awesome-config.toml",
-                RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+                rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
             )?
             // file mode is inherited from source file
             .with_file(
                 "./awesome-bin",
-                RPMFileOptions::new("/usr/bin/awesome"),
+                rpm::RPMFileOptions::new("/usr/bin/awesome"),
             )?
              .with_file(
                 "./awesome-config.toml",
                 // you can set a custom mode and custom user too
-                RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
+                rpm::RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
             )?
             .pre_install_script("echo preinst")
             .add_changelog_entry("me", "was awesome, eh?", 123123123)
             .add_changelog_entry("you", "yeah, it was", 12312312)
-            .requires(Dependency::any("wget"))
-            .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)
+            .requires(rpm::Dependency::any("wget"))
             .vendor("corporation or individual")
             .url("www.github.com/repo")
             .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
+            .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?);
+
 let mut f = std::fs::File::create("./awesome.rpm")?;
 pkg.write(&mut f)?;
 
 // reading
 let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
-let rpm_file = std::fs::File::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
-let mut buf_reader = std::io::BufReader::new(rpm_file);
-let pkg = rpm::RPMPackage::parse(&mut buf_reader)?;
+let pkg = rpm::RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+
 // verifying
 pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 ```

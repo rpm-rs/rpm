@@ -43,6 +43,9 @@
 //!             .add_changelog_entry("me", "was awesome, eh?", 123123123)
 //!             .add_changelog_entry("you", "yeah, it was", 12312312)
 //!             .requires(rpm::Dependency::any("wget"))
+//!             .vendor("corporation or individual")
+//!             .url("www.github.com/repo")
+//!             .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
 //!             .build_and_sign(
 //!                 Signer::load_from_asc_bytes(&raw_secret_key)?
 //!             )?;
@@ -51,9 +54,7 @@
 //!
 //! // reading
 //! let raw_pub_key = std::fs::read("./test_assets/public_key.asc")?;
-//! let rpm_file = std::fs::File::open("./target/awesome.rpm")?;
-//! let mut buf_reader = std::io::BufReader::new(rpm_file);
-//! let pkg = rpm::RPMPackage::parse(&mut buf_reader)?;
+//! let pkg = rpm::RPMPackage::open("./target/awesome.rpm")?;
 //! // verifying
 //! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 //! # }
