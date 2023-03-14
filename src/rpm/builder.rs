@@ -784,7 +784,7 @@ impl RPMBuilder {
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEDIGESTALGO,
                     offset,
-                    IndexData::Int32(vec![8]),
+                    IndexData::Int32(vec![FileDigestAlgorithm::Sha2_256 as u32]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEVERIFYFLAGS,
