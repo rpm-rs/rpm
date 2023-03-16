@@ -1,6 +1,6 @@
 use super::*;
 
-#[cfg(feature = "signature-meta")]
+#[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::{Signer, Verifier};
 
 fn test_private_key_path() -> std::path::PathBuf {
@@ -31,7 +31,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-#[cfg(feature = "signature-meta")]
+#[cfg(feature = "signature-pgp")]
 #[test]
 fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
@@ -52,7 +52,7 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(feature = "signature-meta")]
+#[cfg(feature = "signature-pgp")]
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = file_signatures_test_rpm_file_path();
@@ -408,7 +408,6 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     test_rpm_header_base(package)
 }
 
-#[cfg(feature = "signature-meta")]
 #[test]
 fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
     let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);

@@ -61,12 +61,11 @@ tokio-util = { version = "0.7.4", features = ["compat"]}
 [features]
 default = ["signature-pgp"]
 
-signature-pgp = ["signature-meta", "pgp"]
-signature-meta = []
+signature-pgp = ["pgp"]
 async-futures = ["futures"]
 
 # The use of these features implies that async-futures are being used -
 # explicitly define this feature.
-test-with-podman = ["async-futures", "signature-meta", "tokio-util"]
+test-with-podman = ["async-futures", "tokio-util"]
 with-file-async-tokio = ["async-futures", "tokio/fs", "tokio-util"]
 with-file-async-async-std = ["async-futures", "async-std"]

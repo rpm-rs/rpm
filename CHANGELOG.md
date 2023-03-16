@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Added `rpmlib()` dependencies to built packages as appropriate
+- Ensured that digests are always added to built RPMs. Previously they would not be included unless
+  the "signature-meta" (or "signature-pgp") features were enabled.
 
 ### Breaking Changes
 

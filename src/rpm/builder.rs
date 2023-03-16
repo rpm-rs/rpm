@@ -15,9 +15,7 @@ use super::headers::*;
 use super::Lead;
 use crate::constants::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 use crate::RPMPackage;
@@ -389,7 +387,6 @@ impl RPMBuilder {
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
 
-        #[cfg(feature = "signature-meta")]
         let digest_header = {
             let header = header;
             let (header_digest_sha1, header_and_content_digest_md5) =
@@ -407,8 +404,6 @@ impl RPMBuilder {
                         .expect("signature header + signature length must be <4gb"),
                 )
         };
-        #[cfg(not(feature = "signature-meta"))]
-        let digest_header = { Header::<IndexSignatureTag>::new_empty() };
 
         let metadata = RPMPackageMetadata {
             lead,
@@ -422,7 +417,6 @@ impl RPMBuilder {
     /// use an external signer to sing and build
     ///
     /// See `signature::Signing` for more details.
-    #[cfg(feature = "signature-meta")]
     pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
     where
         S: signature::Signing<crate::signature::algorithm::RSA>,
@@ -471,7 +465,6 @@ impl RPMBuilder {
     }
 
     /// use prepared data but make sure the signatures are
-    #[cfg(feature = "signature-meta")]
     fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
         let digest_md5 = {
             use md5::Digest;

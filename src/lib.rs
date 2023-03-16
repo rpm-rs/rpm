@@ -7,7 +7,7 @@
 //!
 //! ```rust
 //!
-//! # #[cfg(feature = "signature-meta")]
+//! # #[cfg(feature = "signature-pgp")]
 //! use rpm::{
 //!     signature::pgp::{
 //!         Signer,
@@ -17,7 +17,7 @@
 //! use std::str::FromStr;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # #[cfg(feature = "signature-meta")]
+//! # #[cfg(feature = "signature-pgp")]
 //! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -70,7 +70,6 @@ pub use crate::errors::*;
 pub(crate) mod constants;
 pub use crate::constants::*;
 
-#[cfg(feature = "signature-meta")]
 mod sequential_cursor;
 
 mod rpm;

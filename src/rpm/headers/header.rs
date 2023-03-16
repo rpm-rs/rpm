@@ -163,7 +163,7 @@ where
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
     }
 
-    #[cfg(feature = "signature-meta")]
+    #[allow(unused)]
     pub(crate) fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -308,7 +308,7 @@ impl Header<IndexSignatureTag> {
     /// PGP and RSA tags expect signatures according to [RFC2440](https://tools.ietf.org/html/rfc2440)
     ///
     /// Please use the [`builder`](Self::builder()) which has modular and safe API.
-    #[cfg(feature = "signature-meta")]
+    #[allow(unused)]
     pub(crate) fn new_signature_header(
         headers_plus_payload_size: u32,
         md5sum: &[u8],
@@ -322,7 +322,6 @@ impl Header<IndexSignatureTag> {
             .build(headers_plus_payload_size)
     }
 
-    #[cfg(feature = "signature-meta")]
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
         SignatureHeaderBuilder::<Empty>::new()
     }
@@ -516,7 +515,6 @@ where
 mod tests2 {
     use super::*;
 
-    #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
@@ -959,7 +957,7 @@ impl IndexData {
         }
     }
 
-    #[cfg(feature = "signature-meta")]
+    #[allow(unused)]
     pub(crate) fn as_binary(&self) -> Option<&[u8]> {
         match self {
             IndexData::Bin(d) => Some(d.as_slice()),

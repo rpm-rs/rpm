@@ -18,14 +18,12 @@ fn cargo_out_dir() -> std::path::PathBuf {
     cargo_manifest_dir().join("target")
 }
 
-#[cfg(feature = "signature-meta")]
-use signature::{self, Verifying};
-
 #[cfg(feature = "signature-pgp")]
 mod pgp {
     use super::*;
     use futures::io::AsyncWriteExt;
     use signature::pgp::{Signer, Verifier};
+    use signature::{self, Verifying};
     use tokio_util::compat::TokioAsyncReadCompatExt;
 
     #[tokio::test]

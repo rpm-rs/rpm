@@ -1,4 +1,4 @@
-use std::io::BufReader;
+use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
@@ -12,13 +12,8 @@ use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
-
-#[cfg(feature = "signature-meta")]
-use std::io::Seek;
 
 /// A complete rpm file.
 ///
@@ -73,7 +68,6 @@ impl RPMPackage {
     // TODO allow passing an external signer/verifier
 
     /// sign all headers (except for the lead) using an external key and store it as the initial header
-    #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
@@ -139,9 +133,6 @@ impl RPMPackage {
     }
 
     /// Verify the signature as present within the RPM package.
-    ///
-    ///
-    #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
