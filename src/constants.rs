@@ -56,13 +56,9 @@ pub enum IndexTag {
     RPMTAG_SHA256HEADER = RPMTAG_SIG_BASE + 17,
 
     RPMTAG_NAME = 1000,
-
     RPMTAG_VERSION = 1001,
-
     RPMTAG_RELEASE = 1002,
-
     RPMTAG_EPOCH = 1003,
-
     RPMTAG_SUMMARY = 1004,
     RPMTAG_DESCRIPTION = 1005,
     RPMTAG_BUILDTIME = 1006,
@@ -373,57 +369,57 @@ pub enum IndexTag {
 #[allow(non_camel_case_types)]
 pub enum IndexSignatureTag {
     HEADER_SIGNATURES = HEADER_SIGNATURES,
-    // This tag specifies the combined size of the Header and Payload sections.
+    /// This tag specifies the combined size of the Header and Payload sections.
     RPMSIGTAG_SIZE = HEADER_TAGBASE,
 
-    //This  tag  specifies  the  uncompressed  size of the Payload archive, including the cpio headers.
+    /// This tag specifies the uncompressed size of the Payload archive, including the cpio headers.
     RPMSIGTAG_PAYLOADSIZE = HEADER_TAGBASE + 7,
 
-    //This  index  contains  the  SHA1  checksum  of  the  entire  Header  Section,
-    //including the Header Record, Index Records and Header store.
+    /// This  index  contains  the  SHA1  checksum  of  the  entire  Header  Section,
+    /// including the Header Record, Index Records and Header store.
     RPMSIGTAG_SHA1 = 269,
 
-    //This  tag  specifies  the  128-bit  MD5  checksum  of  the  combined  Header  and  Archive sections.
+    /// This tag specifies the 128-bit MD5 checksum of the combined Header and Archive sections.
     RPMSIGTAG_MD5 = 1004,
 
-    //The  tag  contains  the  DSA  signature  of  the  Header  section.
-    // The  data  is  formatted  as  a  Version  3  Signature  Packet  as  specified  in  RFC  2440:  OpenPGP Message Format.
-    // If this tag is present, then the SIGTAG_GPG tag shall also be present.
+    /// The tag contains the DSA signature of the Header section.
+    /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
+    /// If this tag is present, then the SIGTAG_GPG tag shall also be present.
     RPMSIGTAG_DSA = 267,
 
-    // The  tag  contains  the  RSA  signature  of  the  Header  section.
-    // The  data  is  formatted  as  a  Version  3  Signature  Packet  as  specified  in  RFC  2440: OpenPGP  Message  Format.
-    // If  this  tag  is  present,  then  the  SIGTAG_PGP  shall also be present.
+    /// The tag contains the RSA signature of the Header section.
+    /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
+    /// If this tag is present, then the SIGTAG_PGP shall also be present.
     RPMSIGTAG_RSA = 268,
 
-    // Header+payload size if > 4GB.
+    /// Size of combined header and payload if > 4GB.
     RPMSIGTAG_LONGSIGSIZE = 270,
 
-    // (Compressed) payload size when > 4GB.
+    /// (Compressed) payload size when > 4GB.
     RPMSIGTAG_LONGARCHIVESIZE = 271,
 
-    // The tag contains the file signature of a file.
-    // The data is formatted as a hex-encoded string.
-    // If this tag is present, then the SIGTAG_FILESIGNATURE_LENGTH shall also be present.
+    /// The tag contains the file signature of a file.
+    /// The data is formatted as a hex-encoded string.
+    /// If this tag is present, then the SIGTAG_FILESIGNATURE_LENGTH shall also be present.
     RPMSIGTAG_FILESIGNATURES = 274,
 
-    // The tag contains the length of the file signatures in total.
-    // If this tag is present, then the SIGTAG_FILESIGNATURE shall also be present.
+    /// The tag contains the length of the file signatures in total.
+    /// If this tag is present, then the SIGTAG_FILESIGNATURE shall also be present.
     RPMSIGTAG_FILESIGNATURE_LENGTH = 275,
 
-    // This  tag  specifies  the  RSA  signature  of  the  combined  Header  and  Payload  sections.
-    // The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
+    /// This tag specifies the RSA signature of the combined Header and Payload sections.
+    /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_PGP = 1002,
 
-    // The  tag  contains  the  DSA  signature  of  the  combined  Header  and  Payload  sections.
-    // The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
+    /// The tag contains the DSA signature of the combined Header and Payload sections.
+    /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_GPG = 1005,
 
-    //This  index  contains  the  SHA256  checksum  of  the  entire  Header  Section,
-    //including the Header Record, Index Records and Header store.
+    /// This index contains the SHA256 checksum of the entire Header Section,
+    /// including the Header Record, Index Records and Header store.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
-    // A silly tag for a date.
+    /// A silly tag for a date.
     RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as u32,
 }
 
