@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
 
+use digest::Digest;
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use num_traits::FromPrimitive;
@@ -100,6 +101,7 @@ impl RPMPackage {
         }
     }
 
+    // @todo: delete when EL7 goes EOL, PAYLOADDIGEST has been available for years now.
     /// Prepare both header and content digests as used by the `SignatureIndex`.
     pub(crate) fn create_legacy_header_digests<HC, HACC>(
         header_cursor: HC,
@@ -110,7 +112,6 @@ impl RPMPackage {
         HACC: std::io::Read,
     {
         let digest_md5 = {
-            use md5::Digest;
             let mut hasher = md5::Md5::default();
             Self::read_and_update_digest_256(&mut hasher, header_and_content_cursor);
             let hash_result = hasher.finalize();
@@ -118,7 +119,6 @@ impl RPMPackage {
         };
 
         let digest_sha1 = {
-            use sha1::Digest;
             let mut hasher = sha1::Sha1::default();
             Self::read_and_update_digest_256(&mut hasher, header_cursor);
             let digest = hasher.finalize();
@@ -208,6 +208,7 @@ impl RPMPackage {
         );
 
         verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+        self.verify_digests()?;
 
         let header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
@@ -217,7 +218,7 @@ impl RPMPackage {
         Ok(())
     }
 
-    pub fn verify_digest(&self) -> Result<(), RPMError> {
+    pub fn verify_digests(&self) -> Result<(), RPMError> {
         let mut header = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
@@ -227,13 +228,39 @@ impl RPMPackage {
             SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
         )?;
 
-        let package_contained = self.metadata.get_digests()?;
+        let sig_header_digests = self.metadata.get_digests()?;
 
-        if recreated_from_content == package_contained {
-            Ok(())
-        } else {
-            Err(RPMError::DigestMismatchError)
+        let payload_digest_val = self
+            .metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADDIGEST);
+        let payload_digest_algo = self
+            .metadata
+            .header
+            .get_entry_data_as_u32(IndexTag::RPMTAG_PAYLOADDIGESTALGO);
+
+        if let (Ok(payload_digest_val), Ok(payload_digest_algo)) =
+            (payload_digest_val, payload_digest_algo)
+        {
+            let mut hasher = match payload_digest_algo {
+                a if a == FileDigestAlgorithm::Sha2_256 as u32 => sha2::Sha256::default(),
+                _ => unimplemented!("An unknown payload digest algorithm was used"),
+                // At the present moment even rpmbuild only supports sha256
+            };
+            let payload_digest = {
+                hasher.update(self.content.as_slice());
+                hex::encode(hasher.finalize())
+            };
+            if payload_digest != payload_digest_val[0] {
+                return Err(RPMError::DigestMismatchError);
+            }
         }
+
+        if recreated_from_content != sig_header_digests {
+            return Err(RPMError::DigestMismatchError);
+        }
+
+        Ok(())
     }
 }
 
@@ -287,7 +314,7 @@ impl RPMPackageMetadata {
         Ok(())
     }
 
-    pub fn get_digests(&self) -> Result<Digests, RPMError> {
+    fn get_digests(&self) -> Result<Digests, RPMError> {
         let md5 = self
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5)?;

@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use digest::Digest;
 use gethostname::gethostname;
 
 use super::compressor::Compressor;
@@ -328,8 +329,6 @@ impl RPMBuilder {
         modified_at: u32,
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
-        use sha2::Digest;
-
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
             return Err(RPMError::InvalidDestinationPath {
@@ -592,6 +591,7 @@ impl RPMBuilder {
         // Lead is not important. just build it here
 
         let lead = Lead::new(&self.name);
+        let mut archive: Vec<u8> = Vec::new();
 
         let mut ino_index = 1;
 
@@ -645,13 +645,14 @@ impl RPMBuilder {
                 .ino(ino_index)
                 .uid(self.uid.unwrap_or(0))
                 .gid(self.gid.unwrap_or(0))
-                .write(&mut self.compressor, content.len() as u32);
+                .write(&mut archive, content.len() as u32);
 
             writer.write_all(&content)?;
             writer.finish()?;
 
             ino_index += 1;
         }
+        cpio::newc::trailer(&mut archive)?;
 
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
@@ -962,6 +963,41 @@ impl RPMBuilder {
 
         let possible_compression_details = self.compressor.get_details();
 
+        self.compressor.write_all(&archive)?;
+        let payload = self.compressor.finish_compression()?;
+
+        // digest of the uncompressed raw archive
+        let raw_payload_digest_sha256 = {
+            let mut hasher = sha2::Sha256::default();
+            hasher.update(archive.as_slice());
+            hex::encode(hasher.finalize())
+        };
+
+        // digest of the compressed archive (payload)
+        let payload_digest_sha256 = {
+            let mut hasher = sha2::Sha256::default();
+            hasher.update(payload.as_slice());
+            hex::encode(hasher.finalize())
+        };
+
+        actual_records.extend([
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADDIGEST,
+                offset,
+                IndexData::StringArray(vec![payload_digest_sha256]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADDIGESTALGO,
+                offset,
+                IndexData::Int32(vec![FileDigestAlgorithm::Sha2_256 as u32]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOADDIGESTALT,
+                offset,
+                IndexData::StringArray(vec![raw_payload_digest_sha256]),
+            ),
+        ]);
+
         if let Some(details) = possible_compression_details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
@@ -1184,9 +1220,7 @@ impl RPMBuilder {
         }
 
         let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
-        self.compressor = cpio::newc::trailer(self.compressor)?;
-        let content = self.compressor.finish_compression()?;
 
-        Ok((lead, header, content))
+        Ok((lead, header, payload))
     }
 }

@@ -284,6 +284,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.content.len(), second_pkg.content.len());
     assert!(package.metadata == second_pkg.metadata);
 
+    package.verify_digests()?;
+
     Ok(())
 }
 
@@ -333,6 +335,8 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     pkg.write(&mut buff)?;
+
+    pkg.verify_digests()?;
 
     Ok(())
 }

@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   did not have any files associated.
 - Ensured that digests are always added to built RPMs. Previously they would not be included unless
   the "signature-meta" (or "signature-pgp") features were enabled.
+- Added `PAYLOADDIGEST`, `PAYLOADDIGESTALT`, and `PAYLOADDIGESTALGO` tags to built packages.
 
 ### Breaking Changes
 
