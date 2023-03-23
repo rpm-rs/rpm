@@ -16,6 +16,7 @@ use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
+use super::payload;
 use crate::errors::*;
 use crate::{constants::*, Timestamp};
 
@@ -769,7 +770,7 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(FileVerifyFlags::all().bits());
             let content = entry.content.to_owned();
-            let mut writer = cpio::newc::Builder::new(cpio_path)
+            let mut writer = payload::Builder::new(cpio_path)
                 .mode(entry.mode.into())
                 .ino(ino_index)
                 .uid(self.uid.unwrap_or(0))
@@ -781,7 +782,7 @@ impl PackageBuilder {
 
             ino_index += 1;
         }
-        cpio::newc::trailer(&mut archive)?;
+        payload::trailer(&mut archive)?;
 
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
