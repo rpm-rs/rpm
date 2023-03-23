@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
 
+### Changed
+
+- Internally vendored and modified Jonathan Creekmore's `cpio` dependency, as RPM doesn't use vanilla CPIO.
+  See [#108](https://github.com/rpm-rs/rpm/issues/108) or the notes in `src/payload.rs`.
+
 ## 0.17.0
 
 ### Added
