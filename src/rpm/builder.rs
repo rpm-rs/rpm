@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 
 use digest::Digest;
 
+use super::Lead;
 use super::compressor::Compressor;
 use super::headers::*;
-use super::Lead;
 use super::payload;
 use crate::errors::*;
 use crate::{Timestamp, constants::*};
@@ -689,7 +689,7 @@ impl PackageBuilder {
         // @todo: normalize path?
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
-        for (cpio_path, entry) in self.files.iter() {
+        for (file_index, (cpio_path, entry)) in self.files.iter().enumerate() {
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -702,8 +702,7 @@ impl PackageBuilder {
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
-            // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
-            // Who knows, who cares.
+            // @todo: I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
             file_rdevs.push(0);
             file_devices.push(1);
             let mtime = match self.source_date {
@@ -730,15 +729,22 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(entry.verify_flags.bits());
             let content = entry.content.to_owned();
-            let mut writer = payload::Builder::new(cpio_path)
-                .mode(entry.mode.into())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut archive, content.len() as u32);
-
-            writer.write_all(&content)?;
-            writer.finish()?;
+            if !uses_large_files {
+                let mut writer = payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, content.len() as u32);
+                writer.write_all(&content)?;
+                writer.finish()?;
+            } else {
+                // @todo: can we just use ino_index instead of file_index?
+                let header = payload::stripped_cpio_header(file_index as u32);
+                archive.write_all(&header)?;
+                archive.write_all(&content)?;
+                archive.flush()?;
+            };
 
             ino_index += 1;
         }
