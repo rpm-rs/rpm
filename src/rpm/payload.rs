@@ -1,5 +1,7 @@
-// This code is copied from the crate `cpio-rs` by Jonathan Creekmore (https://github.com/jcreekmore/cpio-rs)
-// under the MIT license.
+//! Read/write `newc` (SVR4) format archives.
+
+// The code in this file is partially copied from the `cpio` crate by Jonathan Creekmore
+// (https://github.com/jcreekmore/cpio-rs) under the MIT license.
 //
 //     MIT License
 //
@@ -19,28 +21,58 @@
 //     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 //     DAMAGES OR OTHER  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 //     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS  IN THE SOFTWARE.
+//
+// It has been modified to match modifications which are used by the upstream RPM library.
+// These modifications are described upstream as follows:
+//
+//     As cpio is limited to 4 GB (32 bit unsigned) file sizes, RPM since version 4.12
+//     uses a stripped down version of cpio for packages with files > 4 GB. This format
+//     uses 07070X as magic bytes and the file header otherwise only contains the index
+//     number of the file in the RPM header as 8 byte hex string. The file metadata that
+//     is normally found in a cpio file header - including the file name - is completely
+//     omitted as it is stored in the RPM header already.
+//
+// Other modifications made to this library include:
+//   * Several type renamings
+//   * Reader::entry() removed, tests use a helper function
+//   * Reader::new() now takes a slice of FileEntry, so that knows how large the files are for the purpose of reading them
+//   * Seekable implementation and accompanying tests were deleted - we don't need it
 
-//! Read/write `newc` (SVR4) format archives.
+#![allow(dead_code)]
 
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use super::FileEntry;
+use std::io::{self, Read, Write};
 
-const HEADER_LEN: usize = 110; // 6 byte magic number + 104 bytes of metadata
+const HEADER_LEN: usize = 110; // 6 byte magic + 104 bytes for metadata
+
+const STRIPPED_CPIO_HEADER_LEN: usize = 14; // 8 bytes metadata + 6 bytes magic
 
 const MAGIC_NUMBER_NEWASCII: &[u8] = b"070701";
 const MAGIC_NUMBER_NEWCRC: &[u8] = b"070702";
+
+const STRIPPED_CPIO_MAGIC_NUMBER: &[u8] = b"07070X"; // Magic number changed to conform with RPM
 
 const TRAILER_NAME: &str = "TRAILER!!!";
 
 /// Whether this header is of the "new ascii" form (without checksum) or the "crc" form which
 /// is structurally identical but includes a checksum, depending on the magic number present.
-enum EntryType {
+#[derive(Debug, PartialEq)]
+enum CpioEntryType {
     Crc,
     Newc,
 }
 
+/// Whether the header entry is of a standard CPIO form or the RPM-specific archive form
+#[derive(Debug, PartialEq)]
+pub enum RpmPayloadEntry {
+    Cpio(CpioEntry), // name, file_size
+    Stripped(u32),   // file_index
+}
+
 /// Metadata about one entry from an archive.
-pub struct Entry {
-    entry_type: EntryType,
+#[derive(Debug, PartialEq)]
+pub struct CpioEntry {
+    entry_type: CpioEntryType,
     name: String,
     ino: u32,
     mode: u32,
@@ -59,7 +91,8 @@ pub struct Entry {
 /// Reads one entry header/data from an archive.
 pub struct Reader<R: Read> {
     inner: R,
-    entry: Entry,
+    entry: RpmPayloadEntry,
+    file_size: u64,
     bytes_read: u32,
 }
 
@@ -141,7 +174,7 @@ fn read_hex_u32<R: Read>(reader: &mut R) -> io::Result<u32> {
         })
 }
 
-impl Entry {
+impl CpioEntry {
     /// Returns the name of the file.
     pub fn name(&self) -> &str {
         &self.name
@@ -230,8 +263,8 @@ impl Entry {
     /// significant 32 bits. Not all CPIO archives use checksums.
     pub fn checksum(&self) -> Option<u32> {
         match self.entry_type {
-            EntryType::Crc => Some(self.checksum),
-            EntryType::Newc => None,
+            CpioEntryType::Crc => Some(self.checksum),
+            CpioEntryType::Newc => None,
         }
     }
 }
@@ -239,149 +272,136 @@ impl Entry {
 impl<R: Read> Reader<R> {
     /// Parses metadata for the next entry in an archive, and returns a reader
     /// that will yield the entry data.
-    pub fn new(mut inner: R) -> io::Result<Reader<R>> {
+    pub fn new(mut inner: R, file_entries: &[FileEntry]) -> io::Result<Reader<R>> {
         // char    c_magic[6];
         let mut magic = [0u8; 6];
         inner.read_exact(&mut magic)?;
-        let entry_type = match magic.as_slice() {
-            MAGIC_NUMBER_NEWASCII => EntryType::Newc,
-            MAGIC_NUMBER_NEWCRC => EntryType::Crc,
+        let entry = match magic.as_slice() {
+            MAGIC_NUMBER_NEWASCII | MAGIC_NUMBER_NEWCRC => {
+                let entry_type = match magic.as_slice() {
+                    MAGIC_NUMBER_NEWASCII => CpioEntryType::Newc,
+                    MAGIC_NUMBER_NEWCRC => CpioEntryType::Crc,
+                    _ => unreachable!("can't happen"),
+                };
+
+                // char    c_ino[8];
+                let ino = read_hex_u32(&mut inner)?;
+                // char    c_mode[8];
+                let mode = read_hex_u32(&mut inner)?;
+                // char    c_uid[8];
+                let uid = read_hex_u32(&mut inner)?;
+                // char    c_gid[8];
+                let gid = read_hex_u32(&mut inner)?;
+                // char    c_nlink[8];
+                let nlink = read_hex_u32(&mut inner)?;
+                // char    c_mtime[8];
+                let mtime = read_hex_u32(&mut inner)?;
+                // char    c_filesize[8];
+                let file_size = read_hex_u32(&mut inner)?;
+                // char    c_devmajor[8];
+                let dev_major = read_hex_u32(&mut inner)?;
+                // char    c_devminor[8];
+                let dev_minor = read_hex_u32(&mut inner)?;
+                // char    c_rdevmajor[8];
+                let rdev_major = read_hex_u32(&mut inner)?;
+                // char    c_rdevminor[8];
+                let rdev_minor = read_hex_u32(&mut inner)?;
+                // char    c_namesize[8];
+                let name_len = read_hex_u32(&mut inner)? as usize;
+                // char    c_checksum[8];
+                let checksum = read_hex_u32(&mut inner)?;
+
+                // NUL-terminated name with length `name_len` (including NUL byte).
+                let mut name_bytes = vec![0u8; name_len];
+                if name_bytes.len() > 4096 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Entry name is too long",
+                    ));
+                }
+                inner.read_exact(&mut name_bytes)?;
+                if name_bytes.last() != Some(&0) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Entry name was not NUL-terminated",
+                    ));
+                }
+                name_bytes.pop();
+                // dracut-cpio sometimes pads the name to the next filesystem block.
+                // See https://github.com/dracutdevs/dracut/commit/a9c67046
+                while name_bytes.last() == Some(&0) {
+                    name_bytes.pop();
+                }
+                let name = String::from_utf8(name_bytes).map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Entry name was not valid UTF-8")
+                })?;
+
+                // Pad out to a multiple of 4 bytes.
+                if let Some(mut padding) = pad(HEADER_LEN + name_len) {
+                    inner.read_exact(&mut padding)?;
+                }
+                let entry = CpioEntry {
+                    entry_type,
+                    name,
+                    ino,
+                    mode,
+                    uid,
+                    gid,
+                    nlink,
+                    mtime,
+                    file_size,
+                    dev_major,
+                    dev_minor,
+                    rdev_major,
+                    rdev_minor,
+                    checksum,
+                };
+
+                RpmPayloadEntry::Cpio(entry)
+            }
+            STRIPPED_CPIO_MAGIC_NUMBER => {
+                // char    fx[8];
+                let file_index = read_hex_u32(&mut inner)?;
+                RpmPayloadEntry::Stripped(file_index)
+            }
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "Invalid magic number",
-                ))
+                ));
             }
         };
 
-        // char    c_ino[8];
-        let ino = read_hex_u32(&mut inner)?;
-        // char    c_mode[8];
-        let mode = read_hex_u32(&mut inner)?;
-        // char    c_uid[8];
-        let uid = read_hex_u32(&mut inner)?;
-        // char    c_gid[8];
-        let gid = read_hex_u32(&mut inner)?;
-        // char    c_nlink[8];
-        let nlink = read_hex_u32(&mut inner)?;
-        // char    c_mtime[8];
-        let mtime = read_hex_u32(&mut inner)?;
-        // char    c_filesize[8];
-        let file_size = read_hex_u32(&mut inner)?;
-        // char    c_devmajor[8];
-        let dev_major = read_hex_u32(&mut inner)?;
-        // char    c_devminor[8];
-        let dev_minor = read_hex_u32(&mut inner)?;
-        // char    c_rdevmajor[8];
-        let rdev_major = read_hex_u32(&mut inner)?;
-        // char    c_rdevminor[8];
-        let rdev_minor = read_hex_u32(&mut inner)?;
-        // char    c_namesize[8];
-        let name_len = read_hex_u32(&mut inner)? as usize;
-        // char    c_checksum[8];
-        let checksum = read_hex_u32(&mut inner)?;
-
-        // NUL-terminated name with length `name_len` (including NUL byte).
-        let mut name_bytes = vec![0u8; name_len];
-        inner.read_exact(&mut name_bytes)?;
-        if name_bytes.last() != Some(&0) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Entry name was not NUL-terminated",
-            ));
-        }
-        name_bytes.pop();
-        // dracut-cpio sometimes pads the name to the next filesystem block.
-        // See https://github.com/dracutdevs/dracut/commit/a9c67046
-        while name_bytes.last() == Some(&0) {
-            name_bytes.pop();
-        }
-        let name = String::from_utf8(name_bytes).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "Entry name was not valid UTF-8")
-        })?;
-
-        // Pad out to a multiple of 4 bytes.
-        if let Some(mut padding) = pad(HEADER_LEN + name_len) {
-            inner.read_exact(&mut padding)?;
-        }
-
-        let entry = Entry {
-            entry_type,
-            name,
-            ino,
-            mode,
-            uid,
-            gid,
-            nlink,
-            mtime,
-            file_size,
-            dev_major,
-            dev_minor,
-            rdev_major,
-            rdev_minor,
-            checksum,
+        let file_size: u64 = match entry {
+            RpmPayloadEntry::Cpio(ref c) => c.file_size as u64,
+            RpmPayloadEntry::Stripped(idx) => file_entries[idx as usize].size as u64,
         };
+
         Ok(Reader {
             inner,
             entry,
+            file_size,
             bytes_read: 0,
         })
     }
 
     /// Returns the metadata for this entry.
-    pub fn entry(&self) -> &Entry {
-        &self.entry
+    pub fn is_trailer(&self) -> bool {
+        match &self.entry {
+            RpmPayloadEntry::Cpio(c) => c.is_trailer(),
+            RpmPayloadEntry::Stripped(idx) => *idx == u32::MAX,
+        }
     }
 
     /// Finishes reading this entry and returns the underlying reader in a
     /// position ready to read the next entry (if any).
     pub fn finish(mut self) -> io::Result<R> {
-        let remaining = self.entry.file_size - self.bytes_read;
+        let remaining = self.file_size - self.bytes_read as u64;
         if remaining > 0 {
-            io::copy(
-                &mut self.inner.by_ref().take(remaining as u64),
-                &mut io::sink(),
-            )?;
+            io::copy(&mut self.inner.by_ref().take(remaining), &mut io::sink())?;
         }
-        if let Some(mut padding) = pad(self.entry.file_size as usize) {
+        if let Some(mut padding) = pad(self.file_size as usize) {
             self.inner.read_exact(&mut padding)?;
-        }
-        Ok(self.inner)
-    }
-
-    /// Write the contents of the entry out to the writer using `io::copy`, taking advantage of any
-    /// platform-specific behavior to effeciently copy data that `io::copy` can use. If any of the
-    /// file data has already been read through the `Read` interface, this will copy the
-    /// _remaining_ data in the entry.
-    pub fn to_writer<W: Write>(mut self, mut writer: W) -> io::Result<R> {
-        let remaining = self.entry.file_size - self.bytes_read;
-        if remaining > 0 {
-            io::copy(&mut self.inner.by_ref().take(remaining as u64), &mut writer)?;
-        }
-        if let Some(mut padding) = pad(self.entry.file_size as usize) {
-            self.inner.read_exact(&mut padding)?;
-        }
-        Ok(self.inner)
-    }
-}
-
-impl<R: Read + Seek> Reader<R> {
-    /// Returns the offset within inner, which can be useful for efficient
-    /// io::copy()/copy_file_range() of file data.
-    pub fn offset(&mut self) -> io::Result<u64> {
-        self.inner.stream_position()
-    }
-
-    /// Skip past all remaining file data in this entry, returning the
-    /// underlying reader in a position ready to read the next entry (if any).
-    pub fn skip(mut self) -> io::Result<R> {
-        let mut remaining: i64 = (self.entry.file_size - self.bytes_read).into();
-        match pad(self.entry.file_size as usize) {
-            Some(p) => remaining += p.len() as i64,
-            None {} => {}
-        };
-        if remaining > 0 {
-            self.inner.seek(SeekFrom::Current(remaining))?;
         }
         Ok(self.inner)
     }
@@ -389,8 +409,8 @@ impl<R: Read + Seek> Reader<R> {
 
 impl<R: Read> Read for Reader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let remaining = self.entry.file_size - self.bytes_read;
-        let limit = buf.len().min(remaining as usize);
+        let remaining = self.file_size as usize - self.bytes_read as usize;
+        let limit = buf.len().min(remaining);
         if limit > 0 {
             let num_bytes = self.inner.read(&mut buf[..limit])?;
             self.bytes_read += num_bytes as u32;
@@ -505,7 +525,7 @@ impl Builder {
     }
 
     /// Write out an entry to the provided writer in SVR4 "new ascii" CPIO format.
-    pub fn write<W: Write>(self, w: W, file_size: u32) -> Writer<W> {
+    pub fn write_cpio<W: Write>(self, w: W, file_size: u32) -> Writer<W> {
         let header = self.into_header(file_size, None);
 
         Writer {
@@ -581,6 +601,24 @@ impl Builder {
     }
 }
 
+/// Build a stripped archive header
+pub fn stripped_cpio_header(file_index: u32) -> Vec<u8> {
+    let mut header = Vec::with_capacity(STRIPPED_CPIO_HEADER_LEN);
+
+    // char    c_magic[6];
+    header.extend(STRIPPED_CPIO_MAGIC_NUMBER);
+
+    // char    fx[8];  (file index)
+    header.extend(format!("{:08x}", file_index).as_bytes());
+
+    // pad out to a multiple of 4 bytes
+    if let Some(pad) = pad(STRIPPED_CPIO_HEADER_LEN) {
+        header.extend(pad);
+    }
+
+    header
+}
+
 impl<W: Write> Writer<W> {
     pub fn finish(mut self) -> io::Result<W> {
         self.do_finish()?;
@@ -633,14 +671,21 @@ impl<W: Write> Write for Writer<W> {
 /// Writes a trailer entry into an archive.
 pub fn trailer<W: Write>(w: W) -> io::Result<W> {
     let b = Builder::new(TRAILER_NAME).nlink(1);
-    let writer = b.write(w, 0);
+    let writer = b.write_cpio(w, 0);
     writer.finish()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{copy, Cursor};
+    use std::io::{Cursor, copy};
+
+    fn entry<R: Read>(reader: &Reader<R>) -> &CpioEntry {
+        match reader.entry {
+            RpmPayloadEntry::Cpio(ref cpio) => cpio,
+            _ => unreachable!(),
+        }
+    }
 
     #[test]
     fn test_single_file() {
@@ -655,7 +700,7 @@ mod tests {
         // Set up the descriptor of our input file
         let b = Builder::new("./hello_world");
         // and get a writer for that input file
-        let mut writer = b.write(output, length);
+        let mut writer = b.write_cpio(output, length);
 
         // Copy the input file into our CPIO archive
         copy(&mut input, &mut writer).unwrap();
@@ -665,14 +710,14 @@ mod tests {
         let output = trailer(output).unwrap();
 
         // Now read the archive back in and make sure we get the same data.
-        let mut reader = Reader::new(output.as_slice()).unwrap();
-        assert_eq!(reader.entry.name(), "./hello_world");
-        assert_eq!(reader.entry.file_size(), length);
+        let mut reader = Reader::new(output.as_slice(), &[]).unwrap();
+        assert_eq!(entry(&reader).name(), "./hello_world");
+        assert_eq!(entry(&reader).file_size(), length);
         let mut contents = vec![];
         copy(&mut reader, &mut contents).unwrap();
         assert_eq!(contents, data);
-        let reader = Reader::new(reader.finish().unwrap()).unwrap();
-        assert!(reader.entry().is_trailer());
+        let reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
+        assert!(entry(&reader).is_trailer());
     }
 
     #[test]
@@ -696,7 +741,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length1);
+        let mut writer = b.write_cpio(output, length1);
 
         // Copy the input file into our CPIO archive
         copy(&mut input1, &mut writer).unwrap();
@@ -709,7 +754,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length2);
+        let mut writer = b.write_cpio(output, length2);
 
         // Copy the second input file into our CPIO archive
         copy(&mut input2, &mut writer).unwrap();
@@ -719,93 +764,26 @@ mod tests {
         let output = trailer(output).unwrap();
 
         // Now read the archive back in and make sure we get the same data.
-        let mut reader = Reader::new(output.as_slice()).unwrap();
-        assert_eq!(reader.entry().name(), "./hello_world");
-        assert_eq!(reader.entry().file_size(), length1);
-        assert_eq!(reader.entry().ino(), 1);
-        assert_eq!(reader.entry().uid(), 1000);
-        assert_eq!(reader.entry().gid(), 1000);
-        assert_eq!(reader.entry().mode(), 0o100644);
+        let mut reader = Reader::new(output.as_slice(), &[]).unwrap();
+        assert_eq!(entry(&reader).name(), "./hello_world");
+        assert_eq!(entry(&reader).file_size(), length1);
+        assert_eq!(entry(&reader).ino(), 1);
+        assert_eq!(entry(&reader).uid(), 1000);
+        assert_eq!(entry(&reader).gid(), 1000);
+        assert_eq!(entry(&reader).mode(), 0o100644);
         let mut contents = vec![];
         copy(&mut reader, &mut contents).unwrap();
         assert_eq!(contents, data1);
 
-        let mut reader = Reader::new(reader.finish().unwrap()).unwrap();
-        assert_eq!(reader.entry().name(), "./hello_world2");
-        assert_eq!(reader.entry().file_size(), length2);
-        assert_eq!(reader.entry().ino(), 2);
+        let mut reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
+        assert_eq!(entry(&reader).name(), "./hello_world2");
+        assert_eq!(entry(&reader).file_size(), length2);
+        assert_eq!(entry(&reader).ino(), 2);
         let mut contents = vec![];
         copy(&mut reader, &mut contents).unwrap();
         assert_eq!(contents, data2);
 
-        let reader = Reader::new(reader.finish().unwrap()).unwrap();
-        assert!(reader.entry().is_trailer());
-    }
-
-    #[test]
-    fn test_multi_file_to_writer() {
-        // Set up our input files
-        let data1: &[u8] = b"Hello, World";
-        let length1 = data1.len() as u32;
-        let mut input1 = Cursor::new(data1);
-
-        let data2: &[u8] = b"Hello, World 2";
-        let length2 = data2.len() as u32;
-        let mut input2 = Cursor::new(data2);
-
-        // Set up our output file
-        let output = vec![];
-
-        // Set up the descriptor of our input file
-        let b = Builder::new("./hello_world")
-            .ino(1)
-            .uid(1000)
-            .gid(1000)
-            .mode(0o100644);
-        // and get a writer for that input file
-        let mut writer = b.write(output, length1);
-
-        // Copy the input file into our CPIO archive
-        copy(&mut input1, &mut writer).unwrap();
-        let output = writer.finish().unwrap();
-
-        // Set up the descriptor of our second input file
-        let b = Builder::new("./hello_world2")
-            .ino(2)
-            .uid(1000)
-            .gid(1000)
-            .mode(0o100644);
-        // and get a writer for that input file
-        let mut writer = b.write(output, length2);
-
-        // Copy the second input file into our CPIO archive
-        copy(&mut input2, &mut writer).unwrap();
-        let output = writer.finish().unwrap();
-
-        // Finish up by writing the trailer for the archive
-        let output = trailer(output).unwrap();
-
-        // Now read the archive back in and make sure we get the same data.
-        let reader = Reader::new(output.as_slice()).unwrap();
-        assert_eq!(reader.entry().name(), "./hello_world");
-        assert_eq!(reader.entry().file_size(), length1);
-        assert_eq!(reader.entry().ino(), 1);
-        assert_eq!(reader.entry().uid(), 1000);
-        assert_eq!(reader.entry().gid(), 1000);
-        assert_eq!(reader.entry().mode(), 0o100644);
-        let mut contents = vec![];
-        let handle = reader.to_writer(&mut contents).unwrap();
-        assert_eq!(contents, data1);
-
-        let reader = Reader::new(handle).unwrap();
-        assert_eq!(reader.entry().name(), "./hello_world2");
-        assert_eq!(reader.entry().file_size(), length2);
-        assert_eq!(reader.entry().ino(), 2);
-        let mut contents = vec![];
-        let handle = reader.to_writer(&mut contents).unwrap();
-        assert_eq!(contents, data2);
-
-        let reader = Reader::new(handle).unwrap();
-        assert!(reader.entry().is_trailer());
+        let reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
+        assert!(reader.is_trailer());
     }
 }

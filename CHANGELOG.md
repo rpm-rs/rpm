@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added support for multiple signatures on a package as supported by upstream RPM.
+- RPMs that internally use the stripped-cpio format for the archive (v6 RPMs, or older ones with a file
+  larger than 4gb) are now supported.
 
 ### Fixed
 
-- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
+- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency and use the correct
+  archive format.
 
 ### Changed
 
