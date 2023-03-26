@@ -1,5 +1,7 @@
-// This code is copied from the crate `cpio-rs` by Jonathan Creekmore (https://github.com/jcreekmore/cpio-rs)
-// under the MIT license.
+//! Read/write `newc` (SVR4) format archives.
+
+// The code in this file is partially copied from the `cpio` crate by Jonathan Creekmore
+// (https://github.com/jcreekmore/cpio-rs) under the MIT license.
 //
 //     MIT License
 //
@@ -19,15 +21,27 @@
 //     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 //     DAMAGES OR OTHER  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 //     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS  IN THE SOFTWARE.
-
-//! Read/write `newc` (SVR4) format archives.
+//
+// It has been modified to match modifications which are used by the upstream RPM library.
+// These modifications are described upstream as follows:
+//
+//     As cpio is limited to 4 GB (32 bit unsigned) file sizes, RPM since version 4.12
+//     uses a stripped down version of cpio for packages with files > 4 GB. This format
+//     uses 07070X as magic bytes and the file header otherwise only contains the index
+//     number of the file in the RPM header as 8 byte hex string. The file metadata that
+//     is normally found in a cpio file header - including the file name - is completely
+//     omitted as it is stored in the RPM header already.
 
 use std::io::{self, Read, Seek, SeekFrom, Write};
 
-const HEADER_LEN: usize = 110; // 6 byte magic number + 104 bytes of metadata
+const HEADER_LEN: usize = 110;  // 6 byte magic + 104 bytes for metadata
+
+const STRIPPED_CPIO_HEADER_LEN: usize = 14;  // 8 bytes metadata + 6 bytes magic
 
 const MAGIC_NUMBER_NEWASCII: &[u8] = b"070701";
 const MAGIC_NUMBER_NEWCRC: &[u8] = b"070702";
+
+const STRIPPED_CPIO_MAGIC_NUMBER: &[u8] = b"07070X";  // Magic number changed to conform with RPM
 
 const TRAILER_NAME: &str = "TRAILER!!!";
 
@@ -283,6 +297,12 @@ impl<R: Read> Reader<R> {
 
         // NUL-terminated name with length `name_len` (including NUL byte).
         let mut name_bytes = vec![0u8; name_len];
+        if name_bytes.len() < 0 || name_bytes.len() > 4096 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Entry name is too long",
+            ));
+        }
         inner.read_exact(&mut name_bytes)?;
         if name_bytes.last() != Some(&0) {
             return Err(io::Error::new(
@@ -505,7 +525,7 @@ impl Builder {
     }
 
     /// Write out an entry to the provided writer in SVR4 "new ascii" CPIO format.
-    pub fn write<W: Write>(self, w: W, file_size: u32) -> Writer<W> {
+    pub fn write_cpio<W: Write>(self, w: W, file_size: u32) -> Writer<W> {
         let header = self.into_header(file_size, None);
 
         Writer {
@@ -520,6 +540,18 @@ impl Builder {
     /// Write out an entry to the provided writer in SVR4 "new crc" CPIO format.
     pub fn write_crc<W: Write>(self, w: W, file_size: u32, file_checksum: u32) -> Writer<W> {
         let header = self.into_header(file_size, Some(file_checksum));
+
+        Writer {
+            inner: w,
+            written: 0,
+            file_size,
+            header_size: header.len(),
+            header,
+        }
+    }
+
+    pub fn write_stripped_cpio<W: Write>(self, w: W, file_size: u32) -> Writer<W> {
+        let header = self.into_stripped_cpio_header(file_size);
 
         Writer {
             inner: w,
@@ -579,6 +611,23 @@ impl Builder {
 
         header
     }
+
+    fn into_stripped_cpio_header(self, file_size: u32) -> Vec<u8> {
+        let mut header = Vec::with_capacity(STRIPPED_CPIO_HEADER_LEN);
+
+        // char    c_magic[6];
+        header.extend(STRIPPED_CPIO_MAGIC_NUMBER);
+
+        // char    fx[8];
+        header.extend(format!("{:08x}", 0).as_bytes());  // @todo: I'm pretty sure "fx" is file index, but I have no idea how those values work
+
+        // pad out to a multiple of 4 bytes
+        if let Some(pad) = pad(STRIPPED_CPIO_HEADER_LEN) {
+            header.extend(pad);
+        }
+
+        header
+    }
 }
 
 impl<W: Write> Writer<W> {
@@ -633,7 +682,7 @@ impl<W: Write> Write for Writer<W> {
 /// Writes a trailer entry into an archive.
 pub fn trailer<W: Write>(w: W) -> io::Result<W> {
     let b = Builder::new(TRAILER_NAME).nlink(1);
-    let writer = b.write(w, 0);
+    let writer = b.write_cpio(w, 0);
     writer.finish()
 }
 
@@ -655,7 +704,7 @@ mod tests {
         // Set up the descriptor of our input file
         let b = Builder::new("./hello_world");
         // and get a writer for that input file
-        let mut writer = b.write(output, length);
+        let mut writer = b.write_cpio(output, length);
 
         // Copy the input file into our CPIO archive
         copy(&mut input, &mut writer).unwrap();
@@ -696,7 +745,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length1);
+        let mut writer = b.write_cpio(output, length1);
 
         // Copy the input file into our CPIO archive
         copy(&mut input1, &mut writer).unwrap();
@@ -709,7 +758,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length2);
+        let mut writer = b.write_cpio(output, length2);
 
         // Copy the second input file into our CPIO archive
         copy(&mut input2, &mut writer).unwrap();
@@ -763,7 +812,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length1);
+        let mut writer = b.write_cpio(output, length1);
 
         // Copy the input file into our CPIO archive
         copy(&mut input1, &mut writer).unwrap();
@@ -776,7 +825,7 @@ mod tests {
             .gid(1000)
             .mode(0o100644);
         // and get a writer for that input file
-        let mut writer = b.write(output, length2);
+        let mut writer = b.write_cpio(output, length2);
 
         // Copy the second input file into our CPIO archive
         copy(&mut input2, &mut writer).unwrap();

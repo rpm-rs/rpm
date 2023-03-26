@@ -678,12 +678,17 @@ impl PackageBuilder {
         let mut combined_file_sizes: u64 = 0;
         let mut uses_file_capabilities = false;
 
+        for (_, entry) in self.files.iter() {
+            combined_file_sizes += entry.size;
+        }
+
+        let uses_large_files = combined_file_sizes > u32::MAX.into();
+
         // @todo: sort entries by path?
         // @todo: normalize path?
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
         for (cpio_path, entry) in self.files.iter() {
-            combined_file_sizes += entry.size;
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -724,12 +729,17 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(entry.verify_flags.bits());
             let content = entry.content.to_owned();
-            let mut writer = payload::Builder::new(cpio_path)
-                .mode(entry.mode.into())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut archive, content.len() as u32);
+            let mut writer = if !uses_large_files {
+                payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, content.len() as u32)
+            } else {
+                payload::Builder::new(cpio_path)
+                    .write_stripped_cpio(&mut archive, content.len() as u32)
+            };
 
             writer.write_all(&content)?;
             writer.finish()?;
@@ -737,8 +747,6 @@ impl PackageBuilder {
             ino_index += 1;
         }
         payload::trailer(&mut archive)?;
-
-        let uses_large_files = combined_file_sizes > u32::MAX.into();
 
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
