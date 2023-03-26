@@ -782,12 +782,17 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(FileVerifyFlags::all().bits());
             let content = entry.content.to_owned();
-            let mut writer = payload::Builder::new(cpio_path)
-                .mode(entry.mode.into())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut archive, content.len() as u32);
+            let mut writer = if !self.needs_large_files {
+                payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, content.len() as u32)
+            } else {
+                payload::Builder::new(cpio_path)
+                    .write_stripped_cpio(&mut archive, content.len() as u32)
+            };
 
             writer.write_all(&content)?;
             writer.finish()?;
@@ -913,7 +918,6 @@ impl PackageBuilder {
         }
 
         let offset = 0;
-        let small_package = self.combined_file_sizes <= u32::MAX.into();
 
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
