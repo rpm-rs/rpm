@@ -1,4 +1,4 @@
-use std::io::BufReader;
+use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
@@ -12,13 +12,8 @@ use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
-
-#[cfg(feature = "signature-meta")]
-use std::io::Seek;
 
 /// A complete rpm file.
 ///

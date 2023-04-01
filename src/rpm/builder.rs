@@ -19,7 +19,6 @@ use crate::constants::*;
 
 #[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 use crate::RPMPackage;
@@ -493,7 +492,6 @@ impl RPMBuilder {
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
 
-        #[cfg(feature = "signature-meta")]
         let digest_header = {
             let header = header;
             let (header_digest_sha1, header_and_content_digest_md5) =
@@ -511,8 +509,6 @@ impl RPMBuilder {
                         .expect("signature header + signature length must be <4gb"),
                 )
         };
-        #[cfg(not(feature = "signature-meta"))]
-        let digest_header = { Header::<IndexSignatureTag>::new_empty() };
 
         let metadata = RPMPackageMetadata {
             lead,
