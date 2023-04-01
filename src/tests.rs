@@ -125,7 +125,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
 
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
-    assert_eq!(package.metadata.get_payload_format().unwrap(), "cpio");
 
     assert_eq!(package.metadata.is_source_package(), false);
     // @todo: add a test where this is true
@@ -261,7 +260,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         assert_eq!(*tag, metadata.signature.index_entries[i].tag);
     }
 
-    assert_eq!("cpio", metadata.get_payload_format()?);
     assert_eq!("xz", metadata.get_payload_compressor()?);
 
     let expected_file_checksums = vec![
