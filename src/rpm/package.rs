@@ -488,11 +488,15 @@ impl RPMPackageMetadata {
                 Err(RPMError::TagNotFound(_)),
             ) => Ok(vec![]),
             (Ok(authors), Ok(timestamps), Ok(descriptions)) => {
-                let v = Vec::from_iter(itertools::multizip((authors, timestamps, descriptions)).map(
-                    |(author, timestamp, description)| ChangelogEntry {
-                        author: author.to_owned(), timestamp: timestamp as u64, description: description.to_owned()
-                    },
-                ));
+                let v = Vec::from_iter(
+                    itertools::multizip((authors, timestamps, descriptions)).map(
+                        |(author, timestamp, description)| ChangelogEntry {
+                            author: author.to_owned(),
+                            timestamp: timestamp as u64,
+                            description: description.to_owned(),
+                        },
+                    ),
+                );
                 Ok(v)
             }
             (author, timestamp, description) => {

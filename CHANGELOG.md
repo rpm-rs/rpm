@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a `RPMPackage::open()` helper for working with files
 - Set RPMTAG_ENCODING to "utf-8" on all built RPMs
 - Added `$pkg.metadata.get_changelog_entries()`
+- Added the following functions to `RPMBuilder` to support weak dependencies: `recommends()`,
+  `suggests()`, `enhances()` and `supplements()`
 
 ### Fixed
 
