@@ -26,6 +26,13 @@ pub enum DigestVerificationOutcome {
     Mismatch
 }
 
+struct Digests {
+    /// The digest of the header.
+    header_digest: String,
+    /// The sha1 digest of the entire content
+    header_and_content_digest: Vec<u8>,
+}
+
 /// A complete rpm file.
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
@@ -76,16 +83,58 @@ impl RPMPackage {
         Ok(())
     }
 
+    fn read_and_update_digest_256(hasher: &mut impl digest::Digest, mut source: impl std::io::Read) {
+        {
+            // avoid loading it into memory all at once
+            // since the content could be multiple 100s of MBs
+            let mut buf = [0u8; 256];
+            while let Ok(n) = source.read(&mut buf[..]) {
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buf[0..n]);
+            }
+        }
+    }
+
+    /// Prepare both header and content digests as used by the `SignatureIndex`.
+    fn prepare_digests<HC, HACC>(&self, header_cursor: HC, header_and_content_cursor: HACC) -> Result<Digests, RPMError>
+    where
+        HC: std::io::Read,
+        HACC: std::io::Read,
+    {
+
+        let digest_md5 = {
+            use md5::Digest;
+            let mut hasher = md5::Md5::default();
+            Self::read_and_update_digest_256(&mut hasher, header_and_content_cursor);
+            let hash_result = hasher.finalize();
+            hash_result.to_vec()
+        };
+
+        let digest_sha1 = {
+            use sha1::Digest;
+            let mut hasher = sha1::Sha1::default();
+            Self::read_and_update_digest_256(&mut hasher, header_cursor);
+            let digest = hasher.finalize();
+            hex::encode(digest)
+        };
+        
+       Ok(Digests {
+            header_digest: digest_sha1,
+            header_and_content_digest: digest_md5,
+        })
+    }
+
     /// sign all headers (except for the lead) using an external key and store it as the initial header
     #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
-        use std::io::Read;
-
         // create a temporary byte repr of the header
         // and re-create all hashes
+        use std::io::Read;
 
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
@@ -94,33 +143,9 @@ impl RPMPackage {
         let mut header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
-        let digest_md5 = {
-            use md5::Digest;
-            let mut hasher = md5::Md5::default();
-            {
-                // avoid loading it into memory all at once
-                // since the content could be multiple 100s of MBs
-                let mut buf = [0u8; 256];
-                while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
-                    if n == 0 {
-                        break;
-                    }
-                    hasher.update(&buf[0..n]);
-                }
-            }
-            let hash_result = hasher.finalize();
-            hash_result.to_vec()
-        };
+        let Digests { header_digest, header_and_content_digest } = self.prepare_digests(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
 
         header_and_content_cursor.rewind()?;
-
-        let digest_sha1 = {
-            use sha1::Digest;
-            let mut hasher = sha1::Sha1::default();
-            hasher.update(&header_bytes);
-            let digest = hasher.finalize();
-            hex::encode(digest)
-        };
 
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
 
@@ -133,8 +158,8 @@ impl RPMPackage {
                 .len()
                 .try_into()
                 .expect("headers + payload can't be larger than 4gb"),
-            &digest_md5,
-            digest_sha1,
+            &header_and_content_digest,
+            &header_digest,
             rsa_signature_spanning_header_only.as_slice(),
             rsa_signature_spanning_header_and_archive.as_slice(),
         );

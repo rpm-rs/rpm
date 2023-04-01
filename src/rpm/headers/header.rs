@@ -304,12 +304,12 @@ impl Header<IndexSignatureTag> {
     pub(crate) fn new_signature_header(
         headers_plus_payload_size: u32,
         md5sum: &[u8],
-        sha1: String,
+        sha1: &str,
         rsa_spanning_header: &[u8],
         rsa_spanning_header_and_archive: &[u8],
     ) -> Self {
         SignatureHeaderBuilder::new()
-            .add_digest(sha1.as_str(), md5sum)
+            .add_digest(sha1, md5sum)
             .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
             .build(headers_plus_payload_size)
     }
@@ -520,7 +520,7 @@ mod tests2 {
     fn signature_header_build() {
         let size: u32 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
-        let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
+        let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
         let rsa_spanning_header: &[u8] = b"111222333444";
         let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
 
@@ -541,7 +541,7 @@ mod tests2 {
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA1,
                     offset,
-                    IndexData::StringTag(sha1.clone()),
+                    IndexData::StringTag(sha1.to_owned()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_RSA,
