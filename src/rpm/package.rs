@@ -180,7 +180,7 @@ impl RPMPackage {
     ///
     ///
     #[cfg(feature = "signature-meta")]
-    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<SignatureVerificationOutcome, RPMError>
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
