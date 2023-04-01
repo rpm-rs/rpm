@@ -15,6 +15,17 @@ use crate::errors::*;
 use crate::sequential_cursor::SeqCursor;
 use crate::signature;
 
+
+pub enum SignatureVerificationOutcome {
+    Pass,
+    Failure
+}
+
+pub enum DigestVerificationOutcome {
+    Match,
+    Mismatch
+}
+
 /// A complete rpm file.
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
@@ -64,8 +75,6 @@ impl RPMPackage {
         out.write_all(&self.content).await?;
         Ok(())
     }
-
-    // TODO allow passing an external signer/verifier
 
     /// sign all headers (except for the lead) using an external key and store it as the initial header
     #[cfg(feature = "signature-meta")]
@@ -170,7 +179,11 @@ impl RPMPackage {
 
         verifier.verify(header_and_content_cursor, signature_header_and_content)?;
 
-        Ok(())
+        Ok(SignatureVerificationOutcome::Pass)
+    }
+    
+    pub fn verify_digest() -> Result<DigestVerificationOutcome, RPMError> {
+        todo!()
     }
 }
 
