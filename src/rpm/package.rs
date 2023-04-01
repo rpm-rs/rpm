@@ -83,7 +83,10 @@ impl RPMPackage {
         Ok(())
     }
 
-    fn read_and_update_digest_256(hasher: &mut impl digest::Digest, mut source: impl std::io::Read) {
+    fn read_and_update_digest_256(
+        hasher: &mut impl digest::Digest,
+        mut source: impl std::io::Read,
+    ) {
         {
             // avoid loading it into memory all at once
             // since the content could be multiple 100s of MBs
@@ -98,12 +101,15 @@ impl RPMPackage {
     }
 
     /// Prepare both header and content digests as used by the `SignatureIndex`.
-    fn prepare_digests<HC, HACC>(&self, header_cursor: HC, header_and_content_cursor: HACC) -> Result<Digests, RPMError>
+    fn prepare_digests<HC, HACC>(
+        &self,
+        header_cursor: HC,
+        header_and_content_cursor: HACC,
+    ) -> Result<Digests, RPMError>
     where
         HC: std::io::Read,
         HACC: std::io::Read,
     {
-
         let digest_md5 = {
             use md5::Digest;
             let mut hasher = md5::Md5::default();
@@ -119,8 +125,8 @@ impl RPMPackage {
             let digest = hasher.finalize();
             hex::encode(digest)
         };
-        
-       Ok(Digests {
+
+        Ok(Digests {
             header_digest: digest_sha1,
             header_and_content_digest: digest_md5,
         })
@@ -143,7 +149,10 @@ impl RPMPackage {
         let mut header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
-        let Digests { header_digest, header_and_content_digest } = self.prepare_digests(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
+        let Digests {
+            header_digest,
+            header_and_content_digest,
+        } = self.prepare_digests(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
 
         header_and_content_cursor.rewind()?;
 

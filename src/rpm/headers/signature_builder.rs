@@ -133,7 +133,7 @@ mod test {
         let rsa_sig_header_only = [0u8; 32];
         let rsa_sig_header_and_archive = [0u8; 32];
 
-        let digest_header_only = hex::encode(&[0u8; 64]);        
+        let digest_header_only = hex::encode(&[0u8; 64]);
         let digest_header_and_archive = [0u8; 64];
 
         let header = builder
@@ -154,8 +154,7 @@ mod test {
             .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
     }
-    
-    use super::*;
+
     #[test]
     fn signature_builder_digest_only() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
