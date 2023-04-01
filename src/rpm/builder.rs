@@ -91,6 +91,10 @@ pub struct RPMBuilder {
     obsoletes: Vec<Dependency>,
     provides: Vec<Dependency>,
     conflicts: Vec<Dependency>,
+    recommends: Vec<Dependency>,
+    suggests: Vec<Dependency>,
+    enhances: Vec<Dependency>,
+    supplements: Vec<Dependency>,
 
     pre_inst_script: Option<String>,
     post_inst_script: Option<String>,
@@ -123,10 +127,14 @@ impl RPMBuilder {
             release: "1".to_string(),
             uid: None,
             gid: None,
-            conflicts: Vec::new(),
             provides: Vec::new(),
-            obsoletes: Vec::new(),
             requires: Vec::new(),
+            obsoletes: Vec::new(),
+            conflicts: Vec::new(),
+            recommends: Vec::new(),
+            suggests: Vec::new(),
+            enhances: Vec::new(),
+            supplements: Vec::new(),
             pre_inst_script: None,
             post_inst_script: None,
             pre_uninst_script: None,
@@ -360,23 +368,77 @@ impl RPMBuilder {
         self
     }
 
+    /// Add a "provides" dependency
+    ///
+    /// These are aliases or capabilities provided by this package which other packages can reference.
+    pub fn provides(mut self, dep: Dependency) -> Self {
+        self.provides.push(dep);
+        self
+    }
+
+    /// Add a "requires" dependency
+    ///
+    /// These are packages or capabilities which must be present in order for the package to be
+    /// installed.
     pub fn requires(mut self, dep: Dependency) -> Self {
         self.requires.push(dep);
         self
     }
 
-    pub fn obsoletes(mut self, dep: Dependency) -> Self {
-        self.obsoletes.push(dep);
-        self
-    }
-
+    /// Add a "conflicts" dependency
+    ///
+    /// These are packages which must not be present in order for the package to be installed.
     pub fn conflicts(mut self, dep: Dependency) -> Self {
         self.conflicts.push(dep);
         self
     }
 
-    pub fn provides(mut self, dep: Dependency) -> Self {
-        self.provides.push(dep);
+    /// Add an "obsoletes" dependency
+    ///
+    /// These are packages this package supercedes - if this package is installed, packages
+    /// listed as "obsoletes" will be be automatically removed (if they are present).
+    pub fn obsoletes(mut self, dep: Dependency) -> Self {
+        self.obsoletes.push(dep);
+        self
+    }
+
+    /// Get a list of dependencies which this package "recommends"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat them
+    /// as though they were "requires".  Unlike "requires" however, if installing a package listed
+    /// as a "recommends" would cause errors, it may be ignored without error.
+    pub fn recommends(mut self, dep: Dependency) -> Self {
+        self.recommends.push(dep);
+        self
+    }
+
+    /// Get a list of dependencies which this package "suggests"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
+    /// them to the user to be optionally installed.
+    pub fn suggests(mut self, dep: Dependency) -> Self {
+        self.suggests.push(dep);
+        self
+    }
+
+    /// Get a list of reverse-dependencies which this package "enhances"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
+    /// this package to the user to be optionally installed when a package matching the "enhances"
+    /// dependency is installed.
+    pub fn enhances(mut self, dep: Dependency) -> Self {
+        self.enhances.push(dep);
+        self
+    }
+
+    /// Get a list of reverse-dependencies which this package "supplements"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat this
+    /// package as if it were a "requires" when the matching package is installed. Unlike a
+    /// "requires" however, if installing it would cause errors, it can be ignored ignored
+    /// without error.
+    pub fn supplements(mut self, dep: Dependency) -> Self {
+        self.supplements.push(dep);
         self
     }
 
@@ -634,6 +696,46 @@ impl RPMBuilder {
             conflicts_names.push(d.dep_name);
             conflicts_flags.push(d.sense);
             conflicts_versions.push(d.version);
+        }
+
+        let mut recommends_names = Vec::new();
+        let mut recommends_flags = Vec::new();
+        let mut recommends_versions = Vec::new();
+
+        for d in self.recommends.into_iter() {
+            recommends_names.push(d.dep_name);
+            recommends_flags.push(d.sense);
+            recommends_versions.push(d.version);
+        }
+
+        let mut suggests_names = Vec::new();
+        let mut suggests_flags = Vec::new();
+        let mut suggests_versions = Vec::new();
+
+        for d in self.suggests.into_iter() {
+            suggests_names.push(d.dep_name);
+            suggests_flags.push(d.sense);
+            suggests_versions.push(d.version);
+        }
+
+        let mut enhances_names = Vec::new();
+        let mut enhances_flags = Vec::new();
+        let mut enhances_versions = Vec::new();
+
+        for d in self.enhances.into_iter() {
+            enhances_names.push(d.dep_name);
+            enhances_flags.push(d.sense);
+            enhances_versions.push(d.version);
+        }
+
+        let mut supplements_names = Vec::new();
+        let mut supplements_flags = Vec::new();
+        let mut supplements_versions = Vec::new();
+
+        for d in self.supplements.into_iter() {
+            supplements_names.push(d.dep_name);
+            supplements_flags.push(d.sense);
+            supplements_versions.push(d.version);
         }
 
         let offset = 0;
@@ -911,6 +1013,78 @@ impl RPMBuilder {
                 IndexTag::RPMTAG_CONFLICTFLAGS,
                 offset,
                 IndexData::Int32(conflicts_flags),
+            ));
+        }
+
+        if !recommends_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_RECOMMENDNAME,
+                offset,
+                IndexData::StringArray(recommends_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_RECOMMENDVERSION,
+                offset,
+                IndexData::StringArray(recommends_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_RECOMMENDFLAGS,
+                offset,
+                IndexData::Int32(recommends_flags),
+            ));
+        }
+
+        if !suggests_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUGGESTNAME,
+                offset,
+                IndexData::StringArray(suggests_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUGGESTVERSION,
+                offset,
+                IndexData::StringArray(suggests_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUGGESTFLAGS,
+                offset,
+                IndexData::Int32(suggests_flags),
+            ));
+        }
+
+        if !enhances_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ENHANCENAME,
+                offset,
+                IndexData::StringArray(enhances_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ENHANCEVERSION,
+                offset,
+                IndexData::StringArray(enhances_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ENHANCEFLAGS,
+                offset,
+                IndexData::Int32(enhances_flags),
+            ));
+        }
+
+        if !supplements_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUPPLEMENTNAME,
+                offset,
+                IndexData::StringArray(supplements_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUPPLEMENTVERSION,
+                offset,
+                IndexData::StringArray(supplements_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_SUPPLEMENTFLAGS,
+                offset,
+                IndexData::Int32(supplements_flags),
             ));
         }
 
