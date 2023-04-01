@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed async support from default features
 - Removed `Lead` from the public API. `Lead` is long-deprecated and shouldn't be relied on.
   Restricted the data we write to `Lead` to the bare minimum required for compatibility.
+- Removed `$pkg.metadata.get_payload_format()`. It is still possible to fetch manually, but
+  practically speaking it is not meaningful. rpmbuild has written a misleading value here for
+  10 years.
 
 ## 0.9.0
 

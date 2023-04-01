@@ -319,12 +319,6 @@ impl RPMPackageMetadata {
     // TODO: get_archive_size, get_installed_size
 
     #[inline]
-    pub fn get_payload_format(&self) -> Result<&str, RPMError> {
-        self.header
-            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADFORMAT)
-    }
-
-    #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
