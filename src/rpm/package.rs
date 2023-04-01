@@ -184,8 +184,6 @@ impl RPMPackage {
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
-        // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
-
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
 
