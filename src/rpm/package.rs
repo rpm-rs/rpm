@@ -26,11 +26,11 @@ pub enum DigestVerificationOutcome {
     Mismatch
 }
 
-struct Digests {
+pub(crate) struct Digests {
     /// The digest of the header.
-    header_digest: String,
+    pub(crate) header_digest: String,
     /// The sha1 digest of the entire content
-    header_and_content_digest: Vec<u8>,
+    pub(crate) header_and_content_digest: Vec<u8>,
 }
 
 /// A complete rpm file.
@@ -101,8 +101,7 @@ impl RPMPackage {
     }
 
     /// Prepare both header and content digests as used by the `SignatureIndex`.
-    fn prepare_digests<HC, HACC>(
-        &self,
+    pub(crate) fn create_digests_from_readers<HC, HACC>(
         header_cursor: HC,
         header_and_content_cursor: HACC,
     ) -> Result<Digests, RPMError>
@@ -140,7 +139,6 @@ impl RPMPackage {
     {
         // create a temporary byte repr of the header
         // and re-create all hashes
-        use std::io::Read;
 
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
@@ -152,7 +150,7 @@ impl RPMPackage {
         let Digests {
             header_digest,
             header_and_content_digest,
-        } = self.prepare_digests(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
+        } = Self::create_digests_from_readers(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
 
         header_and_content_cursor.rewind()?;
 

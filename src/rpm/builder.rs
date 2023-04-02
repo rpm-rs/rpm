@@ -11,16 +11,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use gethostname::gethostname;
 
 use crate::errors::*;
-
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
 use crate::signature;
 
+use crate::Digests;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
@@ -571,30 +570,10 @@ impl RPMBuilder {
     }
 
     /// use prepared data but make sure the signatures are
-    #[cfg(feature = "signature-meta")]
-    fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
-        let digest_md5 = {
-            use md5::Digest;
-
-            // across header index and content (compressed or uncompressed, depends on configuration)
-            let mut hasher = md5::Md5::default();
-            hasher.update(header);
-            hasher.update(content);
-            let digest_md5 = hasher.finalize();
-            digest_md5.to_vec()
-        };
-
-        // header only, not the lead, just the header index
-        let digest_sha1 = {
-            use sha1::Digest;
-
-            let mut hasher = sha1::Sha1::default();
-            hasher.update(header);
-            let digest_sha1 = hasher.finalize();
-            hex::encode(digest_sha1)
-        };
-
-        Ok((digest_sha1, digest_md5))
+    fn derive_hashes(mut header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
+        let mut header_and_content_cursor = SeqCursor::new(&[header, content]);
+        let Digests { header_and_content_digest, header_digest } = RPMPackage::create_digests_from_readers(&mut header, &mut header_and_content_cursor)?;
+        Ok((header_digest, header_and_content_digest))
     }
 
     /// prepare all rpm headers including content

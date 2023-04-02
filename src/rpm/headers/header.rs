@@ -516,6 +516,7 @@ where
 mod tests2 {
     use super::*;
 
+    #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
