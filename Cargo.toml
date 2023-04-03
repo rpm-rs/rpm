@@ -52,7 +52,7 @@ tokio-util = { version = "0.7.4", features = ["compat"], optional = true}
 rsa = { version = "0.8" }
 rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
-serial_test = "1.0"
+serial_test = "2.0"
 
 # Use for testing async files when async-futures enabled
 tokio = {version = "1", features = ["full"]}
