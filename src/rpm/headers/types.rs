@@ -231,6 +231,7 @@ impl From<RPMFileOptionsBuilder> for RPMFileOptions {
 }
 
 /// Description of a dependency as present in a RPM header record.
+#[derive(Debug, PartialEq, Eq)]
 pub struct Dependency {
     pub(crate) dep_name: String,
     pub(crate) sense: u32, // @todo: https://github.com/rpm-rs/rpm/issues/52

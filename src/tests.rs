@@ -131,6 +131,148 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         false
     );
 
+    assert_eq!(
+        package.metadata.get_provides().unwrap(),
+        vec![
+            Dependency {
+                dep_name: "389-ds-base-devel".to_string(),
+                sense: 8,
+                version: "1.3.8.4-15.el7".to_string()
+            },
+            Dependency {
+                dep_name: "389-ds-base-devel(x86-64)".to_string(),
+                sense: 8,
+                version: "1.3.8.4-15.el7".to_string()
+            },
+            Dependency {
+                dep_name: "pkgconfig(dirsrv)".to_string(),
+                sense: 32776,
+                version: "1.3.8.4".to_string()
+            },
+            Dependency {
+                dep_name: "pkgconfig(libsds)".to_string(),
+                sense: 32776,
+                version: "1.3.8.4".to_string()
+            },
+            Dependency {
+                dep_name: "pkgconfig(nunc-stans)".to_string(),
+                sense: 32776,
+                version: "1.3.8.4".to_string()
+            }
+        ]
+    );
+    assert_eq!(
+        package.metadata.get_requires().unwrap(),
+        vec![
+            Dependency {
+                dep_name: "/usr/bin/pkg-config".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "389-ds-base-libs".to_string(),
+                sense: 8,
+                version: "1.3.8.4-15.el7".to_string()
+            },
+            Dependency {
+                dep_name: "libevent".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libldaputil.so.0()(64bit)".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libnunc-stans.so.0()(64bit)".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libsds.so.0()(64bit)".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libslapd.so.0()(64bit)".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libtalloc".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "libtevent".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "nspr-devel".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "nss-devel".to_string(),
+                sense: 12,
+                version: "3.34".to_string()
+            },
+            Dependency {
+                dep_name: "openldap-devel".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "pkgconfig".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "pkgconfig(nspr)".to_string(),
+                sense: 16384,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "rpmlib(CompressedFileNames)".to_string(),
+                sense: 16777226,
+                version: "3.0.4-1".to_string()
+            },
+            Dependency {
+                dep_name: "rpmlib(FileDigests)".to_string(),
+                sense: 16777226,
+                version: "4.6.0-1".to_string()
+            },
+            Dependency {
+                dep_name: "rpmlib(PayloadFilesHavePrefix)".to_string(),
+                sense: 16777226,
+                version: "4.0-1".to_string()
+            },
+            Dependency {
+                dep_name: "svrcore-devel".to_string(),
+                sense: 12,
+                version: "4.1.3".to_string()
+            },
+            Dependency {
+                dep_name: "systemd-libs".to_string(),
+                sense: 0,
+                version: "".to_string()
+            },
+            Dependency {
+                dep_name: "rpmlib(PayloadIsXz)".to_string(),
+                sense: 16777226,
+                version: "5.2-1".to_string()
+            }
+        ]
+    );
+    assert_eq!(package.metadata.get_conflicts().unwrap(), vec![]);
+    assert_eq!(package.metadata.get_obsoletes().unwrap(), vec![]);
+    assert_eq!(package.metadata.get_supplements().unwrap(), vec![]);
+    assert_eq!(package.metadata.get_suggests().unwrap(), vec![]);
+    assert_eq!(package.metadata.get_enhances().unwrap(), vec![]);
+    assert_eq!(package.metadata.get_recommends().unwrap(), vec![]);
+
     assert_eq!(package.metadata.is_source_package(), false);
     // @todo: add a test where this is true
     // also https://github.com/rpm-rs/rpm/issues/66

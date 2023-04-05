@@ -314,9 +314,138 @@ impl RPMPackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
     }
 
-    // TODO: get_provides, get_requires, etc.
-    // TODO: get_header_byte_range
-    // TODO: get_archive_size, get_installed_size
+    fn get_dependencies(
+        &self,
+        names_tag: IndexTag,
+        flags_tag: IndexTag,
+        versions_tag: IndexTag,
+    ) -> Result<Vec<Dependency>, RPMError> {
+        let names = self.header.get_entry_data_as_string_array(names_tag);
+        let flags = self.header.get_entry_data_as_u32_array(flags_tag);
+        let versions = self.header.get_entry_data_as_string_array(versions_tag);
+
+        match (names, flags, versions) {
+            // Return an empty list if the tags are not present
+            (
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+            ) => Ok(vec![]),
+            (Ok(names), Ok(flags), Ok(versions)) => {
+                let v = Vec::from_iter(itertools::multizip((names, flags, versions)).map(
+                    |(name, flags, version)| Dependency {
+                        dep_name: name.to_owned(),
+                        sense: flags,
+                        version: version.to_owned(),
+                    },
+                ));
+                Ok(v)
+            }
+            (names, flags, versions) => {
+                names?;
+                flags?;
+                versions?;
+                unreachable!()
+            }
+        }
+    }
+
+    /// Get a list of dependencies which this package "provides"
+    ///
+    /// These are aliases or capabilities provided by this package which other packages can reference.
+    pub fn get_provides(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_PROVIDENAME,
+            IndexTag::RPMTAG_PROVIDEFLAGS,
+            IndexTag::RPMTAG_PROVIDEVERSION,
+        )
+    }
+
+    /// Get a list of dependencies which this package "requires"
+    ///
+    /// These are packages or capabilities which must be present in order for the package to be
+    /// installed.
+    pub fn get_requires(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_REQUIRENAME,
+            IndexTag::RPMTAG_REQUIREFLAGS,
+            IndexTag::RPMTAG_REQUIREVERSION,
+        )
+    }
+
+    /// Get a list of dependencies which this package "conflicts" with
+    ///
+    /// These are packages which must not be present in order for the package to be installed.
+    pub fn get_conflicts(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_CONFLICTNAME,
+            IndexTag::RPMTAG_CONFLICTFLAGS,
+            IndexTag::RPMTAG_CONFLICTVERSION,
+        )
+    }
+
+    /// Get a list of dependencies which this package "obsoletes"
+    ///
+    /// These are packages which are superceded by this package - if this package is installed,
+    /// they will be automatically removed if they are present.
+    pub fn get_obsoletes(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_OBSOLETENAME,
+            IndexTag::RPMTAG_OBSOLETEFLAGS,
+            IndexTag::RPMTAG_OBSOLETEVERSION,
+        )
+    }
+
+    /// Get a list of dependencies which this package "recommends"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat them
+    /// as though they were "requires".  Unlike "requires" however, if installing a package listed
+    /// as a "recommends" would cause errors, it may be ignored without error.
+    pub fn get_recommends(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_RECOMMENDNAME,
+            IndexTag::RPMTAG_RECOMMENDFLAGS,
+            IndexTag::RPMTAG_RECOMMENDVERSION,
+        )
+    }
+
+    /// Get a list of dependencies which this package "suggests"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
+    /// them to the user to be optionally installed.
+    pub fn get_suggests(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_SUGGESTNAME,
+            IndexTag::RPMTAG_SUGGESTFLAGS,
+            IndexTag::RPMTAG_SUGGESTVERSION,
+        )
+    }
+
+    /// Get a list of reverse-dependencies which this package "enhances"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
+    /// this package to the user to be optionally installed when a package matching the "enhances"
+    /// dependency is installed.
+    pub fn get_enhances(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_ENHANCENAME,
+            IndexTag::RPMTAG_ENHANCEFLAGS,
+            IndexTag::RPMTAG_ENHANCEVERSION,
+        )
+    }
+
+    /// Get a list of reverse-dependencies which this package "supplements"
+    ///
+    /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat this
+    /// package as a "requires" when the matching package is installed. Unlike a "requires" however,
+    /// if installing it would cause errors, it can be ignored ignored without error.
+    pub fn get_supplements(&self) -> Result<Vec<Dependency>, RPMError> {
+        self.get_dependencies(
+            IndexTag::RPMTAG_SUPPLEMENTNAME,
+            IndexTag::RPMTAG_SUPPLEMENTFLAGS,
+            IndexTag::RPMTAG_SUPPLEMENTVERSION,
+        )
+    }
 
     #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
