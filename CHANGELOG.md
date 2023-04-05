@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Added `rpmlib()` dependencies to built packages as appropriate
+- Fixed an issue where `get_file_paths()` and `get_file_entries()` would fail if the package
+  did not have any files associated.
 
 ### Breaking Changes
 
