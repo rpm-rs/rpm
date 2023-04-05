@@ -125,6 +125,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
 
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
+    // @todo: too many to test for, need a new fixture RPM. it works though.
+    assert_eq!(package.metadata.get_changelog_entries().unwrap().is_empty(), false);
 
     assert_eq!(package.metadata.is_source_package(), false);
     // @todo: add a test where this is true
