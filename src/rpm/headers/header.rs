@@ -477,6 +477,14 @@ impl FileDigest {
     }
 }
 
+/// User facing accessor type for a changelog entry
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct ChangelogEntry {
+    pub author: String,
+    pub timestamp: u64,
+    pub description: String,
+}
+
 /// User facing accessor type for a file entry with contextual information
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FileEntry {
