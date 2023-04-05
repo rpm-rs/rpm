@@ -468,37 +468,54 @@ impl RPMPackageMetadata {
     /// Extract a the set of contained file names.
     pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, RPMError> {
         // reconstruct the messy de-constructed paths
-        let base = self
+        let basenames = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_BASENAMES)?;
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_BASENAMES);
         let biject = self
             .header
-            .get_entry_data_as_u32_array(IndexTag::RPMTAG_DIRINDEXES)?;
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_DIRINDEXES);
         let dirs = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES);
 
-        let n = dirs.len();
-        let v = base
-            .iter()
-            .zip(biject.into_iter())
-            .try_fold::<Vec<PathBuf>, _, _>(
-                Vec::<PathBuf>::with_capacity(base.len()),
-                |mut acc, item| {
-                    let (base, dir_index) = item;
-                    if let Some(dir) = dirs.get(dir_index as usize) {
-                        acc.push(PathBuf::from(dir).join(base));
-                        Ok(acc)
-                    } else {
-                        Err(RPMError::InvalidTagIndex {
-                            tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
-                            index: dir_index,
-                            bound: n as u32,
-                        })
-                    }
-                },
-            )?;
-        Ok(v)
+        // Return an empty list if the tags are not present
+        match (basenames, biject, dirs) {
+            (
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+            ) => Ok(vec![]),
+            (Ok(basenames), Ok(biject), Ok(dirs)) => {
+                let n = dirs.len();
+
+                let v = basenames
+                    .iter()
+                    .zip(biject.into_iter())
+                    .try_fold::<Vec<PathBuf>, _, _>(
+                        Vec::<PathBuf>::with_capacity(basenames.len()),
+                        |mut acc, item| {
+                            let (basename, dir_index) = item;
+                            if let Some(dir) = dirs.get(dir_index as usize) {
+                                acc.push(PathBuf::from(dir).join(basename));
+                                Ok(acc)
+                            } else {
+                                Err(RPMError::InvalidTagIndex {
+                                    tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
+                                    index: dir_index,
+                                    bound: n as u32,
+                                })
+                            }
+                        },
+                    )?;
+                Ok(v)
+            }
+            (basenames, biject, dirs) => {
+                basenames?;
+                biject?;
+                dirs?;
+                unreachable!()
+            }
+        }
     }
 
     /// The digest algorithm used per file.
@@ -525,19 +542,19 @@ impl RPMPackageMetadata {
         //
         let modes = self
             .header
-            .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES)?;
+            .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES);
         let users = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME)?;
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME);
         let groups = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME)?;
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME);
         let digests = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)?;
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS);
         let mtimes = self
             .header
-            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES)?;
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES);
         let sizes = self
             .header
             .get_entry_data_as_u64_array(IndexTag::RPMTAG_LONGFILESIZES)
@@ -550,51 +567,74 @@ impl RPMPackageMetadata {
                             .map(|file_size| file_size as _)
                             .collect::<Vec<u64>>()
                     })
-            })?;
+            });
         let flags = self
             .header
-            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS)?;
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS);
         // @todo
         // let caps = self.get_entry_i32_array_data(IndexTag::RPMTAG_FILECAPS)?;
 
-        let paths = self.get_file_paths()?;
-        let n = paths.len();
+        match (modes, users, groups, digests, mtimes, sizes, flags) {
+            (Ok(modes), Ok(users), Ok(groups), Ok(digests), Ok(mtimes), Ok(sizes), Ok(flags)) => {
+                let paths = self.get_file_paths()?;
+                let n = paths.len();
 
-        let v = itertools::multizip((
-            paths.into_iter(),
-            users,
-            groups,
-            modes,
-            digests,
-            mtimes,
-            sizes,
-            flags,
-        ))
-        .try_fold::<Vec<FileEntry>, _, Result<_, RPMError>>(
-            Vec::with_capacity(n),
-            |mut acc, (path, user, group, mode, digest, mtime, size, flags)| {
-                let digest = if digest.is_empty() {
-                    None
-                } else {
-                    Some(FileDigest::load_from_str(algorithm, digest)?)
-                };
-                let utc = chrono::Utc;
-                acc.push(FileEntry {
-                    path,
-                    ownership: FileOwnership {
-                        user: user.to_owned(),
-                        group: group.to_owned(),
+                let v = itertools::multizip((
+                    paths.into_iter(),
+                    users,
+                    groups,
+                    modes,
+                    digests,
+                    mtimes,
+                    sizes,
+                    flags,
+                ))
+                .try_fold::<Vec<FileEntry>, _, Result<_, RPMError>>(
+                    Vec::with_capacity(n),
+                    |mut acc, (path, user, group, mode, digest, mtime, size, flags)| {
+                        let digest = if digest.is_empty() {
+                            None
+                        } else {
+                            Some(FileDigest::load_from_str(algorithm, digest)?)
+                        };
+                        let utc = chrono::Utc;
+                        acc.push(FileEntry {
+                            path,
+                            ownership: FileOwnership {
+                                user: user.to_owned(),
+                                group: group.to_owned(),
+                            },
+                            mode: mode.into(),
+                            modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
+                            digest,
+                            category: FileCategory::from_u32(flags).unwrap_or_default(),
+                            size: size as usize,
+                        });
+                        Ok(acc)
                     },
-                    mode: mode.into(),
-                    modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
-                    digest,
-                    category: FileCategory::from_u32(flags).unwrap_or_default(),
-                    size: size as usize,
-                });
-                Ok(acc)
-            },
-        )?;
-        Ok(v)
+                )?;
+                Ok(v)
+            }
+            (
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+                Err(RPMError::TagNotFound(_)),
+            ) => Ok(vec![]),
+            (modes, users, groups, digests, mtimes, sizes, flags) => {
+                modes?;
+                users?;
+                groups?;
+                digests?;
+                mtimes?;
+                sizes?;
+                flags?;
+                unreachable!()
+            }
+        }
     }
 
     /// Return a list of changelog entries
