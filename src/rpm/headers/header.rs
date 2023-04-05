@@ -165,8 +165,7 @@ where
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
-    #[cfg(feature = "signature-meta")]
-    pub(crate) fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
+    pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -178,7 +177,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
+    pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -190,7 +189,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
+    pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -202,7 +201,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
+    pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -214,7 +213,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
+    pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -226,8 +225,7 @@ where
             })
     }
 
-    #[allow(unused)]
-    pub(crate) fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
+    pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -239,7 +237,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
+    pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -251,7 +249,7 @@ where
             })
     }
 
-    pub(crate) fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
+    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
             .data
@@ -948,7 +946,6 @@ impl IndexData {
         }
     }
 
-    #[allow(unused)]
     pub(crate) fn as_u64(&self) -> Option<u64> {
         match self {
             IndexData::Int64(s) => s.first().copied(),
@@ -970,7 +967,6 @@ impl IndexData {
         }
     }
 
-    #[cfg(feature = "signature-meta")]
     pub(crate) fn as_binary(&self) -> Option<&[u8]> {
         match self {
             IndexData::Bin(d) => Some(d.as_slice()),

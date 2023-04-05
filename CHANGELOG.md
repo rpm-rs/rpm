@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `$pkg.metadata.get_changelog_entries()`
 - Added the following functions to `RPMBuilder` to support weak dependencies: `recommends()`,
   `suggests()`, `enhances()` and `supplements()`
+- Added the following functions to `$pkg.metadata` for retrieval of various kinds of RPM
+  dependencies: `get_provides()`, `get_requires()`, `get_obsoletes()`, `get_conflicts()`,
+  `get_recommends()`, `get_suggests()`, `get_enhances()`, `get_supplements()`
+- Added the following functions to `$pkg.metadata.header` to enable the reading of arbitrary
+  tags in the header: `get_entry_data_as_binary()`, `get_entry_data_as_string()`,
+  `get_entry_data_as_u16_array()`, `get_entry_data_as_u32()`, `get_entry_data_as_u32_array()`,
+  `get_entry_data_as_u64()`, `get_entry_data_as_u64_array()`, `get_entry_data_as_string_array()`
 
 ### Fixed
 
