@@ -16,10 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the following functions to `$pkg.metadata` for retrieval of various kinds of RPM
   dependencies: `get_provides()`, `get_requires()`, `get_obsoletes()`, `get_conflicts()`,
   `get_recommends()`, `get_suggests()`, `get_enhances()`, `get_supplements()`
+- Added the following functions to `$pkg.metadata` for retrieval of metadata: `get_group()`,
+  `get_description()`, `get_summary()`
 - Added the following functions to `$pkg.metadata.header` to enable the reading of arbitrary
   tags in the header: `get_entry_data_as_binary()`, `get_entry_data_as_string()`,
   `get_entry_data_as_u16_array()`, `get_entry_data_as_u32()`, `get_entry_data_as_u32_array()`,
-  `get_entry_data_as_u64()`, `get_entry_data_as_u64_array()`, `get_entry_data_as_string_array()`
+  `get_entry_data_as_u64()`, `get_entry_data_as_u64_array()`, `get_entry_data_as_string_array()`,
+  `get_entry_data_as_i18n_string()`
 
 ### Fixed
 
