@@ -189,6 +189,18 @@ where
             })
     }
 
+    pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, RPMError> {
+        let entry = self.find_entry_or_err(&tag)?;
+        entry
+            .data
+            .as_i18n_str()
+            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+                expected_data_type: "i18n string array",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            })
+    }
+
     pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
         let entry = self.find_entry_or_err(&tag)?;
         entry
@@ -963,6 +975,16 @@ impl IndexData {
     pub(crate) fn as_string_array(&self) -> Option<&[String]> {
         match self {
             IndexData::StringArray(d) | IndexData::I18NString(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_i18n_str(&self) -> Option<&str> {
+        match self {
+            IndexData::I18NString(s) => {
+                // @todo: an actual implementation that doesn't just get the first string from the table
+                Some(&s[0])
+            }
             _ => None,
         }
     }

@@ -101,19 +101,18 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_license().unwrap(), "GPLv3+");
     assert_eq!(package.metadata.get_vendor().unwrap(), "CentOS");
 
-    // TODO: internationalized strings
-    // assert_eq!(
-    //     package.metadata.get_summary().unwrap(),
-    //     "Development libraries for 389 Directory Server"
-    // );
-    // assert_eq!(
-    //     package.metadata.get_description().unwrap(),
-    //     "Development Libraries and headers for the 389 Directory Server base package."
-    // );
-    // assert_eq!(
-    //     package.metadata.get_group().unwrap(),
-    //     "Development/Libraries"
-    // );
+    assert_eq!(
+        package.metadata.get_summary().unwrap(),
+        "Development libraries for 389 Directory Server"
+    );
+    assert_eq!(
+        package.metadata.get_description().unwrap(),
+        "Development Libraries and headers for the 389 Directory Server base package."
+    );
+    assert_eq!(
+        package.metadata.get_group().unwrap(),
+        "Development/Libraries"
+    );
     assert_eq!(
         package.metadata.get_source_rpm().unwrap(),
         "389-ds-base-1.3.8.4-15.el7.src.rpm"

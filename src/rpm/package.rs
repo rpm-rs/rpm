@@ -286,8 +286,23 @@ impl RPMPackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)
     }
 
-    // TODO: internationalized strings
-    // get_summary, get_description, get_group
+    #[inline]
+    pub fn get_summary(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_i18n_string(IndexTag::RPMTAG_SUMMARY)
+    }
+
+    #[inline]
+    pub fn get_description(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_i18n_string(IndexTag::RPMTAG_DESCRIPTION)
+    }
+
+    #[inline]
+    pub fn get_group(&self) -> Result<&str, RPMError> {
+        self.header
+            .get_entry_data_as_i18n_string(IndexTag::RPMTAG_GROUP)
+    }
 
     #[inline]
     pub fn get_packager(&self) -> Result<&str, RPMError> {
