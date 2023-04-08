@@ -8,6 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use gethostname::gethostname;
+
 use crate::errors::*;
 
 use super::compressor::Compressor;
@@ -67,17 +69,31 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
+/// Returns a value that can be used for associating several package builds as being part of one operation
+///
+/// You can use any value, but the standard format is "${build_host} ${build_time}"
+///
+/// See `RPMBuilder::cookie()`
+pub fn get_build_cookie() -> String {
+    let build_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32;
+    let build_host = gethostname().to_string_lossy().to_string();
+
+    format!("{} {}", build_host, build_time)
+}
+
 /// Builder pattern for a full rpm file.
 ///
 /// Preferred method of creating a rpm file.
 pub struct RPMBuilder {
     name: String,
     epoch: u32,
-    build_time: u32, // because rpm_time_t is an uint32
     version: String,
     license: String,
     arch: String,
-    uid: Option<u32>,
+    uid: Option<u32>, // @todo: nothing is actually setting these or allowing setting them, they fall back to default
     gid: Option<u32>,
     desc: String,
     release: String,
@@ -109,22 +125,33 @@ pub struct RPMBuilder {
     vendor: Option<String>,
     url: Option<String>,
     vcs: Option<String>,
+    cookie: Option<String>,
+
+    // Filled out automatically if not overridden
+    build_time: u32, // because rpm_time_t is an uint32
+    build_host: String,
 }
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
+        // @todo, should these values be calculated lazily (only when .build()) is called?
+        let build_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
+        let build_host = gethostname().to_string_lossy().to_string();
+
         RPMBuilder {
             name: name.to_string(),
             epoch: 0,
-            build_time: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
             desc: desc.to_string(),
             release: "1".to_string(),
+            build_time,
+            build_host,
+            cookie: None,
             uid: None,
             gid: None,
             provides: Vec::new(),
@@ -167,6 +194,21 @@ impl RPMBuilder {
 
     pub fn epoch(mut self, epoch: u32) -> Self {
         self.epoch = epoch;
+        self
+    }
+
+    /// Override the automatically-detected name of the build host with a new value
+    pub fn build_host(mut self, build_host: &str) -> Self {
+        self.build_host = build_host.to_owned();
+        self
+    }
+
+    /// Provide a value that can be used for tracking packages built together, e.g.
+    /// packages built in one build operation.
+    ///
+    /// See: `get_build_cookie()`
+    pub fn cookie(mut self, cookie: &str) -> Self {
+        self.cookie = Some(cookie.to_owned());
         self
     }
 
@@ -761,6 +803,13 @@ impl RPMBuilder {
                 offset,
                 IndexData::Int32(vec![self.build_time]),
             ),
+            // @todo: write RPMTAG_RPMVERSION?
+            // @todo: write RPMTAG_PLATFORM?
+            IndexEntry::new(
+                IndexTag::RPMTAG_BUILDHOST,
+                offset,
+                IndexData::StringTag(self.build_host),
+            ),
             IndexEntry::new(
                 IndexTag::RPMTAG_VERSION,
                 offset,
@@ -1141,6 +1190,14 @@ impl RPMBuilder {
                 IndexTag::RPMTAG_VCS,
                 offset,
                 IndexData::StringTag(vcs),
+            ));
+        }
+
+        if let Some(cookie) = self.cookie {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_COOKIE,
+                offset,
+                IndexData::StringTag(cookie),
             ));
         }
 

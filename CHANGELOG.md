@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `$pkg.metadata.get_changelog_entries()`
 - Added the following functions to `RPMBuilder` to support weak dependencies: `recommends()`,
   `suggests()`, `enhances()` and `supplements()`
+- Added the following additional functions to `RPMBuilder`: `cookie()`, `build_host()`
+- Added `get_build_cookie()` for use with `RPMBuilder::cookie()`
 - Added the following functions to `$pkg.metadata` for retrieval of various kinds of RPM
   dependencies: `get_provides()`, `get_requires()`, `get_obsoletes()`, `get_conflicts()`,
   `get_recommends()`, `get_suggests()`, `get_enhances()`, `get_supplements()`
@@ -32,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- Bump MSRV to 1.63.0
+- Bump MSRV to 1.64.0
 - Removed async support from default features
 - Removed `Lead` from the public API. `Lead` is long-deprecated and shouldn't be relied on.
   Restricted the data we write to `Lead` to the bare minimum required for compatibility.
