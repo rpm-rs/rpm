@@ -3,31 +3,10 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::process::Stdio;
 
-fn test_rpm_file_path() -> std::path::PathBuf {
-    let mut rpm_path = cargo_manifest_dir();
-    rpm_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
-    rpm_path
-}
+mod common;
 
-fn cargo_manifest_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn cargo_out_dir() -> std::path::PathBuf {
-    cargo_manifest_dir().join("target")
-}
-
-pub fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
-    let signing_key = include_bytes!("../test_assets/secret_key.asc");
-    let verification_key = include_bytes!("../test_assets/public_key.asc");
-    (signing_key.to_vec(), verification_key.to_vec())
-}
-
-
-#[cfg(feature = "signature-meta")]
 use signature::{self, Verifying};
 
-#[cfg(feature = "signature-pgp")]
 mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
@@ -37,17 +16,17 @@ mod pgp {
     #[serial_test::serial]
     #[cfg(feature = "async-futures")]
     async fn create_full_rpm_async() -> Result<(), Box<dyn std::error::Error>> {
-        use tokio_util::compat::TokioAsyncReadCompatExt;
         use futures::io::AsyncWriteExt;
+        use tokio_util::compat::TokioAsyncReadCompatExt;
 
         let _ = env_logger::try_init();
-        let (signing_key, _) = load_asc_keys();
+        let (signing_key, _) = common::load_asc_keys();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
 
-        let cargo_file = cargo_manifest_dir().join("Cargo.toml");
-        let out_file = cargo_out_dir().join("test.rpm");
+        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = tokio::fs::File::create(out_file).await?.compat();
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
@@ -125,7 +104,7 @@ mod pgp {
     #[serial_test::serial]
     fn create_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let pkg = RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
-        let out_file = cargo_out_dir().join("test.rpm");
+        let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = std::fs::File::create(out_file)?;
         pkg.write(&mut f)?;
@@ -149,13 +128,13 @@ mod pgp {
     fn create_full_rpm_with_signature_and_verify_externally(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = load_asc_keys();
+        let (signing_key, _) = common::load_asc_keys();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
 
-        let cargo_file = cargo_manifest_dir().join("Cargo.toml");
-        let out_file = cargo_out_dir().join("test.rpm");
+        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
@@ -223,70 +202,15 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
-    fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (signing_key, verification_key) = load_asc_keys();
-
-        let cargo_file = cargo_manifest_dir().join("Cargo.toml");
-        let out_file = cargo_out_dir().join("roundtrip.rpm");
-
-        {
-            let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
-
-            let mut f = std::fs::File::create(&out_file)?;
-            let pkg = RPMBuilder::new(
-                "roundtrip",
-                "1.0.0",
-                "MIT",
-                "x86_64",
-                "spins round and round",
-            )
-            .compression(Compressor::from_str("gzip")?)
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(FileMode::regular(0o777))
-                    .is_config(),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/Cargo.toml"),
-            )?
-            .epoch(3)
-            .pre_install_script("echo preinst")
-            .add_changelog_entry("you", "yada yada", 12_317_712)
-            .requires(Dependency::any("rpm-sign".to_string()))
-            .build_and_sign(&signer)?;
-
-            pkg.write(&mut f)?;
-            let epoch = pkg.metadata.get_epoch()?;
-            assert_eq!(3, epoch);
-        }
-
-        // verify
-        {
-            let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
-            let mut buf_reader = std::io::BufReader::new(out_file);
-            let package = RPMPackage::parse(&mut buf_reader)?;
-
-            let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
-
-            package.verify_signature(verifier)?;
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    #[serial_test::serial]
     fn create_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_, verification_key) = load_asc_keys();
+        let (_, verification_key) = common::load_asc_keys();
 
         let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
-        let rpm_file_path = test_rpm_file_path();
-        let out_file = cargo_out_dir().join(rpm_file_path.file_name().unwrap().to_str().unwrap());
+        let rpm_file_path = common::rpm_389_ds_file_path();
+        let out_file =
+            common::cargo_out_dir().join(rpm_file_path.file_name().unwrap().to_str().unwrap());
 
         println!("cpy {} -> {}", rpm_file_path.display(), out_file.display());
         std::fs::copy(rpm_file_path.as_path(), out_file.as_path()).expect("Must be able to copy");
@@ -320,10 +244,10 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
     #[serial_test::serial]
     fn create_signature_with_gpg_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_signing_key, verification_key) = load_asc_keys();
+        let (_signing_key, verification_key) = common::load_asc_keys();
 
-        let test_file = cargo_out_dir().join("test.file");
-        let test_file_sig = cargo_out_dir().join("test.file.sig");
+        let test_file = common::cargo_out_dir().join("test.file");
+        let test_file_sig = common::cargo_out_dir().join("test.file.sig");
 
         std::fs::write(&test_file, "test").expect("Must be able to write");
         let _ = std::fs::remove_file(&test_file_sig);
@@ -415,11 +339,14 @@ fn podman_container_launcher(
     mut mappings: Vec<String>,
 ) -> std::io::Result<()> {
     // always mount assets and out directory into container
-    let var_cache = cargo_manifest_dir().join("dnf-cache");
+    let var_cache = common::cargo_manifest_dir().join("dnf-cache");
     let _ = std::fs::create_dir(var_cache.as_path());
     let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
-    let out = format!("{}:/out:z", cargo_out_dir().display());
-    let assets = format!("{}/test_assets:/assets:z", cargo_manifest_dir().display());
+    let out = format!("{}:/out:z", common::cargo_out_dir().display());
+    let assets = format!(
+        "{}/test_assets:/assets:z",
+        common::cargo_manifest_dir().display()
+    );
     mappings.extend(vec![out, assets, var_cache]);
     let mut args = mappings
         .iter()
