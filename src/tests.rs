@@ -1,74 +1,11 @@
 use super::*;
 
-#[cfg(feature = "signature-meta")]
-use crate::signature::pgp::{Signer, Verifier};
-
-fn test_private_key_path() -> std::path::PathBuf {
-    let mut rpm_path = cargo_manifest_dir();
-    rpm_path.push("test_assets/secret_key.asc");
-    rpm_path
-}
-
-fn test_public_key_path() -> std::path::PathBuf {
-    let mut rpm_path = cargo_manifest_dir();
-    rpm_path.push("test_assets/public_key.asc");
-    rpm_path
-}
-
-fn test_rpm_file_path() -> std::path::PathBuf {
-    let mut rpm_path = cargo_manifest_dir();
-    rpm_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
-    rpm_path
-}
-
-fn file_signatures_test_rpm_file_path() -> std::path::PathBuf {
-    let mut rpm_path = cargo_manifest_dir();
-    rpm_path.push("test_assets/ima_signed.rpm");
-    rpm_path
+fn rpm_389_ds_file_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
 }
 
 fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = file_signatures_test_rpm_file_path();
-    let package = RPMPackage::open(rpm_file_path)?;
-    let metadata = &package.metadata;
-
-    let signatures = metadata.get_file_ima_signatures()?;
-
-    assert_eq!(
-        signatures,
-        [
-            "0302041adfaa0e004630440220162785458f5d81d1393cc72afc642c86167c15891ea39213e28907b1c4e8dc6c02202fa86ad2f5e474d36c59300f736f52cb5ed24abb55759a71ec224184a7035a78",
-            "0302041adfaa0e00483046022100bd940093777b75650980afb656507f2729a05c9b1bc9986993106de9f301a172022100b3384f6ba200a5a80647a0f0727c5b8f3ab01f74996a1550db605b44af3d10bf",
-            "0302041adfaa0e00473045022068953626d7a5b65aa4b1f1e79a2223f2d3500ddcb3d75a7050477db0480a13e10221008637cefe8c570044e11ff95fa933c1454fd6aa8793bbf3e87edab2a2624df460",
-        ],
-    );
-
-    Ok(())
-}
-
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = file_signatures_test_rpm_file_path();
-    let mut package = RPMPackage::open(rpm_file_path)?;
-
-    let private_key_content = std::fs::read(test_private_key_path())?;
-    let signer = Signer::load_from_asc_bytes(&private_key_content)?;
-
-    package.sign(&signer)?;
-
-    let public_key_content = std::fs::read(test_public_key_path())?;
-    let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
-    package
-        .verify_signature(&verifier)
-        .expect("failed to verify signature");
-    Ok(())
 }
 
 fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
@@ -253,9 +190,10 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     ];
 
     for (i, (len, data, tag)) in expected_data.iter().enumerate() {
-        assert_eq!(*len as u32, metadata.signature.index_entries[i].num_items);
-        assert_eq!(data, &metadata.signature.index_entries[i].data);
-        assert_eq!(*tag, metadata.signature.index_entries[i].tag);
+        let actual_entry = &metadata.signature.index_entries[i];
+        assert_eq!(*len as u32, actual_entry.num_items);
+        assert_eq!(*data, actual_entry.data);
+        assert_eq!(*tag, actual_entry.tag);
     }
 
     assert_eq!("xz", metadata.get_payload_compressor()?);
@@ -354,7 +292,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
 async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
     use tokio_util::compat::TokioAsyncReadCompatExt;
 
-    let rpm_file_path = test_rpm_file_path();
+    let rpm_file_path = rpm_389_ds_file_path();
     let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
     let package = RPMPackage::parse_async(&mut rpm_file).await?;
     test_rpm_header_base(package)
@@ -401,7 +339,7 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = test_rpm_file_path();
+    let rpm_file_path = rpm_389_ds_file_path();
     let package = RPMPackage::open(rpm_file_path)?;
     test_rpm_header_base(package)
 }
