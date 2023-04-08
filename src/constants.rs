@@ -423,18 +423,24 @@ pub enum IndexSignatureTag {
     RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as u32,
 }
 
-pub trait TypeName {
-    fn type_name() -> &'static str;
+/// Header tag.
+///
+/// Each and every header has a particular header tag that identifies the type of
+/// the header the format / information contained in that header.
+pub trait Tag:
+    num::FromPrimitive + num::ToPrimitive + PartialEq + std::fmt::Display + std::fmt::Debug + Copy
+{
+    fn tag_type_name() -> &'static str;
 }
 
-impl TypeName for IndexTag {
-    fn type_name() -> &'static str {
+impl Tag for IndexTag {
+    fn tag_type_name() -> &'static str {
         "IndexTag"
     }
 }
 
-impl TypeName for IndexSignatureTag {
-    fn type_name() -> &'static str {
+impl Tag for IndexSignatureTag {
+    fn tag_type_name() -> &'static str {
         "IndexSignatureTag"
     }
 }

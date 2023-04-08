@@ -11,28 +11,8 @@ use std::path::PathBuf;
 use super::*;
 use crate::errors::*;
 
-/// Header tag.
-///
-/// Each and every header has a particular header tag that identifies the type of
-/// the header the format / information contained in that header.
-pub trait Tag:
-    num::FromPrimitive + num::ToPrimitive + PartialEq + fmt::Display + fmt::Debug + Copy + TypeName
-{
-}
-
-impl<T> Tag for T where
-    T: num::FromPrimitive
-        + num::ToPrimitive
-        + PartialEq
-        + fmt::Display
-        + fmt::Debug
-        + Copy
-        + TypeName
-{
-}
-
 #[derive(Debug, PartialEq)]
-pub struct Header<T: num::FromPrimitive> {
+pub struct Header<T: Tag> {
     pub(crate) index_header: IndexHeader,
     pub(crate) index_entries: Vec<IndexEntry<T>>,
     pub(crate) store: Vec<u8>,
@@ -680,9 +660,7 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) num_items: u32,
 }
 
-use crate::constants::TypeName;
-
-impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntry<T> {
+impl<T: Tag> IndexEntry<T> {
     // 16 bytes
     pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
         //first 4 bytes are the tag.
@@ -690,7 +668,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
 
         let tag: T = num::FromPrimitive::from_u32(raw_tag).ok_or_else(|| RPMError::InvalidTag {
             raw_tag,
-            store_type: T::type_name(),
+            store_type: T::tag_type_name(),
         })?;
         //next 4 bytes is the tag type
         let (input, raw_tag_type) = be_u32(input)?;
@@ -699,7 +677,7 @@ impl<T: num::FromPrimitive + num::ToPrimitive + fmt::Debug + TypeName> IndexEntr
         let data = IndexData::from_type_as_u32(raw_tag_type).ok_or_else(|| {
             RPMError::InvalidTagDataType {
                 raw_data_type: raw_tag_type,
-                store_type: T::type_name(),
+                store_type: T::tag_type_name(),
             }
         })?;
 
