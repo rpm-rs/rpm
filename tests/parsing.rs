@@ -2,6 +2,7 @@ use rpm::*;
 
 mod common;
 
+// @todo: replace with a new fixture that serves more than one purpose
 #[test]
 fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = common::rpm_ima_signed_file_path();
@@ -18,6 +19,58 @@ fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
             "0302041adfaa0e00473045022068953626d7a5b65aa4b1f1e79a2223f2d3500ddcb3d75a7050477db0480a13e10221008637cefe8c570044e11ff95fa933c1454fd6aa8793bbf3e87edab2a2624df460",
         ],
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
+    let package = RPMPackage::open(common::rpm_empty_path())?;
+    let metadata = &package.metadata;
+
+    assert_eq!(metadata.get_name().unwrap(), "rpm-empty");
+    assert!(metadata.get_epoch().is_err());
+    assert_eq!(metadata.get_version().unwrap(), "0");
+    assert_eq!(metadata.get_release().unwrap(), "0");
+    assert_eq!(metadata.get_arch().unwrap(), "x86_64");
+    assert_eq!(metadata.get_description().unwrap(), "");
+    assert_eq!(metadata.get_summary().unwrap(), "\"\"");
+
+    assert!(matches!(metadata.get_url(), Err(RPMError::TagNotFound(_))));
+
+    // assert_eq!(metadata.get_file_paths().unwrap(), vec![]);
+    assert_eq!(metadata.get_file_entries().unwrap(), vec![]);
+
+    assert_eq!(metadata.get_changelog_entries().unwrap(), vec![]);
+
+    assert_eq!(
+        metadata.get_provides().unwrap(),
+        vec![
+            Dependency::eq("rpm-empty".to_owned(), "0-0".to_owned()),
+            Dependency::eq("rpm-empty(x86-64)".to_owned(), "0-0".to_owned()),
+        ]
+    );
+    // // @todo: need some way to express generalized flags outside of the crate
+    // assert_eq!(
+    //     metadata.get_requires().unwrap(),
+    //     vec![
+    //         Dependency::greater_eq(
+    //             "rpmlib(CompressedFileNames)".to_owned(),
+    //             "3.0.4-1".to_owned()
+    //         ),
+    //         Dependency::greater_eq("rpmlib(FileDigests)".to_owned(), "4.6.0-1".to_owned()),
+    //         Dependency::greater_eq(
+    //             "rpmlib(PayloadFilesHavePrefix)".to_owned(),
+    //             "4.0-1".to_owned()
+    //         ),
+    //     ]
+    // );
+    assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
+    assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
+    assert_eq!(metadata.get_supplements().unwrap(), vec![]);
+    assert_eq!(metadata.get_suggests().unwrap(), vec![]);
+    assert_eq!(metadata.get_enhances().unwrap(), vec![]);
+    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
 
     Ok(())
 }

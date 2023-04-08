@@ -1,3 +1,5 @@
+use rpm::{RPMBuilder, RPMPackage};
+
 pub fn test_private_key_path() -> std::path::PathBuf {
     cargo_manifest_dir().join("test_assets/secret_key.asc")
 }
