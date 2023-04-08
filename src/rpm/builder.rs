@@ -137,7 +137,7 @@ impl RPMBuilder {
         // @todo, should these values be calculated lazily (only when .build()) is called?
         let build_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .expect("system time predates the Unix epoch?")
             .as_secs() as u32;
         let build_host = gethostname().to_string_lossy().to_string();
 
@@ -679,11 +679,6 @@ impl RPMBuilder {
         ));
 
         self.requires.push(Dependency::rpmlib(
-            "rpmlib(PayloadFilesHavePrefix)".to_string(),
-            "4.0-1".to_string(),
-        ));
-
-        self.requires.push(Dependency::rpmlib(
             "rpmlib(CompressedFileNames)".to_string(),
             "3.0.4-1".to_string(),
         ));
@@ -691,6 +686,11 @@ impl RPMBuilder {
         self.requires.push(Dependency::rpmlib(
             "rpmlib(FileDigests)".to_string(),
             "4.6.0-1".to_string(),
+        ));
+
+        self.requires.push(Dependency::rpmlib(
+            "rpmlib(PayloadFilesHavePrefix)".to_string(),
+            "4.0-1".to_string(),
         ));
 
         if matches!(self.compressor, Compressor::Zstd(_)) {
@@ -786,7 +786,7 @@ impl RPMBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_HEADERI18NTABLE,
                 offset,
-                IndexData::StringTag("C".to_string()),
+                IndexData::StringArray(vec!["C".to_string()]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_NAME,
@@ -823,12 +823,12 @@ impl RPMBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_DESCRIPTION,
                 offset,
-                IndexData::StringTag(self.desc.clone()),
+                IndexData::I18NString(vec![self.desc.clone()]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_SUMMARY,
                 offset,
-                IndexData::StringTag(self.desc),
+                IndexData::I18NString(vec![self.desc]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_SIZE,
@@ -840,13 +840,13 @@ impl RPMBuilder {
                 offset,
                 IndexData::StringTag(self.license),
             ),
-            // <https://fedoraproject.org/wiki/RPMGroups>
-            // IndexEntry::new(IndexTag::RPMTAG_GROUP, offset, IndexData::I18NString(group)),
             IndexEntry::new(
                 IndexTag::RPMTAG_OS,
                 offset,
                 IndexData::StringTag("linux".to_string()),
             ),
+            // @todo: Fedora packaging guidelines recommend against using %group <https://fedoraproject.org/wiki/RPMGroups>
+            // If it's legacy and safe to drop entirely let's do so. rpmbuild still writes it in the header though.
             IndexEntry::new(
                 IndexTag::RPMTAG_GROUP,
                 offset,
@@ -957,15 +957,15 @@ impl RPMBuilder {
                     offset,
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PROVIDENAME,
-                    offset,
-                    IndexData::StringArray(provide_names),
-                ),
             ]);
         }
 
         actual_records.extend([
+            IndexEntry::new(
+                IndexTag::RPMTAG_PROVIDENAME,
+                offset,
+                IndexData::StringArray(provide_names),
+            ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PROVIDEVERSION,
                 offset,
