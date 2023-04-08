@@ -916,11 +916,33 @@ impl IndexData {
     }
 }
 
-#[cfg(feature = "signature-meta")]
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
+    #[test]
+    fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
+        let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
+
+        let possible_binary = region_entry.data.as_binary();
+
+        assert!(possible_binary.is_some(), "should be binary");
+
+        let data = possible_binary.unwrap();
+
+        let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
+
+        assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
+        assert_eq!(
+            entry.data.type_as_u32(),
+            IndexData::Bin(Vec::new()).type_as_u32()
+        );
+        assert_eq!(-48, entry.offset);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
@@ -971,27 +993,5 @@ mod tests {
         );
 
         assert_eq!(built, truth);
-    }
-
-    #[test]
-    fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
-        let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
-
-        let possible_binary = region_entry.data.as_binary();
-
-        assert!(possible_binary.is_some(), "should be binary");
-
-        let data = possible_binary.unwrap();
-
-        let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
-
-        assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
-        assert_eq!(
-            entry.data.type_as_u32(),
-            IndexData::Bin(Vec::new()).type_as_u32()
-        );
-        assert_eq!(-48, entry.offset);
-
-        Ok(())
     }
 }

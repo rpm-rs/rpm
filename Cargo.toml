@@ -20,6 +20,17 @@ rust-version = "1.64.0"  # required by `gethosname`
 [lib]
 name = "rpm"
 
+# tests that try to install / verify RPMs using rpm / dnf in Linux containers via podman
+[[test]]
+name = "rpm-compat-tests"
+required-features = ["test-with-podman"]
+path = "tests/compat.rs"
+
+[[test]]
+name = "signatures"
+required-features = ["signature-meta"]
+path = "tests/signatures.rs"
+
 [dependencies]
 thiserror = "1"
 nom = "7"
@@ -55,7 +66,8 @@ digest = "0.10.6"
 rsa = { version = "0.8" }
 rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
-serial_test = "2.0"
+serial_test = "1.0"
+pretty_assertions = "1.3.0"
 
 # Use for testing async files when async-futures enabled
 tokio = { version = "1", features = ["full"] }
@@ -68,8 +80,9 @@ signature-pgp = ["signature-meta", "pgp"]
 signature-meta = []
 async-futures = ["futures"]
 
+# Segregate tests that require podman to be installed
+test-with-podman = ["signature-pgp"]
 # The use of these features implies that async-futures are being used -
 # explicitly define this feature.
-test-with-podman = ["async-futures", "signature-meta", "tokio-util"]
 with-file-async-tokio = ["async-futures", "tokio/fs", "tokio-util"]
 with-file-async-async-std = ["async-futures", "async-std"]
