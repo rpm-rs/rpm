@@ -44,7 +44,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.63.0
+          - 1.64.0
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -59,7 +59,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.63.0
+          - 1.64.0
         flags:
           - "--all-features"
           - "--no-default-features"
