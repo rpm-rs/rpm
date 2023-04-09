@@ -4,7 +4,7 @@ License:        LGPL
 Release:        0
 Summary:        ""
 
-#BuildRequires: 
+#BuildRequires:
 
 %description
 
