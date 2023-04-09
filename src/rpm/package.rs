@@ -546,6 +546,7 @@ impl RPMPackageMetadata {
         )
     }
 
+    // @todo: It's not very convenient to receive an Error when there's no compressor
     #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
         self.header

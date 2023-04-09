@@ -35,63 +35,15 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Verify the expected content of `fn test_rpm_file_path()`.
+// Currently only testing header internal details which we can't do from the integration tests
+// Once we have enough API surface (or a way to test total equality) we can ditch these
 fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
     assert_eq!(metadata.signature.index_entries.len(), 7);
     assert_eq!(metadata.signature.index_entries[0].num_items, 16);
     assert_eq!(metadata.signature.index_header.header_size, 1156);
 
-    assert_eq!(package.metadata.get_name().unwrap(), "389-ds-base-devel");
-    assert!(package.metadata.get_epoch().is_err());
-    assert_eq!(package.metadata.get_version().unwrap(), "1.3.8.4");
-    assert_eq!(package.metadata.get_release().unwrap(), "15.el7");
-    assert_eq!(package.metadata.get_arch().unwrap(), "x86_64");
-
-    assert_eq!(
-        package.metadata.get_url().unwrap(),
-        "https://www.port389.org/"
-    );
-
-    // TODO: vcs
-    // assert_eq!(
-    //     package.metadata.get_vcs().unwrap(),
-    //     "git://pkgs.fedoraproject.org/389-ds-base.git"
-    // );
-
-    assert_eq!(
-        package.metadata.get_packager().unwrap(),
-        "CentOS BuildSystem <http://bugs.centos.org>"
-    );
-    assert_eq!(package.metadata.get_license().unwrap(), "GPLv3+");
-    assert_eq!(package.metadata.get_vendor().unwrap(), "CentOS");
-
-    // TODO: internationalized strings
-    // assert_eq!(
-    //     package.metadata.get_summary().unwrap(),
-    //     "Development libraries for 389 Directory Server"
-    // );
-    // assert_eq!(
-    //     package.metadata.get_description().unwrap(),
-    //     "Development Libraries and headers for the 389 Directory Server base package."
-    // );
-    // assert_eq!(
-    //     package.metadata.get_group().unwrap(),
-    //     "Development/Libraries"
-    // );
-    assert_eq!(
-        package.metadata.get_source_rpm().unwrap(),
-        "389-ds-base-1.3.8.4-15.el7.src.rpm"
-    );
-    assert_eq!(
-        package.metadata.get_build_host().unwrap(),
-        "x86-01.bsys.centos.org"
-    );
-    assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
-
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
-
-    assert_eq!(package.metadata.is_source_package(), false);
 
     let expected_data = vec![
         (
@@ -315,15 +267,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-#[cfg(feature = "async-futures")]
-#[tokio::test]
-async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
-    use tokio_util::compat::TokioAsyncReadCompatExt;
-
-    let rpm_file_path = rpm_389_ds_file_path();
-    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
-    let package = RPMPackage::parse_async(&mut rpm_file).await?;
-    test_rpm_header_base(package)
+pub fn rpm_389_ds_file_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
 }
 
 #[test]
