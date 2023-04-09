@@ -216,14 +216,14 @@ impl RPMBuilder {
         self
     }
 
-    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: u32) -> Self
+    pub fn add_changelog_entry<E, F>(mut self, author: E, description: F, timestamp: u32) -> Self
     where
         E: Into<String>,
         F: Into<String>,
     {
         self.changelog_authors.push(author.into());
-        self.changelog_entries.push(entry.into());
-        self.changelog_times.push(time);
+        self.changelog_entries.push(description.into());
+        self.changelog_times.push(timestamp);
         self
     }
 

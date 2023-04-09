@@ -47,7 +47,7 @@ pub struct Digests {
 ///
 /// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
 /// or used with [`parse`](`self::RPMPackage::parse`) to obtain from a file.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RPMPackage {
     /// Header and metadata structures.
     ///
@@ -244,7 +244,7 @@ impl RPMPackage {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RPMPackageMetadata {
     pub lead: Lead,
     pub signature: Header<IndexSignatureTag>,

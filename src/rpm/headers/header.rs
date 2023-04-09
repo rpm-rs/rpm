@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use super::*;
 use crate::errors::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Header<T: Tag> {
     pub(crate) index_header: IndexHeader,
     pub(crate) index_entries: Vec<IndexEntry<T>>,
@@ -513,7 +513,7 @@ where
 }
 
 /// A header keeping track of all other header records.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct IndexHeader {
     /// rpm specific magic header
     pub(crate) magic: [u8; 3],
@@ -593,8 +593,8 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(Debug, PartialEq)]
-pub(crate) struct IndexEntry<T: num::FromPrimitive> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct IndexEntry<T: Tag> {
     pub(crate) tag: T,
     pub(crate) data: IndexData,
     pub(crate) offset: i32,
@@ -674,7 +674,7 @@ impl<T: Tag> IndexEntry<T> {
 }
 
 /// Data as present in a [`IndexEntry`](self::IndexEntry) .
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IndexData {
     Null,
     Char(Vec<u8>),

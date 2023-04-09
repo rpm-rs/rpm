@@ -86,7 +86,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - run: cargo test --features test-with-podman,with-file-async-tokio
+      - run: cargo test --features with-file-async-tokio
 
   fmt:
     name: Rustfmt

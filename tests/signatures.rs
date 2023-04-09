@@ -9,14 +9,13 @@ mod common;
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = common::rpm_ima_signed_file_path();
     let mut package = RPMPackage::open(rpm_file_path)?;
+    let (signing_key, verification_key) = common::load_asc_keys();
 
-    let private_key_content = std::fs::read(common::test_private_key_path())?;
-    let signer = Signer::load_from_asc_bytes(&private_key_content)?;
+    let signer = Signer::load_from_asc_bytes(&signing_key)?;
 
     package.sign(&signer)?;
 
-    let public_key_content = std::fs::read(common::test_public_key_path())?;
-    let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
+    let verifier = Verifier::load_from_asc_bytes(&verification_key).unwrap();
     package
         .verify_signature(&verifier)
         .expect("failed to verify signature");

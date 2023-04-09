@@ -326,49 +326,6 @@ async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
     test_rpm_header_base(package)
 }
 
-#[cfg(feature = "async-futures")]
-#[tokio::test]
-async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
-    use std::str::FromStr;
-
-    let mut buff = std::io::Cursor::new(Vec::<u8>::new());
-
-    let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-        .compression(rpm::Compressor::from_str("gzip")?)
-        .with_file_async(
-            "Cargo.toml",
-            RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
-        )
-        .await?
-        // file mode is inherited from source file
-        .with_file_async("Cargo.toml", RPMFileOptions::new("/usr/bin/awesome"))
-        .await?
-        .with_file_async(
-            "Cargo.toml",
-            // you can set a custom mode and custom user too
-            RPMFileOptions::new("/etc/awesome/second.toml")
-                .mode(0o100744)
-                .user("hugo"),
-        )
-        .await?
-        .pre_install_script("echo preinst")
-        .add_changelog_entry("me", "was awesome, eh?", 123123123)
-        .add_changelog_entry("you", "yeah, it was", 12312312)
-        .requires(Dependency::any("wget"))
-        .vendor("dummy vendor")
-        .url("dummy url")
-        .vcs("dummy vcs")
-        .build()?;
-
-    pkg.write(&mut buff)?;
-
-    Ok(())
-}
-
-pub fn rpm_389_ds_file_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
-}
-
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = rpm_389_ds_file_path();
