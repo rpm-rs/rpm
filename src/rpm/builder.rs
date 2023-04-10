@@ -133,11 +133,18 @@ pub struct RPMBuilder {
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
+        // Implement the SOURCE_DATE_EPOCH standard for reproducable builds
+        // https://reproducible-builds.org/docs/source-date-epoch/
+        let source_date_epoch = std::env::var("SOURCE_DATE_EPOCH");
+
         // @todo, should these values be calculated lazily (only when .build()) is called?
-        let build_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs() as u32;
+        let build_time: u32 = source_date_epoch
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("system time predates the Unix epoch?")
+                .as_secs() as u32);
         let build_host = gethostname().to_string_lossy().to_string();
 
         RPMBuilder {
@@ -213,6 +220,18 @@ impl RPMBuilder {
 
     pub fn compression(mut self, comp: Compressor) -> Self {
         self.compressor = comp;
+        self
+    }
+
+    // @todo: rpmbuild provides a few different settings for this through different mechanisms. we could
+    // possibly accept an enum with various options here, or find some other way to do so.
+    //
+    // CurrentTime
+    // SpecifiedTime(u32)
+    // MostRecentChangelog
+    // SourceDateEpoch
+    pub fn build_time(mut self, timestamp: u32) -> Self {
+        self.build_time = timestamp;
         self
     }
 

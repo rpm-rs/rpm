@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_entry_data_as_u16_array()`, `get_entry_data_as_u32()`, `get_entry_data_as_u32_array()`,
   `get_entry_data_as_u64()`, `get_entry_data_as_u64_array()`, `get_entry_data_as_string_array()`,
   `get_entry_data_as_i18n_string()`
+- Support the `SOURCE_DATE_EPOCH` environment variable for overriding the timestamp during package
+  builds (for reproducable builds), as well as allow it to be manually overridden with `build_time()`
 
 ### Fixed
 
