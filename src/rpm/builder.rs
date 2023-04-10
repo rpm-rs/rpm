@@ -141,10 +141,12 @@ impl RPMBuilder {
         let build_time: u32 = source_date_epoch
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .expect("system time predates the Unix epoch?")
-                .as_secs() as u32);
+            .unwrap_or_else(|| {
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("system time predates the Unix epoch?")
+                    .as_secs() as u32
+            });
         let build_host = gethostname().to_string_lossy().to_string();
 
         RPMBuilder {
