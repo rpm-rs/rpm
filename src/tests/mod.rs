@@ -1,9 +1,8 @@
 use super::*;
 
+mod fut;
 mod meta;
 mod pgp;
-mod fut;
-
 
 #[cfg(feature = "signature-pgp")]
 fn test_private_key_path() -> std::path::PathBuf {
@@ -24,7 +23,6 @@ fn test_rpm_file_path() -> std::path::PathBuf {
     rpm_path.push("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm");
     rpm_path
 }
-
 
 #[cfg(any(feature = "signature-pgp", feature = "signature-meta"))]
 fn file_signatures_test_rpm_file_path() -> std::path::PathBuf {
@@ -317,7 +315,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
 
     Ok(())
 }
-
 
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {

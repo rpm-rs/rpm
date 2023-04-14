@@ -10,11 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gethostname::gethostname;
 
-use crate::errors::*;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
+use crate::errors::*;
 
 use crate::sequential_cursor::SeqCursor;
 use crate::signature;
@@ -493,8 +493,15 @@ impl RPMBuilder {
 
         let digest_header = {
             let header = header;
-            let (header_digest_sha1, header_and_content_digest_md5) =
-                Self::derive_hashes(header.as_slice(), content.as_slice())?;
+
+            let Digests {
+                header_and_content_digest: header_and_content_digest_md5,
+                header_digest: header_digest_sha1,
+            } = RPMPackage::create_digests_from_readers(
+                &mut header.as_slice(),
+                SeqCursor::new(&[header.as_slice(), content.as_slice()]),
+            )?;
+
             let header_and_content_len = header.len() + content.len();
 
             Header::<IndexSignatureTag>::builder()
@@ -532,8 +539,13 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let (header_digest_sha1, header_and_content_digest_md5) =
-            Self::derive_hashes(header.as_slice(), content.as_slice())?;
+        let Digests {
+            header_and_content_digest: header_and_content_digest_md5,
+            header_digest: header_digest_sha1,
+        } = RPMPackage::create_digests_from_readers(
+            &mut header.as_slice(),
+            SeqCursor::new(&[header.as_slice(), content.as_slice()]),
+        )?;
 
         let header_and_content_len = header.len() + content.len();
 
@@ -567,13 +579,6 @@ impl RPMBuilder {
         };
         let pkg = RPMPackage { metadata, content };
         Ok(pkg)
-    }
-
-    /// use prepared data but make sure the signatures are
-    fn derive_hashes(mut header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
-        let mut header_and_content_cursor = SeqCursor::new(&[header, content]);
-        let Digests { header_and_content_digest, header_digest } = RPMPackage::create_digests_from_readers(&mut header, &mut header_and_content_cursor)?;
-        Ok((header_digest, header_and_content_digest))
     }
 
     /// prepare all rpm headers including content

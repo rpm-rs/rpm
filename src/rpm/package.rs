@@ -2,6 +2,7 @@ use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
+
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use num_traits::FromPrimitive;
@@ -15,18 +16,23 @@ use crate::errors::*;
 use crate::sequential_cursor::SeqCursor;
 use crate::signature;
 
-
 pub enum SignatureVerificationOutcome {
     Pass,
-    Failure
+    Failure,
 }
 
 pub enum DigestVerificationOutcome {
     Match,
-    Mismatch
+    Mismatch,
 }
 
-pub(crate) struct Digests {
+/// Combined digest of signature header tags `RPMSIGTAG_MD5` and `RPMSIGTAG_SHA1`
+///
+/// Succinct to cover to "verify" the content of the rpm file. Quotes because
+/// the fact `md5` is used doesn't really give any guarantee anything anymore
+/// in the 2020s.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Digests {
     /// The digest of the header.
     pub(crate) header_digest: String,
     /// The sha1 digest of the entire content
@@ -150,7 +156,10 @@ impl RPMPackage {
         let Digests {
             header_digest,
             header_and_content_digest,
-        } = Self::create_digests_from_readers(&mut header_bytes.as_slice(), &mut header_and_content_cursor)?;
+        } = Self::create_digests_from_readers(
+            &mut header_bytes.as_slice(),
+            &mut header_and_content_cursor,
+        )?;
 
         header_and_content_cursor.rewind()?;
 
@@ -211,9 +220,23 @@ impl RPMPackage {
 
         Ok(SignatureVerificationOutcome::Pass)
     }
-    
-    pub fn verify_digest() -> Result<DigestVerificationOutcome, RPMError> {
-        todo!()
+
+    pub fn verify_digest(&self) -> Result<DigestVerificationOutcome, RPMError> {
+        let mut header = Vec::<u8>::with_capacity(1024);
+        // make sure to not hash any previous signatures in the header
+        self.metadata.header.write(&mut header)?;
+
+        let recreated_from_content = Self::create_digests_from_readers(
+            &mut header.as_slice(),
+            SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
+        )?;
+
+        let package_contained = self.metadata.get_digests()?;
+        if recreated_from_content == package_contained {
+            Ok(DigestVerificationOutcome::Match)
+        } else {
+            Ok(DigestVerificationOutcome::Mismatch)
+        }
     }
 }
 
@@ -265,6 +288,19 @@ impl RPMPackageMetadata {
         self.signature.write_signature_async(out).await?;
         self.header.write_async(out).await?;
         Ok(())
+    }
+
+    pub fn get_digests(&self) -> Result<Digests, RPMError> {
+        let md5 = self
+            .signature
+            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5)?;
+        let sha1 = self
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)?;
+        Ok(Digests {
+            header_digest: sha1.to_owned(),
+            header_and_content_digest: Vec::from(md5),
+        })
     }
 
     #[inline]
