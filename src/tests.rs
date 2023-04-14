@@ -1,17 +1,14 @@
 use super::*;
 
-mod fut;
-mod meta;
-mod pgp;
+#[cfg(feature = "signature-meta")]
+use crate::signature::pgp::{Signer, Verifier};
 
-#[cfg(feature = "signature-pgp")]
 fn test_private_key_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/secret_key.asc");
     rpm_path
 }
 
-#[cfg(feature = "signature-pgp")]
 fn test_public_key_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/public_key.asc");
@@ -24,7 +21,6 @@ fn test_rpm_file_path() -> std::path::PathBuf {
     rpm_path
 }
 
-#[cfg(any(feature = "signature-pgp", feature = "signature-meta"))]
 fn file_signatures_test_rpm_file_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/ima_signed.rpm");
@@ -35,7 +31,46 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Verify the expected content of `fn test_rpm_file_path()`.
+#[cfg(feature = "signature-meta")]
+#[test]
+fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = file_signatures_test_rpm_file_path();
+    let package = RPMPackage::open(rpm_file_path)?;
+    let metadata = &package.metadata;
+
+    let signatures = metadata.get_file_ima_signatures()?;
+
+    assert_eq!(
+        signatures,
+        [
+            "0302041adfaa0e004630440220162785458f5d81d1393cc72afc642c86167c15891ea39213e28907b1c4e8dc6c02202fa86ad2f5e474d36c59300f736f52cb5ed24abb55759a71ec224184a7035a78",
+            "0302041adfaa0e00483046022100bd940093777b75650980afb656507f2729a05c9b1bc9986993106de9f301a172022100b3384f6ba200a5a80647a0f0727c5b8f3ab01f74996a1550db605b44af3d10bf",
+            "0302041adfaa0e00473045022068953626d7a5b65aa4b1f1e79a2223f2d3500ddcb3d75a7050477db0480a13e10221008637cefe8c570044e11ff95fa933c1454fd6aa8793bbf3e87edab2a2624df460",
+        ],
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "signature-meta")]
+#[test]
+fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = file_signatures_test_rpm_file_path();
+    let mut package = RPMPackage::open(rpm_file_path)?;
+
+    let private_key_content = std::fs::read(test_private_key_path())?;
+    let signer = Signer::load_from_asc_bytes(&private_key_content)?;
+
+    package.sign(&signer)?;
+
+    let public_key_content = std::fs::read(test_public_key_path())?;
+    let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
+    package
+        .verify_signature(&verifier)
+        .expect("failed to verify signature");
+    Ok(())
+}
+
 fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
     assert_eq!(metadata.signature.index_entries.len(), 7);
@@ -314,9 +349,82 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+#[cfg(feature = "async-futures")]
+#[tokio::test]
+async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
+    use tokio_util::compat::TokioAsyncReadCompatExt;
+
+    let rpm_file_path = test_rpm_file_path();
+    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
+    let package = RPMPackage::parse_async(&mut rpm_file).await?;
+    test_rpm_header_base(package)
+}
+
+#[cfg(feature = "async-futures")]
+#[tokio::test]
+async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
+    use std::str::FromStr;
+
+    let mut buff = std::io::Cursor::new(Vec::<u8>::new());
+
+    let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+        .compression(rpm::Compressor::from_str("gzip")?)
+        .with_file_async(
+            "Cargo.toml",
+            RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+        )
+        .await?
+        // file mode is inherited from source file
+        .with_file_async("Cargo.toml", RPMFileOptions::new("/usr/bin/awesome"))
+        .await?
+        .with_file_async(
+            "Cargo.toml",
+            // you can set a custom mode and custom user too
+            RPMFileOptions::new("/etc/awesome/second.toml")
+                .mode(0o100744)
+                .user("hugo"),
+        )
+        .await?
+        .pre_install_script("echo preinst")
+        .add_changelog_entry("me", "was awesome, eh?", 123123123)
+        .add_changelog_entry("you", "yeah, it was", 12312312)
+        .requires(Dependency::any("wget"))
+        .vendor("dummy vendor")
+        .url("dummy url")
+        .vcs("dummy vcs")
+        .build()?;
+
+    pkg.write(&mut buff)?;
+
+    Ok(())
+}
+
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = test_rpm_file_path();
     let package = RPMPackage::open(rpm_file_path)?;
     test_rpm_header_base(package)
+}
+
+#[cfg(feature = "signature-meta")]
+#[test]
+fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
+    let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
+
+    let possible_binary = region_entry.data.as_binary();
+
+    assert!(possible_binary.is_some(), "should be binary");
+
+    let data = possible_binary.unwrap();
+
+    let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
+
+    assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
+    assert_eq!(
+        entry.data.type_as_u32(),
+        IndexData::Bin(Vec::new()).type_as_u32()
+    );
+    assert_eq!(-48, entry.offset);
+
+    Ok(())
 }
