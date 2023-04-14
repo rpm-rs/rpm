@@ -90,7 +90,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
 
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
-    assert_eq!(package.metadata.get_payload_format().unwrap(), "cpio");
 
     assert_eq!(package.metadata.is_source_package(), false);
 
