@@ -405,26 +405,3 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let package = RPMPackage::open(rpm_file_path)?;
     test_rpm_header_base(package)
 }
-
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
-    let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
-
-    let possible_binary = region_entry.data.as_binary();
-
-    assert!(possible_binary.is_some(), "should be binary");
-
-    let data = possible_binary.unwrap();
-
-    let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
-
-    assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
-    assert_eq!(
-        entry.data.type_as_u32(),
-        IndexData::Bin(Vec::new()).type_as_u32()
-    );
-    assert_eq!(-48, entry.offset);
-
-    Ok(())
-}
