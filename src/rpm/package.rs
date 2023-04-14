@@ -1,4 +1,6 @@
-use std::io::{BufReader, Seek};
+use std::io::BufReader;
+#[cfg(feature = "signature-meta")]
+use std::io::Seek;
 use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
@@ -14,6 +16,8 @@ use crate::constants::*;
 use crate::errors::*;
 
 use crate::sequential_cursor::SeqCursor;
+
+#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 pub enum SignatureVerificationOutcome {

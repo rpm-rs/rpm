@@ -17,6 +17,7 @@ use crate::constants::*;
 use crate::errors::*;
 
 use crate::sequential_cursor::SeqCursor;
+#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 use crate::Digests;
@@ -494,15 +495,16 @@ impl RPMBuilder {
         let digest_header = {
             let header = header;
 
+            let header_and_content_cursor =
+                SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+            let header_and_content_len = header_and_content_cursor.len();
             let Digests {
                 header_and_content_digest: header_and_content_digest_md5,
                 header_digest: header_digest_sha1,
             } = RPMPackage::create_digests_from_readers(
                 &mut header.as_slice(),
-                SeqCursor::new(&[header.as_slice(), content.as_slice()]),
+                header_and_content_cursor,
             )?;
-
-            let header_and_content_len = header.len() + content.len();
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(
@@ -539,15 +541,15 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
+        let header_and_content_cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+        let header_and_content_len = header_and_content_cursor.len();
         let Digests {
             header_and_content_digest: header_and_content_digest_md5,
             header_digest: header_digest_sha1,
         } = RPMPackage::create_digests_from_readers(
             &mut header.as_slice(),
-            SeqCursor::new(&[header.as_slice(), content.as_slice()]),
+            header_and_content_cursor,
         )?;
-
-        let header_and_content_len = header.len() + content.len();
 
         let builder = Header::<IndexSignatureTag>::builder().add_digest(
             header_digest_sha1.as_str(),
