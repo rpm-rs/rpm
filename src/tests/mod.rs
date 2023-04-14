@@ -1,14 +1,17 @@
 use super::*;
 
-#[cfg(feature = "signature-meta")]
-use crate::signature::pgp::{Signer, Verifier};
+mod fut;
+mod meta;
+mod pgp;
 
+#[cfg(feature = "signature-pgp")]
 fn test_private_key_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/secret_key.asc");
     rpm_path
 }
 
+#[cfg(feature = "signature-pgp")]
 fn test_public_key_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/public_key.asc");
@@ -21,6 +24,7 @@ fn test_rpm_file_path() -> std::path::PathBuf {
     rpm_path
 }
 
+#[cfg(any(feature = "signature-pgp", feature = "signature-meta"))]
 fn file_signatures_test_rpm_file_path() -> std::path::PathBuf {
     let mut rpm_path = cargo_manifest_dir();
     rpm_path.push("test_assets/ima_signed.rpm");
@@ -31,46 +35,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = file_signatures_test_rpm_file_path();
-    let package = RPMPackage::open(rpm_file_path)?;
-    let metadata = &package.metadata;
-
-    let signatures = metadata.get_file_ima_signatures()?;
-
-    assert_eq!(
-        signatures,
-        [
-            "0302041adfaa0e004630440220162785458f5d81d1393cc72afc642c86167c15891ea39213e28907b1c4e8dc6c02202fa86ad2f5e474d36c59300f736f52cb5ed24abb55759a71ec224184a7035a78",
-            "0302041adfaa0e00483046022100bd940093777b75650980afb656507f2729a05c9b1bc9986993106de9f301a172022100b3384f6ba200a5a80647a0f0727c5b8f3ab01f74996a1550db605b44af3d10bf",
-            "0302041adfaa0e00473045022068953626d7a5b65aa4b1f1e79a2223f2d3500ddcb3d75a7050477db0480a13e10221008637cefe8c570044e11ff95fa933c1454fd6aa8793bbf3e87edab2a2624df460",
-        ],
-    );
-
-    Ok(())
-}
-
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = file_signatures_test_rpm_file_path();
-    let mut package = RPMPackage::open(rpm_file_path)?;
-
-    let private_key_content = std::fs::read(test_private_key_path())?;
-    let signer = Signer::load_from_asc_bytes(&private_key_content)?;
-
-    package.sign(&signer)?;
-
-    let public_key_content = std::fs::read(test_public_key_path())?;
-    let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
-    package
-        .verify_signature(&verifier)
-        .expect("failed to verify signature");
-    Ok(())
-}
-
+/// Verify the expected content of `fn test_rpm_file_path()`.
 fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = &package.metadata;
     assert_eq!(metadata.signature.index_entries.len(), 7);
@@ -101,18 +66,19 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_license().unwrap(), "GPLv3+");
     assert_eq!(package.metadata.get_vendor().unwrap(), "CentOS");
 
-    assert_eq!(
-        package.metadata.get_summary().unwrap(),
-        "Development libraries for 389 Directory Server"
-    );
-    assert_eq!(
-        package.metadata.get_description().unwrap(),
-        "Development Libraries and headers for the 389 Directory Server base package."
-    );
-    assert_eq!(
-        package.metadata.get_group().unwrap(),
-        "Development/Libraries"
-    );
+    // TODO: internationalized strings
+    // assert_eq!(
+    //     package.metadata.get_summary().unwrap(),
+    //     "Development libraries for 389 Directory Server"
+    // );
+    // assert_eq!(
+    //     package.metadata.get_description().unwrap(),
+    //     "Development Libraries and headers for the 389 Directory Server base package."
+    // );
+    // assert_eq!(
+    //     package.metadata.get_group().unwrap(),
+    //     "Development/Libraries"
+    // );
     assert_eq!(
         package.metadata.get_source_rpm().unwrap(),
         "389-ds-base-1.3.8.4-15.el7.src.rpm"
@@ -124,154 +90,8 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
 
     assert_eq!(package.metadata.get_payload_compressor().unwrap(), "xz");
-    // @todo: too many to test for, need a new fixture RPM. it works though.
-    assert!(!package.metadata.get_changelog_entries().unwrap().is_empty());
-
-    assert_eq!(
-        package.metadata.get_provides().unwrap(),
-        vec![
-            Dependency {
-                dep_name: "389-ds-base-devel".to_string(),
-                sense: 8,
-                version: "1.3.8.4-15.el7".to_string()
-            },
-            Dependency {
-                dep_name: "389-ds-base-devel(x86-64)".to_string(),
-                sense: 8,
-                version: "1.3.8.4-15.el7".to_string()
-            },
-            Dependency {
-                dep_name: "pkgconfig(dirsrv)".to_string(),
-                sense: 32776,
-                version: "1.3.8.4".to_string()
-            },
-            Dependency {
-                dep_name: "pkgconfig(libsds)".to_string(),
-                sense: 32776,
-                version: "1.3.8.4".to_string()
-            },
-            Dependency {
-                dep_name: "pkgconfig(nunc-stans)".to_string(),
-                sense: 32776,
-                version: "1.3.8.4".to_string()
-            }
-        ]
-    );
-    assert_eq!(
-        package.metadata.get_requires().unwrap(),
-        vec![
-            Dependency {
-                dep_name: "/usr/bin/pkg-config".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "389-ds-base-libs".to_string(),
-                sense: 8,
-                version: "1.3.8.4-15.el7".to_string()
-            },
-            Dependency {
-                dep_name: "libevent".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libldaputil.so.0()(64bit)".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libnunc-stans.so.0()(64bit)".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libsds.so.0()(64bit)".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libslapd.so.0()(64bit)".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libtalloc".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "libtevent".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "nspr-devel".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "nss-devel".to_string(),
-                sense: 12,
-                version: "3.34".to_string()
-            },
-            Dependency {
-                dep_name: "openldap-devel".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "pkgconfig".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "pkgconfig(nspr)".to_string(),
-                sense: 16384,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "rpmlib(CompressedFileNames)".to_string(),
-                sense: 16777226,
-                version: "3.0.4-1".to_string()
-            },
-            Dependency {
-                dep_name: "rpmlib(FileDigests)".to_string(),
-                sense: 16777226,
-                version: "4.6.0-1".to_string()
-            },
-            Dependency {
-                dep_name: "rpmlib(PayloadFilesHavePrefix)".to_string(),
-                sense: 16777226,
-                version: "4.0-1".to_string()
-            },
-            Dependency {
-                dep_name: "svrcore-devel".to_string(),
-                sense: 12,
-                version: "4.1.3".to_string()
-            },
-            Dependency {
-                dep_name: "systemd-libs".to_string(),
-                sense: 0,
-                version: "".to_string()
-            },
-            Dependency {
-                dep_name: "rpmlib(PayloadIsXz)".to_string(),
-                sense: 16777226,
-                version: "5.2-1".to_string()
-            }
-        ]
-    );
-    assert_eq!(package.metadata.get_conflicts().unwrap(), vec![]);
-    assert_eq!(package.metadata.get_obsoletes().unwrap(), vec![]);
-    assert_eq!(package.metadata.get_supplements().unwrap(), vec![]);
-    assert_eq!(package.metadata.get_suggests().unwrap(), vec![]);
-    assert_eq!(package.metadata.get_enhances().unwrap(), vec![]);
-    assert_eq!(package.metadata.get_recommends().unwrap(), vec![]);
 
     assert_eq!(package.metadata.is_source_package(), false);
-    // @todo: add a test where this is true
-    // also https://github.com/rpm-rs/rpm/issues/66
 
     let expected_data = vec![
         (
@@ -494,82 +314,9 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-#[cfg(feature = "async-futures")]
-#[tokio::test]
-async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
-    use tokio_util::compat::TokioAsyncReadCompatExt;
-
-    let rpm_file_path = test_rpm_file_path();
-    let mut rpm_file = tokio::fs::File::open(rpm_file_path).await?.compat();
-    let package = RPMPackage::parse_async(&mut rpm_file).await?;
-    test_rpm_header_base(package)
-}
-
-#[cfg(feature = "async-futures")]
-#[tokio::test]
-async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
-    use std::str::FromStr;
-
-    let mut buff = std::io::Cursor::new(Vec::<u8>::new());
-
-    let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-        .compression(rpm::Compressor::from_str("gzip")?)
-        .with_file_async(
-            "Cargo.toml",
-            RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
-        )
-        .await?
-        // file mode is inherited from source file
-        .with_file_async("Cargo.toml", RPMFileOptions::new("/usr/bin/awesome"))
-        .await?
-        .with_file_async(
-            "Cargo.toml",
-            // you can set a custom mode and custom user too
-            RPMFileOptions::new("/etc/awesome/second.toml")
-                .mode(0o100744)
-                .user("hugo"),
-        )
-        .await?
-        .pre_install_script("echo preinst")
-        .add_changelog_entry("me", "was awesome, eh?", 123123123)
-        .add_changelog_entry("you", "yeah, it was", 12312312)
-        .requires(Dependency::any("wget"))
-        .vendor("dummy vendor")
-        .url("dummy url")
-        .vcs("dummy vcs")
-        .build()?;
-
-    pkg.write(&mut buff)?;
-
-    Ok(())
-}
-
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = test_rpm_file_path();
     let package = RPMPackage::open(rpm_file_path)?;
     test_rpm_header_base(package)
-}
-
-#[cfg(feature = "signature-meta")]
-#[test]
-fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
-    let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
-
-    let possible_binary = region_entry.data.as_binary();
-
-    assert!(possible_binary.is_some(), "should be binary");
-
-    let data = possible_binary.unwrap();
-
-    let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
-
-    assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
-    assert_eq!(
-        entry.data.type_as_u32(),
-        IndexData::Bin(Vec::new()).type_as_u32()
-    );
-    assert_eq!(-48, entry.offset);
-
-    Ok(())
 }

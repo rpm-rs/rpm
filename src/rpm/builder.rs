@@ -10,18 +10,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gethostname::gethostname;
 
-use crate::errors::*;
-
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
+use crate::errors::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
+use crate::Digests;
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 
@@ -493,12 +492,19 @@ impl RPMBuilder {
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
 
-        #[cfg(feature = "signature-meta")]
         let digest_header = {
             let header = header;
-            let (header_digest_sha1, header_and_content_digest_md5) =
-                Self::derive_hashes(header.as_slice(), content.as_slice())?;
-            let header_and_content_len = header.len() + content.len();
+
+            let header_and_content_cursor =
+                SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+            let header_and_content_len = header_and_content_cursor.len();
+            let Digests {
+                header_and_content_digest: header_and_content_digest_md5,
+                header_digest: header_digest_sha1,
+            } = RPMPackage::create_digests_from_readers(
+                &mut header.as_slice(),
+                header_and_content_cursor,
+            )?;
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(
@@ -511,8 +517,6 @@ impl RPMBuilder {
                         .expect("signature header + signature length must be <4gb"),
                 )
         };
-        #[cfg(not(feature = "signature-meta"))]
-        let digest_header = { Header::<IndexSignatureTag>::new_empty() };
 
         let metadata = RPMPackageMetadata {
             lead,
@@ -537,10 +541,15 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let (header_digest_sha1, header_and_content_digest_md5) =
-            Self::derive_hashes(header.as_slice(), content.as_slice())?;
-
-        let header_and_content_len = header.len() + content.len();
+        let header_and_content_cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+        let header_and_content_len = header_and_content_cursor.len();
+        let Digests {
+            header_and_content_digest: header_and_content_digest_md5,
+            header_digest: header_digest_sha1,
+        } = RPMPackage::create_digests_from_readers(
+            &mut header.as_slice(),
+            header_and_content_cursor,
+        )?;
 
         let builder = Header::<IndexSignatureTag>::builder().add_digest(
             header_digest_sha1.as_str(),
@@ -572,33 +581,6 @@ impl RPMBuilder {
         };
         let pkg = RPMPackage { metadata, content };
         Ok(pkg)
-    }
-
-    /// use prepared data but make sure the signatures are
-    #[cfg(feature = "signature-meta")]
-    fn derive_hashes(header: &[u8], content: &[u8]) -> Result<(String, Vec<u8>), RPMError> {
-        let digest_md5 = {
-            use md5::Digest;
-
-            // across header index and content (compressed or uncompressed, depends on configuration)
-            let mut hasher = md5::Md5::default();
-            hasher.update(header);
-            hasher.update(content);
-            let digest_md5 = hasher.finalize();
-            digest_md5.to_vec()
-        };
-
-        // header only, not the lead, just the header index
-        let digest_sha1 = {
-            use sha1::Digest;
-
-            let mut hasher = sha1::Sha1::default();
-            hasher.update(header);
-            let digest_sha1 = hasher.finalize();
-            hex::encode(digest_sha1)
-        };
-
-        Ok((digest_sha1, digest_md5))
     }
 
     /// prepare all rpm headers including content

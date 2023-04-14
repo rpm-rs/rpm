@@ -1,7 +1,10 @@
 use std::io::BufReader;
+#[cfg(feature = "signature-meta")]
+use std::io::Seek;
 use std::path::{Path, PathBuf};
 
 use chrono::offset::TimeZone;
+
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use num_traits::FromPrimitive;
@@ -12,13 +15,33 @@ use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
 
-#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
+
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
-#[cfg(feature = "signature-meta")]
-use std::io::Seek;
+pub enum SignatureVerificationOutcome {
+    Pass,
+    Failure,
+}
+
+pub enum DigestVerificationOutcome {
+    Match,
+    Mismatch,
+}
+
+/// Combined digest of signature header tags `RPMSIGTAG_MD5` and `RPMSIGTAG_SHA1`
+///
+/// Succinct to cover to "verify" the content of the rpm file. Quotes because
+/// the fact `md5` is used doesn't really give any guarantee anything anymore
+/// in the 2020s.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Digests {
+    /// The digest of the header.
+    pub(crate) header_digest: String,
+    /// The sha1 digest of the entire content
+    pub(crate) header_and_content_digest: Vec<u8>,
+}
 
 /// A complete rpm file.
 ///
@@ -70,7 +93,53 @@ impl RPMPackage {
         Ok(())
     }
 
-    // TODO allow passing an external signer/verifier
+    fn read_and_update_digest_256(
+        hasher: &mut impl digest::Digest,
+        mut source: impl std::io::Read,
+    ) {
+        {
+            // avoid loading it into memory all at once
+            // since the content could be multiple 100s of MBs
+            let mut buf = [0u8; 256];
+            while let Ok(n) = source.read(&mut buf[..]) {
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buf[0..n]);
+            }
+        }
+    }
+
+    /// Prepare both header and content digests as used by the `SignatureIndex`.
+    pub(crate) fn create_digests_from_readers<HC, HACC>(
+        header_cursor: HC,
+        header_and_content_cursor: HACC,
+    ) -> Result<Digests, RPMError>
+    where
+        HC: std::io::Read,
+        HACC: std::io::Read,
+    {
+        let digest_md5 = {
+            use md5::Digest;
+            let mut hasher = md5::Md5::default();
+            Self::read_and_update_digest_256(&mut hasher, header_and_content_cursor);
+            let hash_result = hasher.finalize();
+            hash_result.to_vec()
+        };
+
+        let digest_sha1 = {
+            use sha1::Digest;
+            let mut hasher = sha1::Sha1::default();
+            Self::read_and_update_digest_256(&mut hasher, header_cursor);
+            let digest = hasher.finalize();
+            hex::encode(digest)
+        };
+
+        Ok(Digests {
+            header_digest: digest_sha1,
+            header_and_content_digest: digest_md5,
+        })
+    }
 
     /// sign all headers (except for the lead) using an external key and store it as the initial header
     #[cfg(feature = "signature-meta")]
@@ -78,8 +147,6 @@ impl RPMPackage {
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
-        use std::io::Read;
-
         // create a temporary byte repr of the header
         // and re-create all hashes
 
@@ -90,33 +157,15 @@ impl RPMPackage {
         let mut header_and_content_cursor =
             SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
-        let digest_md5 = {
-            use md5::Digest;
-            let mut hasher = md5::Md5::default();
-            {
-                // avoid loading it into memory all at once
-                // since the content could be multiple 100s of MBs
-                let mut buf = [0u8; 256];
-                while let Ok(n) = header_and_content_cursor.read(&mut buf[..]) {
-                    if n == 0 {
-                        break;
-                    }
-                    hasher.update(&buf[0..n]);
-                }
-            }
-            let hash_result = hasher.finalize();
-            hash_result.to_vec()
-        };
+        let Digests {
+            header_digest,
+            header_and_content_digest,
+        } = Self::create_digests_from_readers(
+            &mut header_bytes.as_slice(),
+            &mut header_and_content_cursor,
+        )?;
 
         header_and_content_cursor.rewind()?;
-
-        let digest_sha1 = {
-            use sha1::Digest;
-            let mut hasher = sha1::Sha1::default();
-            hasher.update(&header_bytes);
-            let digest = hasher.finalize();
-            hex::encode(digest)
-        };
 
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
 
@@ -129,8 +178,8 @@ impl RPMPackage {
                 .len()
                 .try_into()
                 .expect("headers + payload can't be larger than 4gb"),
-            &digest_md5,
-            digest_sha1,
+            &header_and_content_digest,
+            &header_digest,
             rsa_signature_spanning_header_only.as_slice(),
             rsa_signature_spanning_header_and_archive.as_slice(),
         );
@@ -142,12 +191,10 @@ impl RPMPackage {
     ///
     ///
     #[cfg(feature = "signature-meta")]
-    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<SignatureVerificationOutcome, RPMError>
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
-        // TODO retval should be SIGNATURE_VERIFIED or MISMATCH, not just an error
-
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
 
@@ -175,7 +222,25 @@ impl RPMPackage {
 
         verifier.verify(header_and_content_cursor, signature_header_and_content)?;
 
-        Ok(())
+        Ok(SignatureVerificationOutcome::Pass)
+    }
+
+    pub fn verify_digest(&self) -> Result<DigestVerificationOutcome, RPMError> {
+        let mut header = Vec::<u8>::with_capacity(1024);
+        // make sure to not hash any previous signatures in the header
+        self.metadata.header.write(&mut header)?;
+
+        let recreated_from_content = Self::create_digests_from_readers(
+            &mut header.as_slice(),
+            SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
+        )?;
+
+        let package_contained = self.metadata.get_digests()?;
+        if recreated_from_content == package_contained {
+            Ok(DigestVerificationOutcome::Match)
+        } else {
+            Ok(DigestVerificationOutcome::Mismatch)
+        }
     }
 }
 
@@ -229,10 +294,23 @@ impl RPMPackageMetadata {
         Ok(())
     }
 
+    pub fn get_digests(&self) -> Result<Digests, RPMError> {
+        let md5 = self
+            .signature
+            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5)?;
+        let sha1 = self
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)?;
+        Ok(Digests {
+            header_digest: sha1.to_owned(),
+            header_and_content_digest: Vec::from(md5),
+        })
+    }
+
     #[inline]
     pub fn is_source_package(&self) -> bool {
         self.header
-            .find_entry_or_err(&IndexTag::RPMTAG_SOURCEPACKAGE)
+            .find_entry_or_err(IndexTag::RPMTAG_SOURCEPACKAGE)
             .is_ok()
     }
 

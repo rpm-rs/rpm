@@ -1,4 +1,4 @@
-//! Trait abstractions of signinggraphic operations.
+//! Trait abstractions of signing operations.
 //!
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.

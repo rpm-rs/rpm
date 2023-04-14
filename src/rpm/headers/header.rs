@@ -136,17 +136,17 @@ where
         Ok(())
     }
 
-    pub(crate) fn find_entry_or_err(&self, tag: &T) -> Result<&IndexEntry<T>, RPMError> {
+    pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, RPMError> {
         self.index_entries
             .iter()
-            .find(|entry| &entry.tag == tag)
+            .find(|entry| entry.tag == tag)
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
         // @todo: this could be more efficient, if the tag is an integer, we can just pass around
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
     pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_binary()
@@ -158,7 +158,7 @@ where
     }
 
     pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_str()
@@ -170,7 +170,7 @@ where
     }
 
     pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_i18n_str()
@@ -182,7 +182,7 @@ where
     }
 
     pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u16_array()
@@ -194,7 +194,7 @@ where
     }
 
     pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32()
@@ -206,7 +206,7 @@ where
     }
 
     pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32_array()
@@ -218,7 +218,7 @@ where
     }
 
     pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64()
@@ -230,7 +230,7 @@ where
     }
 
     pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64_array()
@@ -242,7 +242,7 @@ where
     }
 
     pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_string_array()
@@ -304,17 +304,16 @@ impl Header<IndexSignatureTag> {
     pub(crate) fn new_signature_header(
         headers_plus_payload_size: u32,
         md5sum: &[u8],
-        sha1: String,
+        sha1: &str,
         rsa_spanning_header: &[u8],
         rsa_spanning_header_and_archive: &[u8],
     ) -> Self {
         SignatureHeaderBuilder::new()
-            .add_digest(sha1.as_str(), md5sum)
+            .add_digest(sha1, md5sum)
             .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
             .build(headers_plus_payload_size)
     }
 
-    #[cfg(feature = "signature-meta")]
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
         SignatureHeaderBuilder::<Empty>::new()
     }
@@ -513,16 +512,16 @@ where
     Ok((input, ()))
 }
 
+#[cfg(feature = "signature-meta")]
 #[cfg(test)]
 mod tests2 {
     use super::*;
 
-    #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
-        let sha1: String = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D".to_owned();
+        let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
         let rsa_spanning_header: &[u8] = b"111222333444";
         let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
 
@@ -543,7 +542,7 @@ mod tests2 {
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA1,
                     offset,
-                    IndexData::StringTag(sha1.clone()),
+                    IndexData::StringTag(sha1.to_owned()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_RSA,
