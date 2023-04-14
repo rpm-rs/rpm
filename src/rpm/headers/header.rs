@@ -136,17 +136,17 @@ where
         Ok(())
     }
 
-    pub(crate) fn find_entry_or_err(&self, tag: &T) -> Result<&IndexEntry<T>, RPMError> {
+    pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, RPMError> {
         self.index_entries
             .iter()
-            .find(|entry| &entry.tag == tag)
+            .find(|entry| entry.tag == tag)
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
         // @todo: this could be more efficient, if the tag is an integer, we can just pass around
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
     pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_binary()
@@ -158,7 +158,7 @@ where
     }
 
     pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_str()
@@ -170,7 +170,7 @@ where
     }
 
     pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_i18n_str()
@@ -182,7 +182,7 @@ where
     }
 
     pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u16_array()
@@ -194,7 +194,7 @@ where
     }
 
     pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32()
@@ -206,7 +206,7 @@ where
     }
 
     pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32_array()
@@ -218,7 +218,7 @@ where
     }
 
     pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64()
@@ -230,7 +230,7 @@ where
     }
 
     pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64_array()
@@ -242,7 +242,7 @@ where
     }
 
     pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
-        let entry = self.find_entry_or_err(&tag)?;
+        let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_string_array()

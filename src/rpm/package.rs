@@ -306,7 +306,7 @@ impl RPMPackageMetadata {
     #[inline]
     pub fn is_source_package(&self) -> bool {
         self.header
-            .find_entry_or_err(&IndexTag::RPMTAG_SOURCEPACKAGE)
+            .find_entry_or_err(IndexTag::RPMTAG_SOURCEPACKAGE)
             .is_ok()
     }
 

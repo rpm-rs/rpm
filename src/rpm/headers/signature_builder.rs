@@ -142,16 +142,16 @@ mod test {
             .build(32);
 
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_RSA)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
             .is_ok());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_PGP)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_PGP)
             .is_ok());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_MD5)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
             .is_ok());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_SHA1)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
     }
 
@@ -167,16 +167,16 @@ mod test {
             .build(32);
 
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_RSA)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
             .is_err());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_PGP)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_PGP)
             .is_err());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_MD5)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
             .is_ok());
         assert!(header
-            .find_entry_or_err(&IndexSignatureTag::RPMSIGTAG_SHA1)
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
     }
 }
