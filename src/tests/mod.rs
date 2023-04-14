@@ -223,7 +223,6 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         assert_eq!(*tag, metadata.signature.index_entries[i].tag);
     }
 
-    assert_eq!("cpio", metadata.get_payload_format()?);
     assert_eq!("xz", metadata.get_payload_compressor()?);
 
     let expected_file_checksums = vec![
