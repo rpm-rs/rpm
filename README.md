@@ -55,8 +55,8 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
                 rpm::RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
             )?
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123123123)
-            .add_changelog_entry("you", "yeah, it was", 12312312)
+            .add_changelog_entry("me", "was awesome, eh?", std::time::SystemTime::now())
+            .add_changelog_entry("you", "yeah, it was", std::time::SystemTime::now())
             .requires(rpm::Dependency::any("wget"))
             .vendor("corporation or individual")
             .url("www.github.com/repo")

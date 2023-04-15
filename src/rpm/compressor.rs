@@ -7,6 +7,22 @@ pub enum Compressor {
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
 }
 
+impl Default for Compressor {
+    fn default() -> Self {
+        Self::None(Default::default())
+    }
+}
+
+impl std::fmt::Debug for Compressor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::None(_) => "Uncompressed",
+            Self::Gzip(_) => "compressed/gzip",
+            Self::Zstd(_) => "comrpessed/zstd",
+        })
+    }
+}
+
 impl Write for Compressor {
     fn write(&mut self, content: &[u8]) -> Result<usize, std::io::Error> {
         match self {

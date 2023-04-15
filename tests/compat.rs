@@ -59,7 +59,7 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
+            .add_changelog_entry("me", "was awesome, eh?", std::time::SystemTime::now())
             .add_changelog_entry("you", "yeah, it was", 12_312_312)
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
@@ -160,7 +160,7 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
+            .add_changelog_entry("me", "was awesome, eh?", std::time::SystemTime::now())
             .add_changelog_entry("you", "yeah, it was", 12_312_312)
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")

@@ -40,8 +40,10 @@
 //!                         .user("hugo"),
 //!             )?
 //!             .pre_install_script("echo preinst")
-//!             .add_changelog_entry("me", "was awesome, eh?", 123123123)
-//!             .add_changelog_entry("you", "yeah, it was", 12312312)
+//!             .build_time(std::time::SystemTime::now())
+//!             .build_host(gethostname::gethostname().to_str().unwrap().to_string())
+//!             .add_changelog_entry("me", "was awesome, eh?", std::time::SystemTime::now())
+//!             .add_changelog_entry("you", "yeah, it was", std::time::SystemTime::now())
 //!             .requires(rpm::Dependency::any("wget"))
 //!             .vendor("corporation or individual")
 //!             .url("www.github.com/repo")

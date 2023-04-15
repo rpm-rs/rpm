@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use digest::Digest;
-use gethostname::gethostname;
-
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
@@ -69,24 +67,16 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-/// Returns a value that can be used for associating several package builds as being part of one operation
-///
-/// You can use any value, but the standard format is "${build_host} ${build_time}"
-///
-/// See `RPMBuilder::cookie()`
-pub fn get_build_cookie() -> String {
-    let build_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as u32;
-    let build_host = gethostname().to_string_lossy().to_string();
-
-    format!("{} {}", build_host, build_time)
+fn system_time_as_u32(when: &SystemTime) -> u32 {
+    when.duration_since(SystemTime::UNIX_EPOCH)
+        .expect("It's 2023 or later. qed")
+        .as_secs() as u32
 }
 
 /// Builder pattern for a full rpm file.
 ///
 /// Preferred method of creating a rpm file.
+#[derive(Default)]
 pub struct RPMBuilder {
     name: String,
     epoch: u32,
@@ -119,7 +109,7 @@ pub struct RPMBuilder {
 
     changelog_authors: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<u32>,
+    changelog_times: Vec<std::time::SystemTime>,
     compressor: Compressor,
 
     vendor: Option<String>,
@@ -127,20 +117,12 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    // Filled out automatically if not overridden
-    build_time: u32, // because rpm_time_t is an uint32
-    build_host: String,
+    build_time: Option<std::time::SystemTime>, // because `rpm_time_t` is an `uint32`
+    build_host: Option<String>,
 }
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
-        // @todo, should these values be calculated lazily (only when .build()) is called?
-        let build_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs() as u32;
-        let build_host = gethostname().to_string_lossy().to_string();
-
         RPMBuilder {
             name: name.to_string(),
             epoch: 0,
@@ -149,32 +131,7 @@ impl RPMBuilder {
             arch: arch.to_string(),
             desc: desc.to_string(),
             release: "1".to_string(),
-            build_time,
-            build_host,
-            cookie: None,
-            uid: None,
-            gid: None,
-            provides: Vec::new(),
-            requires: Vec::new(),
-            obsoletes: Vec::new(),
-            conflicts: Vec::new(),
-            recommends: Vec::new(),
-            suggests: Vec::new(),
-            enhances: Vec::new(),
-            supplements: Vec::new(),
-            pre_inst_script: None,
-            post_inst_script: None,
-            pre_uninst_script: None,
-            post_uninst_script: None,
-            files: BTreeMap::new(),
-            changelog_authors: Vec::new(),
-            changelog_entries: Vec::new(),
-            changelog_times: Vec::new(),
-            compressor: Compressor::None(Vec::new()),
-            directories: BTreeSet::new(),
-            vendor: None,
-            url: None,
-            vcs: None,
+            ..Default::default()
         }
     }
 
@@ -197,18 +154,20 @@ impl RPMBuilder {
         self
     }
 
-    /// Override the automatically-detected name of the build host with a new value
-    pub fn build_host(mut self, build_host: &str) -> Self {
-        self.build_host = build_host.to_owned();
+    pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
+        self.build_host = Some(build_host.as_ref().to_owned());
+        self
+    }
+
+    pub fn build_time(mut self, build_time: SystemTime) -> Self {
+        self.build_time = Some(build_time);
         self
     }
 
     /// Provide a value that can be used for tracking packages built together, e.g.
     /// packages built in one build operation.
-    ///
-    /// See: `get_build_cookie()`
-    pub fn cookie(mut self, cookie: &str) -> Self {
-        self.cookie = Some(cookie.to_owned());
+    pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
+        self.cookie = Some(cookie.as_ref().to_owned());
         self
     }
 
@@ -217,13 +176,18 @@ impl RPMBuilder {
         self
     }
 
-    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: u32) -> Self
+    pub fn add_changelog_entry<A, E>(
+        mut self,
+        author: A,
+        entry: E,
+        time: std::time::SystemTime,
+    ) -> Self
     where
-        E: Into<String>,
-        F: Into<String>,
+        A: AsRef<str>,
+        E: AsRef<str>,
     {
-        self.changelog_authors.push(author.into());
-        self.changelog_entries.push(entry.into());
+        self.changelog_authors.push(author.as_ref().to_owned());
+        self.changelog_entries.push(entry.as_ref().to_owned());
         self.changelog_times.push(time);
         self
     }
@@ -787,18 +751,8 @@ impl RPMBuilder {
                 offset,
                 IndexData::Int32(vec![self.epoch]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_BUILDTIME,
-                offset,
-                IndexData::Int32(vec![self.build_time]),
-            ),
             // @todo: write RPMTAG_RPMVERSION?
             // @todo: write RPMTAG_PLATFORM?
-            IndexEntry::new(
-                IndexTag::RPMTAG_BUILDHOST,
-                offset,
-                IndexData::StringTag(self.build_host),
-            ),
             IndexEntry::new(
                 IndexTag::RPMTAG_VERSION,
                 offset,
@@ -857,6 +811,23 @@ impl RPMBuilder {
                 IndexData::StringTag("cpio".to_string()),
             ),
         ];
+
+        if let Some(ref build_time) = self.build_time {
+            let build_time = system_time_as_u32(build_time);
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_BUILDTIME,
+                offset,
+                IndexData::Int32(vec![build_time]),
+            ));
+        }
+
+        if let Some(build_host) = self.build_host {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_BUILDHOST,
+                offset,
+                IndexData::StringTag(build_host),
+            ));
+        }
 
         // if we have an empty RPM, we have to leave out all file related index entries.
         if !self.files.is_empty() {
@@ -1023,7 +994,9 @@ impl RPMBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTIME,
                 offset,
-                IndexData::Int32(self.changelog_times),
+                IndexData::Int32(Vec::from_iter(
+                    self.changelog_times.iter().map(system_time_as_u32),
+                )),
             ));
         }
 
