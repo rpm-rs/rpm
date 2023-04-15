@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_entry_data_as_u16_array()`, `get_entry_data_as_u32()`, `get_entry_data_as_u32_array()`,
   `get_entry_data_as_u64()`, `get_entry_data_as_u64_array()`, `get_entry_data_as_string_array()`,
   `get_entry_data_as_i18n_string()`
+- Added `verify_signature()` and `verify_digests()` to `RPMPackage` to enable checking the integrity
+  and provenance of packages.
 
 ### Fixed
 

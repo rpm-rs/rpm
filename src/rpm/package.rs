@@ -20,16 +20,6 @@ use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
-pub enum SignatureVerificationOutcome {
-    Pass,
-    Failure,
-}
-
-pub enum DigestVerificationOutcome {
-    Match,
-    Mismatch,
-}
-
 /// Combined digest of signature header tags `RPMSIGTAG_MD5` and `RPMSIGTAG_SHA1`
 ///
 /// Succinct to cover to "verify" the content of the rpm file. Quotes because
@@ -111,7 +101,7 @@ impl RPMPackage {
     }
 
     /// Prepare both header and content digests as used by the `SignatureIndex`.
-    pub(crate) fn create_digests_from_readers<HC, HACC>(
+    pub(crate) fn create_legacy_header_digests<HC, HACC>(
         header_cursor: HC,
         header_and_content_cursor: HACC,
     ) -> Result<Digests, RPMError>
@@ -160,7 +150,7 @@ impl RPMPackage {
         let Digests {
             header_digest,
             header_and_content_digest,
-        } = Self::create_digests_from_readers(
+        } = Self::create_legacy_header_digests(
             &mut header_bytes.as_slice(),
             &mut header_and_content_cursor,
         )?;
@@ -187,11 +177,13 @@ impl RPMPackage {
         Ok(())
     }
 
+    // @todo: function that returns the key ID of the key used to sign this package
+
     /// Verify the signature as present within the RPM package.
     ///
     ///
     #[cfg(feature = "signature-meta")]
-    pub fn verify_signature<V>(&self, verifier: V) -> Result<SignatureVerificationOutcome, RPMError>
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
@@ -222,24 +214,25 @@ impl RPMPackage {
 
         verifier.verify(header_and_content_cursor, signature_header_and_content)?;
 
-        Ok(SignatureVerificationOutcome::Pass)
+        Ok(())
     }
 
-    pub fn verify_digest(&self) -> Result<DigestVerificationOutcome, RPMError> {
+    pub fn verify_digest(&self) -> Result<(), RPMError> {
         let mut header = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
 
-        let recreated_from_content = Self::create_digests_from_readers(
+        let recreated_from_content = Self::create_legacy_header_digests(
             &mut header.as_slice(),
             SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
         )?;
 
         let package_contained = self.metadata.get_digests()?;
+
         if recreated_from_content == package_contained {
-            Ok(DigestVerificationOutcome::Match)
+            Ok(())
         } else {
-            Ok(DigestVerificationOutcome::Mismatch)
+            Err(RPMError::DigestMismatchError)
         }
     }
 }
