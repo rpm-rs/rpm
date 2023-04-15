@@ -501,7 +501,7 @@ impl RPMBuilder {
             let Digests {
                 header_and_content_digest: header_and_content_digest_md5,
                 header_digest: header_digest_sha1,
-            } = RPMPackage::create_digests_from_readers(
+            } = RPMPackage::create_legacy_header_digests(
                 &mut header.as_slice(),
                 header_and_content_cursor,
             )?;
@@ -546,7 +546,7 @@ impl RPMBuilder {
         let Digests {
             header_and_content_digest: header_and_content_digest_md5,
             header_digest: header_digest_sha1,
-        } = RPMPackage::create_digests_from_readers(
+        } = RPMPackage::create_legacy_header_digests(
             &mut header.as_slice(),
             header_and_content_cursor,
         )?;
