@@ -73,6 +73,9 @@ pub enum RPMError {
         key_ref: String,
     },
 
+    #[error("digests from content did not match those in the header")]
+    DigestMismatchError,
+
     #[error("unable to find key with key-ref: {key_ref}")]
     KeyNotFoundError { key_ref: String },
 
