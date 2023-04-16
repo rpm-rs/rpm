@@ -591,7 +591,13 @@ impl RPMBuilder {
         // Lead is not important. just build it here
 
         let lead = Lead::new(&self.name);
-        let mut archive: Vec<u8> = Vec::new();
+        let possible_compression_details = self.compressor.get_details();
+
+        // Make the borrow checker happy
+        let is_zstd = matches!(self.compressor, Compressor::Zstd(_));
+        // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
+        // need to keep two copies in memory simultaneously.
+        let mut archive = Sha256Writer::new(&mut self.compressor);
 
         let mut ino_index = 1;
 
@@ -676,7 +682,7 @@ impl RPMBuilder {
             "4.0-1".to_string(),
         ));
 
-        if matches!(self.compressor, Compressor::Zstd(_)) {
+        if is_zstd {
             self.requires.push(Dependency::rpmlib(
                 "rpmlib(PayloadIsZstd)".to_string(),
                 "5.4.18-1".to_string(),
@@ -961,19 +967,11 @@ impl RPMBuilder {
             ),
         ]);
 
-        let possible_compression_details = self.compressor.get_details();
-
-        self.compressor.write_all(&archive)?;
+        // digest of the uncompressed raw archive calculated on the inner writer
+        let raw_archive_digest_sha256 = hex::encode(archive.into_digest());
         let payload = self.compressor.finish_compression()?;
 
-        // digest of the uncompressed raw archive
-        let raw_payload_digest_sha256 = {
-            let mut hasher = sha2::Sha256::default();
-            hasher.update(archive.as_slice());
-            hex::encode(hasher.finalize())
-        };
-
-        // digest of the compressed archive (payload)
+        // digest of the post-compression archive (payload)
         let payload_digest_sha256 = {
             let mut hasher = sha2::Sha256::default();
             hasher.update(payload.as_slice());
@@ -994,7 +992,7 @@ impl RPMBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADDIGESTALT,
                 offset,
-                IndexData::StringArray(vec![raw_payload_digest_sha256]),
+                IndexData::StringArray(vec![raw_archive_digest_sha256]),
             ),
         ]);
 
