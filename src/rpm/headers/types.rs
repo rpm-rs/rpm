@@ -1,5 +1,6 @@
 //! A collection of types used in various header records.
 use crate::{constants::*, errors};
+use digest::Digest;
 
 /// Describes a file present in the rpm file.
 pub struct RPMFileEntry {
@@ -312,6 +313,35 @@ impl Dependency {
             sense,
             version,
         }
+    }
+}
+
+pub struct Sha256Writer<W> {
+    writer: W,
+    hasher: sha2::Sha256,
+}
+
+impl<W> Sha256Writer<W> {
+    pub fn new(writer: W) -> Self {
+        Sha256Writer {
+            writer,
+            hasher: sha2::Sha256::new(),
+        }
+    }
+
+    pub fn into_digest(self) -> impl AsRef<[u8]> {
+        self.hasher.finalize()
+    }
+}
+
+impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.hasher.update(buf);
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
     }
 }
 
