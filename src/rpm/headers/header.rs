@@ -416,15 +416,15 @@ impl Default for FileCategory {
 pub enum FileDigestAlgorithm {
     // broken and very broken
     Md5 = constants::PGPHASHALGO_MD5,
-    Sha1 = constants::PGPHASHALGO_SHA1,
-    Md2 = constants::PGPHASHALGO_MD2,
+    // Sha1 = constants::PGPHASHALGO_SHA1,
+    // Md2 = constants::PGPHASHALGO_MD2,
 
-    // not proven to be broken, weaker variants broken
-    #[allow(non_camel_case_types)]
-    Haval_5_160 = constants::PGPHASHALGO_HAVAL_5_160, // not part of PGP
-    Ripemd160 = constants::PGPHASHALGO_RIPEMD160,
+    // // not proven to be broken, weaker variants broken
+    // #[allow(non_camel_case_types)]
+    // Haval_5_160 = constants::PGPHASHALGO_HAVAL_5_160, // not part of PGP
+    // Ripemd160 = constants::PGPHASHALGO_RIPEMD160,
 
-    Tiger192 = constants::PGPHASHALGO_TIGER192, // not part of PGP
+    // Tiger192 = constants::PGPHASHALGO_TIGER192, // not part of PGP
     Sha2_256 = constants::PGPHASHALGO_SHA256,
     Sha2_384 = constants::PGPHASHALGO_SHA384,
     Sha2_512 = constants::PGPHASHALGO_SHA512,

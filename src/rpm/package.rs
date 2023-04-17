@@ -177,11 +177,11 @@ impl RPMPackage {
         Ok(())
     }
 
-    // @todo: function that returns the key ID of the key used to sign this package
+    // @todo: a function that returns the key ID of the key used to sign this package would be useful
+    // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
+    //        was present and verified or whether it was not present at all.
 
     /// Verify the signature as present within the RPM package.
-    ///
-    ///
     #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
     where
@@ -218,6 +218,7 @@ impl RPMPackage {
         Ok(())
     }
 
+    /// Verify any digests which may be present in the RPM headers
     pub fn verify_digests(&self) -> Result<(), RPMError> {
         let mut header = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
@@ -228,7 +229,41 @@ impl RPMPackage {
             SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
         )?;
 
-        let sig_header_digests = self.metadata.get_digests()?;
+        let md5 = self
+            .metadata
+            .signature
+            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5);
+        let sha1 = self
+            .metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1);
+        let sha256 = self
+            .metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256);
+
+        if let Ok(md5) = md5 {
+            if md5 != recreated_from_content.header_and_content_digest {
+                return Err(RPMError::DigestMismatchError);
+            }
+        }
+
+        if let Ok(sha1) = sha1 {
+            if sha1 != recreated_from_content.header_digest {
+                return Err(RPMError::DigestMismatchError);
+            }
+        }
+
+        if let Ok(sha256) = sha256 {
+            let sha256_calculated = {
+                let mut hasher = sha2::Sha256::default();
+                hasher.update(self.content.as_slice());
+                hex::encode(hasher.finalize())
+            };
+            if sha256 != sha256_calculated {
+                return Err(RPMError::DigestMismatchError);
+            }
+        }
 
         let payload_digest_val = self
             .metadata
@@ -242,9 +277,15 @@ impl RPMPackage {
         if let (Ok(payload_digest_val), Ok(payload_digest_algo)) =
             (payload_digest_val, payload_digest_algo)
         {
+            let payload_digest_algo = FileDigestAlgorithm::from_u32(payload_digest_algo)
+                .expect("Completely unknown payload digest algorithm");
+
+            // @todo: UnsupportedFileDigestAlgorithm is awkward, if a number is outside the range of the expected
+            // variants to begin with, we can't even return it, as it carries a FileDigestAlgorithm
+
             let mut hasher = match payload_digest_algo {
-                a if a == FileDigestAlgorithm::Sha2_256 as u32 => sha2::Sha256::default(),
-                _ => unimplemented!("An unknown payload digest algorithm was used"),
+                FileDigestAlgorithm::Sha2_256 => sha2::Sha256::default(),
+                a => return Err(RPMError::UnsupportedFileDigestAlgorithm(a)),
                 // At the present moment even rpmbuild only supports sha256
             };
             let payload_digest = {
@@ -254,10 +295,6 @@ impl RPMPackage {
             if payload_digest != payload_digest_val[0] {
                 return Err(RPMError::DigestMismatchError);
             }
-        }
-
-        if recreated_from_content != sig_header_digests {
-            return Err(RPMError::DigestMismatchError);
         }
 
         Ok(())
@@ -312,19 +349,6 @@ impl RPMPackageMetadata {
         self.signature.write_signature_async(out).await?;
         self.header.write_async(out).await?;
         Ok(())
-    }
-
-    fn get_digests(&self) -> Result<Digests, RPMError> {
-        let md5 = self
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5)?;
-        let sha1 = self
-            .signature
-            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)?;
-        Ok(Digests {
-            header_digest: sha1.to_owned(),
-            header_and_content_digest: Vec::from(md5),
-        })
     }
 
     #[inline]
