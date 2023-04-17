@@ -316,6 +316,7 @@ impl Dependency {
     }
 }
 
+/// A wrapper for calculating the sha256 checksum of the contents written to it
 pub struct Sha256Writer<W> {
     writer: W,
     hasher: sha2::Sha256,

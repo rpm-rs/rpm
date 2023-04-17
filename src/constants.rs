@@ -335,12 +335,12 @@ pub enum IndexTag {
     RPMTAG_TRANSFILETRIGGERTYPE = 5089,
     RPMTAG_FILESIGNATURES = 5090,
     RPMTAG_FILESIGNATURELENGTH = 5091,
-    RPMTAG_PAYLOADDIGEST = 5092,
+    RPMTAG_PAYLOADDIGEST = 5092, // hex-encoded string representing the digest of the payload
     RPMTAG_PAYLOADDIGESTALGO = 5093,
     RPMTAG_AUTOINSTALLED = 5094,
     RPMTAG_IDENTITY = 5095,
     RPMTAG_MODULARITYLABEL = 5096,
-    RPMTAG_PAYLOADDIGESTALT = 5097,
+    RPMTAG_PAYLOADDIGESTALT = 5097, // hex-encoded string representing the digest of the payload without compression
     RPMTAG_ARCHSUFFIX = 5098,
     RPMTAG_SPEC = 5099,
     RPMTAG_TRANSLATIONURL = 5100,
@@ -375,11 +375,12 @@ pub enum IndexSignatureTag {
     /// This tag specifies the uncompressed size of the Payload archive, including the cpio headers.
     RPMSIGTAG_PAYLOADSIZE = HEADER_TAGBASE + 7,
 
-    /// This  index  contains  the  SHA1  checksum  of  the  entire  Header  Section,
-    /// including the Header Record, Index Records and Header store.
+    /// The SHA1 checksum of the entire Header Section, including the Header Record, Index Records and
+    /// Header store, stored as a hex-encoded string.
     RPMSIGTAG_SHA1 = 269,
 
-    /// This tag specifies the 128-bit MD5 checksum of the combined Header and Archive sections.
+    /// This tag specifies the 128-bit MD5 checksum of the combined Header and Archive sections, stored as
+    /// a binary representation.
     RPMSIGTAG_MD5 = 1004,
 
     /// The tag contains the DSA signature of the Header section.
@@ -415,8 +416,8 @@ pub enum IndexSignatureTag {
     /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_GPG = 1005,
 
-    /// This index contains the SHA256 checksum of the entire Header Section,
-    /// including the Header Record, Index Records and Header store.
+    /// This index contains the SHA256 checksum of the entire Header Section, including the Header Record,
+    /// Index Records and Header store, stored as a hex-encoded string.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
     /// A silly tag for a date.
