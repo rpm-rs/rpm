@@ -328,8 +328,16 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?
         .pre_install_script("echo preinst")
-        .add_changelog_entry("me", "was awesome, eh?", chrono::Utc.timestamp_opt(1681411811, 0).unwrap())
-        .add_changelog_entry("you", "yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap())
+        .add_changelog_entry(
+            "me",
+            "was awesome, eh?",
+            chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+        )
+        .add_changelog_entry(
+            "you",
+            "yeah, it was",
+            chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+        )
         .requires(Dependency::any("wget"))
         .vendor("dummy vendor")
         .url("dummy url")

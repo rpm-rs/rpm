@@ -1,6 +1,6 @@
+use chrono::TimeZone;
 use rpm::*;
 use std::fs::File;
-use chrono::TimeZone;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::process::Stdio;

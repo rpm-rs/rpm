@@ -1,5 +1,5 @@
-use rpm::signature::pgp::{Signer, Verifier};
 use rpm::chrono::TimeZone;
+use rpm::signature::pgp::{Signer, Verifier};
 use rpm::*;
 
 use std::str::FromStr;
@@ -56,7 +56,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
         )?
         .epoch(3)
         .pre_install_script("echo preinst")
-        .add_changelog_entry("you", "yada yada", chrono::Utc.timestamp_opt(1,0).unwrap())
+        .add_changelog_entry("you", "yada yada", chrono::Utc.timestamp_opt(1, 0).unwrap())
         .requires(Dependency::any("rpm-sign".to_string()))
         .build_and_sign(&signer)?;
 
