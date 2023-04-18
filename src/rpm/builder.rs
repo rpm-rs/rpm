@@ -158,11 +158,31 @@ impl RPMBuilder {
         self
     }
 
+    /// Define the name of the build host.
+    ///
+    /// Commonly used in conjunction with the `gethostname` crate.
+    ///
+    /// ```ignore
+    /// let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+    ///             .build_host(gethostname::gethostname().to_str().unwrap())
+    ///             // ..
+    /// ```
     pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
         self.build_host = Some(build_host.as_ref().to_owned());
         self
     }
 
+    /// Define the build time header of the package.
+    ///
+    /// Will be converted to UTC internally.
+    ///
+    /// Commonly used with the current time stamp.
+    ///
+    /// ```ignore
+    /// let pkg = rpm::RPMBuilder::new(..)
+    ///             .build_time(rpm::chrono::Utc::now())
+    ///             // ..
+    /// ```
     pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
         self.build_time = Some(build_time.with_timezone(&chrono::Utc));
         self
