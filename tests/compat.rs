@@ -1,6 +1,5 @@
 use rpm::*;
 use std::fs::File;
-use super::*;
 use chrono::TimeZone;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -173,12 +172,12 @@ mod pgp {
             .add_changelog_entry(
                 "me",
                 "was awesome, eh?",
-                chrono::Utc.timestamp_millis_opt(1681411811).unwrap(),
+                chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
             )
             .add_changelog_entry(
                 "you",
                 "yeah, it was",
-                chrono::Utc.timestamp_millis_opt(1681411991).unwrap(),
+                chrono::Utc.timestamp_opt(1681411991, 0).unwrap(),
             )
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
@@ -211,10 +210,10 @@ mod pgp {
     #[serial_test::serial]
     fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, verification_key) = crate::signature::pgp::test::load_asc_keys();
+        let (signing_key, verification_key) = common::load_asc_keys();
 
-        let cargo_file = cargo_manifest_dir().join("Cargo.toml");
-        let out_file = cargo_out_dir().join("roundtrip.rpm");
+        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let out_file = common::cargo_out_dir().join("roundtrip.rpm");
 
         {
             let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
@@ -243,7 +242,7 @@ mod pgp {
             .add_changelog_entry(
                 "you",
                 "yada yada",
-                chrono::Utc.timestamp_millis_opt(1681801261).unwrap(),
+                chrono::Utc.timestamp_opt(1681801261, 0).unwrap(),
             )
             .requires(Dependency::any("rpm-sign".to_string()))
             .build_and_sign(&signer)?;

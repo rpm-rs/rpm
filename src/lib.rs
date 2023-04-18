@@ -41,9 +41,9 @@
 //!                         .user("hugo"),
 //!             )?
 //!             .pre_install_script("echo preinst")
-//!             .build_time(std::time::SystemTime::now())
+//!             .build_time(chrono::Utc::now())
 //!             .build_host(gethostname::gethostname().to_str().unwrap().to_string())
-//!             .add_changelog_entry("me", "was awesome, eh?", chrono::Utc.timestamp_millis_opt(1681411811).unwrap())
+//!             .add_changelog_entry("me", "was awesome, eh?", chrono::Utc.timestamp_opt(1681411811, 0).unwrap())
 //!             .add_changelog_entry("you", "yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap())
 //!             .requires(rpm::Dependency::any("wget"))
 //!             .vendor("corporation or individual")

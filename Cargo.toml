@@ -65,6 +65,7 @@ rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
 serial_test = "1.0"
 pretty_assertions = "1.3.0"
+gethostname = "0.4"
 
 # Use for testing async files when async-futures enabled
 tokio = { version = "1", features = ["full"] }
