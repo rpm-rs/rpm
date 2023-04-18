@@ -6,7 +6,6 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use digest::Digest;
 use super::compressor::Compressor;
@@ -67,10 +66,15 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-fn system_time_as_u32(when: &SystemTime) -> u32 {
-    when.duration_since(SystemTime::UNIX_EPOCH)
-        .expect("It's 2023 or later. qed")
-        .as_secs() as u32
+fn date_time_as_u32(when: &chrono::DateTime<chrono::Utc>) -> u32 {
+    when.timestamp()
+        .try_into()
+        .expect("By 2100 we have a new, modern, package format spec and implementation. qed")
+}
+
+fn system_time_as_u32(when: std::time::SystemTime) -> u32 {
+    let dt = chrono::DateTime::<chrono::Utc>::from(when);
+    date_time_as_u32(&dt)
 }
 
 /// Builder pattern for a full rpm file.
@@ -109,7 +113,7 @@ pub struct RPMBuilder {
 
     changelog_authors: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<std::time::SystemTime>,
+    changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
     compressor: Compressor,
 
     vendor: Option<String>,
@@ -117,7 +121,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    build_time: Option<std::time::SystemTime>, // because `rpm_time_t` is an `uint32`
+    build_time: Option<chrono::DateTime<chrono::Utc>>, // because `rpm_time_t` is an `uint32`
     build_host: Option<String>,
 }
 
@@ -159,8 +163,8 @@ impl RPMBuilder {
         self
     }
 
-    pub fn build_time(mut self, build_time: SystemTime) -> Self {
-        self.build_time = Some(build_time);
+    pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
+        self.build_time = Some(build_time.with_timezone(&chrono::Utc));
         self
     }
 
@@ -176,19 +180,21 @@ impl RPMBuilder {
         self
     }
 
-    pub fn add_changelog_entry<A, E>(
+    pub fn add_changelog_entry<A, E, TZ>(
         mut self,
         author: A,
         entry: E,
-        time: std::time::SystemTime,
+        datetime: chrono::DateTime<TZ>,
     ) -> Self
     where
         A: AsRef<str>,
         E: AsRef<str>,
+        TZ: chrono::TimeZone,
     {
         self.changelog_authors.push(author.as_ref().to_owned());
         self.changelog_entries.push(entry.as_ref().to_owned());
-        self.changelog_times.push(time);
+        self.changelog_times
+            .push(datetime.with_timezone(&chrono::Utc));
         self
     }
 
@@ -203,15 +209,9 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (async_file_mode(&input).await? as i32).into();
         }
-        let modified_at = input
-            .metadata()
-            .await?
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs();
+        let modified_at = input.metadata().await?.modified()?;
 
-        self.with_file_async_inner(input.compat(), modified_at, options)
+        self.with_file_async_inner(input.compat(), system_time_as_u32(modified_at), options)
             .await
     }
 
@@ -229,15 +229,9 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (async_file_mode(&input).await? as i32).into();
         }
-        let modified_at = input
-            .metadata()
-            .await?
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs();
+        let modified_at = input.metadata().await?.modified()?;
 
-        self.with_file_async_inner(input, modified_at, options)
+        self.with_file_async_inner(input, system_time_as_u32(modified_at), options)
             .await
     }
 
@@ -245,7 +239,7 @@ impl RPMBuilder {
     async fn with_file_async_inner<P>(
         mut self,
         mut input: P,
-        modified_at: u64,
+        modified_at: u32,
         options: RPMFileOptions,
     ) -> Result<Self, RPMError>
     where
@@ -253,10 +247,7 @@ impl RPMBuilder {
     {
         let mut content = Vec::new();
         input.read_to_end(&mut content).await?;
-        let mtime = modified_at
-            .try_into()
-            .expect("file mtime is likely wrong, too large to be stored as uint32");
-        self.add_data(content, mtime, options)?;
+        self.add_data(content, modified_at, options)?;
         Ok(self)
     }
 
@@ -272,18 +263,10 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (file_mode(&input)? as i32).into();
         }
-        self.add_data(
-            content,
-            input
-                .metadata()?
-                .modified()?
-                .duration_since(UNIX_EPOCH)
-                .expect("system time predates the Unix epoch?")
-                .as_secs()
-                .try_into()
-                .expect("file mtime is wrong, too large to be stored as uint32"),
-            options,
-        )?;
+
+        let modified_at = input.metadata()?.modified()?;
+
+        self.add_data(content, system_time_as_u32(modified_at), options)?;
         Ok(self)
     }
 
@@ -813,7 +796,7 @@ impl RPMBuilder {
         ];
 
         if let Some(ref build_time) = self.build_time {
-            let build_time = system_time_as_u32(build_time);
+            let build_time = date_time_as_u32(build_time);
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_BUILDTIME,
                 offset,
@@ -995,7 +978,7 @@ impl RPMBuilder {
                 IndexTag::RPMTAG_CHANGELOGTIME,
                 offset,
                 IndexData::Int32(Vec::from_iter(
-                    self.changelog_times.iter().map(system_time_as_u32),
+                    self.changelog_times.iter().map(date_time_as_u32),
                 )),
             ));
         }

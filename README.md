@@ -55,8 +55,8 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
                 rpm::RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
             )?
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", std::time::SystemTime::now())
-            .add_changelog_entry("you", "yeah, it was", std::time::SystemTime::now())
+            .add_changelog_entry("me", "was awesome, eh?", chrono::DateTime::parse_from_rfc2822("Wed, 19 April 2023 23:16:09 GMT"))
+            .add_changelog_entry("you", "yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00"))
             .requires(rpm::Dependency::any("wget"))
             .vendor("corporation or individual")
             .url("www.github.com/repo")
