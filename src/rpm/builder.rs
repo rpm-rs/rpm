@@ -168,8 +168,11 @@ impl RPMBuilder {
         self
     }
 
-    /// Provide a value that can be used for tracking packages built together, e.g.
-    /// packages built in one build operation.
+    /// Returns a value that can be used for associating several package builds as being part of one operation
+    ///
+    /// You can use any value, but the standard format is "${build_host} ${build_time}"
+    ///
+    /// See `RPMBuilder::cookie()`
     pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
         self.cookie = Some(cookie.as_ref().to_owned());
         self

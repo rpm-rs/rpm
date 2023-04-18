@@ -18,7 +18,7 @@ impl std::fmt::Debug for Compressor {
         f.write_str(match self {
             Self::None(_) => "Uncompressed",
             Self::Gzip(_) => "compressed/gzip",
-            Self::Zstd(_) => "comrpessed/zstd",
+            Self::Zstd(_) => "compressed/zstd",
         })
     }
 }
