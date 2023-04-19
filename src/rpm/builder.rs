@@ -191,8 +191,6 @@ impl RPMBuilder {
     /// Returns a value that can be used for associating several package builds as being part of one operation
     ///
     /// You can use any value, but the standard format is "${build_host} ${build_time}"
-    ///
-    /// See `RPMBuilder::cookie()`
     pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
         self.cookie = Some(cookie.as_ref().to_owned());
         self
@@ -203,6 +201,22 @@ impl RPMBuilder {
         self
     }
 
+    /// Add an entry to the changelog, compromised of author, description, and the date and time of the change.
+    ///
+    /// ```ignore
+    /// let pkg = rpm::RPMBuilder::new(..)
+    ///     .add_changelog_entry(
+    ///         "Alfred J. Quack",
+    ///         "Obsolete `fn foo`, in favor of `fn bar`.",
+    ///         rpm::chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+    ///     )
+    ///     .add_changelog_entry(
+    ///         "Gambl",
+    ///         "Add enumerator."
+    ///         rpm::chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+    ///     )
+    ///     //..
+    /// ```
     pub fn add_changelog_entry<A, E, TZ>(
         mut self,
         author: A,
