@@ -782,7 +782,7 @@ impl RPMPackageMetadata {
 
     /// Return a list of changelog entries
     pub fn get_changelog_entries(&self) -> Result<Vec<ChangelogEntry>, RPMError> {
-        let authors = self
+        let names = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_CHANGELOGNAME);
         let timestamps = self
@@ -793,26 +793,24 @@ impl RPMPackageMetadata {
             .get_entry_data_as_string_array(IndexTag::RPMTAG_CHANGELOGTEXT);
 
         // Return an empty list if the tags are not present
-        match (authors, timestamps, descriptions) {
+        match (names, timestamps, descriptions) {
             (
                 Err(RPMError::TagNotFound(_)),
                 Err(RPMError::TagNotFound(_)),
                 Err(RPMError::TagNotFound(_)),
             ) => Ok(vec![]),
-            (Ok(authors), Ok(timestamps), Ok(descriptions)) => {
-                let v = Vec::from_iter(
-                    itertools::multizip((authors, timestamps, descriptions)).map(
-                        |(author, timestamp, description)| ChangelogEntry {
-                            author: author.to_owned(),
-                            timestamp: timestamp as u64,
-                            description: description.to_owned(),
-                        },
-                    ),
-                );
+            (Ok(names), Ok(timestamps), Ok(descriptions)) => {
+                let v = Vec::from_iter(itertools::multizip((names, timestamps, descriptions)).map(
+                    |(name, timestamp, description)| ChangelogEntry {
+                        name: name.to_owned(),
+                        timestamp: timestamp as u64,
+                        description: description.to_owned(),
+                    },
+                ));
                 Ok(v)
             }
-            (author, timestamp, description) => {
-                author?;
+            (name, timestamp, description) => {
+                name?;
                 timestamp?;
                 description?;
                 unreachable!()

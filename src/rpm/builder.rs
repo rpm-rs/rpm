@@ -111,7 +111,9 @@ pub struct RPMBuilder {
     pre_uninst_script: Option<String>,
     post_uninst_script: Option<String>,
 
-    changelog_authors: Vec<String>,
+    /// The author name with email followed by a dash with the version
+    /// `Max Mustermann <max@example.com> - 0.1-1`
+    changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
     compressor: Compressor,
@@ -201,35 +203,37 @@ impl RPMBuilder {
         self
     }
 
-    /// Add an entry to the changelog, compromised of author, description, and the date and time of the change.
+    /// Add an entry to the changelog, compromised of changelog name (which includes author, email followed by
+    /// a dash followed by a version number),
+    /// description, and the date and time of the change.
     ///
     /// ```ignore
     /// let pkg = rpm::RPMBuilder::new(..)
     ///     .add_changelog_entry(
-    ///         "Alfred J. Quack <quack@example.com>",
+    ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
     /// - Secondly."#,
     ///         rpm::chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
     ///     )
     ///     .add_changelog_entry(
-    ///         "Gambl B. Xen <gbx@example.com>",
+    ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
     ///         " - Add enumerator."
     ///         rpm::chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
     ///     )
     ///     //..
     /// ```
-    pub fn add_changelog_entry<A, E, TZ>(
+    pub fn add_changelog_entry<N, E, TZ>(
         mut self,
-        author: A,
+        name: N,
         entry: E,
         datetime: chrono::DateTime<TZ>,
     ) -> Self
     where
-        A: AsRef<str>,
+        N: AsRef<str>,
         E: AsRef<str>,
         TZ: chrono::TimeZone,
     {
-        self.changelog_authors.push(author.as_ref().to_owned());
+        self.changelog_names.push(name.as_ref().to_owned());
         self.changelog_entries.push(entry.as_ref().to_owned());
         self.changelog_times
             .push(datetime.with_timezone(&chrono::Utc));
@@ -1001,11 +1005,11 @@ impl RPMBuilder {
             ));
         }
 
-        if !self.changelog_authors.is_empty() {
+        if !self.changelog_names.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGNAME,
                 offset,
-                IndexData::StringArray(self.changelog_authors),
+                IndexData::StringArray(self.changelog_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTEXT,
