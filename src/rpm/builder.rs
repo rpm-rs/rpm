@@ -7,12 +7,12 @@ use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
 
-use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
+use digest::Digest;
 
 use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
@@ -206,13 +206,14 @@ impl RPMBuilder {
     /// ```ignore
     /// let pkg = rpm::RPMBuilder::new(..)
     ///     .add_changelog_entry(
-    ///         "Alfred J. Quack",
-    ///         "Obsolete `fn foo`, in favor of `fn bar`.",
+    ///         "Alfred J. Quack <quack@example.com>",
+    ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
+    /// - Secondly."#,
     ///         rpm::chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
     ///     )
     ///     .add_changelog_entry(
-    ///         "Gambl",
-    ///         "Add enumerator."
+    ///         "Gambl B. Xen <gbx@example.com>",
+    ///         " - Add enumerator."
     ///         rpm::chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
     ///     )
     ///     //..
