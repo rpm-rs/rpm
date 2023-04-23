@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_entry_data_as_i18n_string()`
 - Added `verify_signature()` and `verify_digests()` to `RPMPackage` to enable checking the integrity
   and provenance of packages.
+- Added `get_package_segment_boundaries()` to `RPMPackage` to enable reading the raw bytes of the
+  different components (header, payload, etc.) from an on-disk package.
 
 ### Fixed
 

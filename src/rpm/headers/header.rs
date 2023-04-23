@@ -294,6 +294,14 @@ where
             store,
         }
     }
+
+    /// Size (in bytes) of this header in on-disk representation, not including padding
+    pub(crate) fn size(&self) -> u32 {
+        let index_size = self.index_header.num_entries * INDEX_ENTRY_SIZE;
+        let data_size = self.index_header.data_section_size;
+
+        INDEX_HEADER_SIZE + index_size + data_size
+    }
 }
 
 impl Header<IndexSignatureTag> {

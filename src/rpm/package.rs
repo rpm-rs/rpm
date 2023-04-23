@@ -590,6 +590,55 @@ impl RPMPackageMetadata {
         )
     }
 
+    /// An RPM package is comprised of several segments - the Lead, Signature Header, Header, and Payload.
+    /// This function returns the computed (byte) boundaries between those segments in the package file
+    /// as if it were written out on-disk.
+    ///
+    /// ```
+    /// # use rpm::RPMPackage;
+    /// # let package = RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm").unwrap();
+    /// let (sig_header_start, header_start, payload_start) = package.metadata.get_package_segment_boundaries();
+    /// let lead = 0..sig_header_start;
+    /// let sig_header = sig_header_start..header_start;
+    /// let header = header_start..payload_start;
+    /// let payload = payload_start..;
+    /// ```
+    pub fn get_package_segment_boundaries(&self) -> (u64, u64, u64) {
+        // Lead is 96 bytes.
+
+        // Each Header starts like this (16 bytes)
+        // 3 bytes for the magic
+        // 1 byte RPM version number - always 1
+        // 4 reserved bytes (no meaning, just padding)
+        // 4 bytes for the number of entries in the index (u32)
+        // 4 bytes for the length of the data section (u32)
+
+        // Next comes a series of index entries
+        // Each index entry is 16 bytes
+        // 4 bytes for the tag (u32)
+        // 4 bytes for the tag data type (u32)
+        // 4 bytes for the offset relative to the beginning of the data store
+        // 4 bytes for the count that contains the number of data items pointed to by the index entry
+
+        // After the header entries comes the data section. This stores the data pointed to by
+        // the offsets within each index entry.
+
+        let sig_header_start = LEAD_SIZE;
+        let sig_header_size = self.signature.size();
+        let padding = 8 - (sig_header_size % 8); // todo: share padding code
+
+        let header_start = sig_header_start + sig_header_size + padding;
+        let header_size = self.header.size();
+
+        let payload_start = header_start + header_size;
+
+        (
+            sig_header_start as u64,
+            header_start as u64,
+            payload_start as u64,
+        )
+    }
+
     #[inline]
     pub fn get_payload_compressor(&self) -> Result<&str, RPMError> {
         self.header
