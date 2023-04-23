@@ -303,6 +303,8 @@ async fn test_rpm_header_async() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "async-futures")]
 #[tokio::test]
 async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
+    use chrono::TimeZone;
+
     use std::str::FromStr;
 
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
@@ -326,8 +328,16 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?
         .pre_install_script("echo preinst")
-        .add_changelog_entry("me", "was awesome, eh?", 123123123)
-        .add_changelog_entry("you", "yeah, it was", 12312312)
+        .add_changelog_entry(
+            "me",
+            "was awesome, eh?",
+            chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+        )
+        .add_changelog_entry(
+            "you",
+            "yeah, it was",
+            chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+        )
         .requires(Dependency::any("wget"))
         .vendor("dummy vendor")
         .url("dummy url")

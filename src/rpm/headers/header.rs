@@ -469,7 +469,7 @@ impl FileDigest {
 /// User facing accessor type for a changelog entry
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ChangelogEntry {
-    pub author: String,
+    pub name: String,
     pub timestamp: u64,
     pub description: String,
 }

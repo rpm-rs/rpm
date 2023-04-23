@@ -15,7 +15,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.64.0"  # required by `gethosname`
+rust-version = "1.64.0" # required by `gethostname`
 
 [lib]
 name = "rpm"
@@ -53,7 +53,6 @@ itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
 zstd = "0.12.0"
 futures = { version = "0.3.25", optional = true }
-gethostname = "0.4.1"
 
 # Libraries required for with_file_async() implementations
 async-std = { version = "1.12.0", optional = true }
@@ -66,6 +65,7 @@ rsa-der = { version = "^0.3.0" }
 env_logger = "0.10.0"
 serial_test = "1.0"
 pretty_assertions = "1.3.0"
+gethostname = "0.4"
 
 # Use for testing async files when async-futures enabled
 tokio = { version = "1", features = ["full"] }

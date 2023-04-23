@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the following functions to `RPMBuilder` to support weak dependencies: `recommends()`,
   `suggests()`, `enhances()` and `supplements()`
 - Added the following additional functions to `RPMBuilder`: `cookie()`, `build_host()`
-- Added `get_build_cookie()` for use with `RPMBuilder::cookie()`
 - Added the following functions to `$pkg.metadata` for retrieval of various kinds of RPM
   dependencies: `get_provides()`, `get_requires()`, `get_obsoletes()`, `get_conflicts()`,
   `get_recommends()`, `get_suggests()`, `get_enhances()`, `get_supplements()`
@@ -36,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensured that digests are always added to built RPMs. Previously they would not be included unless
   the "signature-meta" (or "signature-pgp") features were enabled.
 - Added `PAYLOADDIGEST`, `PAYLOADDIGESTALT`, and `PAYLOADDIGESTALGO` tags to built packages.
+- To facilitate reproducible builds, stop writing `build_time` to the package by default.  Users can configure it with `RPMBuilder::build_time()`.
 
 ### Breaking Changes
 

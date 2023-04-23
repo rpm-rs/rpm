@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use rpm::*;
 use std::fs::File;
 use std::io::prelude::*;
@@ -59,8 +60,16 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
-            .add_changelog_entry("you", "yeah, it was", 12_312_312)
+            .add_changelog_entry(
+                "me",
+                "was awesome, eh?",
+                chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+            )
+            .add_changelog_entry(
+                "you",
+                "yeah, it was",
+                chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+            )
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
             .url("dummy url")
@@ -160,8 +169,16 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 123_123_123)
-            .add_changelog_entry("you", "yeah, it was", 12_312_312)
+            .add_changelog_entry(
+                "me",
+                "was awesome, eh?",
+                chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+            )
+            .add_changelog_entry(
+                "you",
+                "yeah, it was",
+                chrono::Utc.timestamp_opt(1681411991, 0).unwrap(),
+            )
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
             .url("dummy repo")
@@ -187,6 +204,66 @@ mod pgp {
             podman_container_launcher(cmd, image, vec![])?;
             Ok(())
         })
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let (signing_key, verification_key) = common::load_asc_keys();
+
+        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let out_file = common::cargo_out_dir().join("roundtrip.rpm");
+
+        {
+            let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
+
+            let mut f = std::fs::File::create(&out_file)?;
+            let pkg = RPMBuilder::new(
+                "roundtrip",
+                "1.0.0",
+                "MIT",
+                "x86_64",
+                "spins round and round",
+            )
+            .compression(Compressor::from_str("gzip")?)
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                    .mode(FileMode::regular(0o777))
+                    .is_config(),
+            )?
+            .with_file(
+                cargo_file.to_str().unwrap(),
+                RPMFileOptions::new("/etc/Cargo.toml"),
+            )?
+            .epoch(3)
+            .pre_install_script("echo preinst")
+            .add_changelog_entry(
+                "you",
+                "yada yada",
+                chrono::Utc.timestamp_opt(1681801261, 0).unwrap(),
+            )
+            .requires(Dependency::any("rpm-sign".to_string()))
+            .build_and_sign(&signer)?;
+
+            pkg.write(&mut f)?;
+            let epoch = pkg.metadata.get_epoch()?;
+            assert_eq!(3, epoch);
+        }
+
+        // verify
+        {
+            let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
+            let mut buf_reader = std::io::BufReader::new(out_file);
+            let package = RPMPackage::parse(&mut buf_reader)?;
+
+            let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+
+            package.verify_signature(verifier)?;
+        }
+
+        Ok(())
     }
 
     #[test]

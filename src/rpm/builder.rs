@@ -6,16 +6,13 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use digest::Digest;
-use gethostname::gethostname;
 
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
+use digest::Digest;
 
 use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
@@ -69,24 +66,21 @@ async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
-/// Returns a value that can be used for associating several package builds as being part of one operation
-///
-/// You can use any value, but the standard format is "${build_host} ${build_time}"
-///
-/// See `RPMBuilder::cookie()`
-pub fn get_build_cookie() -> String {
-    let build_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as u32;
-    let build_host = gethostname().to_string_lossy().to_string();
+fn date_time_as_u32(when: &chrono::DateTime<chrono::Utc>) -> u32 {
+    when.timestamp()
+        .try_into()
+        .expect("By 2100 we have a new, modern, package format spec and implementation. qed")
+}
 
-    format!("{} {}", build_host, build_time)
+fn system_time_as_u32(when: std::time::SystemTime) -> u32 {
+    let dt = chrono::DateTime::<chrono::Utc>::from(when);
+    date_time_as_u32(&dt)
 }
 
 /// Builder pattern for a full rpm file.
 ///
 /// Preferred method of creating a rpm file.
+#[derive(Default)]
 pub struct RPMBuilder {
     name: String,
     epoch: u32,
@@ -117,9 +111,11 @@ pub struct RPMBuilder {
     pre_uninst_script: Option<String>,
     post_uninst_script: Option<String>,
 
-    changelog_authors: Vec<String>,
+    /// The author name with email followed by a dash with the version
+    /// `Max Mustermann <max@example.com> - 0.1-1`
+    changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<u32>,
+    changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
     compressor: Compressor,
 
     vendor: Option<String>,
@@ -127,20 +123,12 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    // Filled out automatically if not overridden
-    build_time: u32, // because rpm_time_t is an uint32
-    build_host: String,
+    build_time: Option<chrono::DateTime<chrono::Utc>>, // because `rpm_time_t` is an `uint32`
+    build_host: Option<String>,
 }
 
 impl RPMBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
-        // @todo, should these values be calculated lazily (only when .build()) is called?
-        let build_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs() as u32;
-        let build_host = gethostname().to_string_lossy().to_string();
-
         RPMBuilder {
             name: name.to_string(),
             epoch: 0,
@@ -149,32 +137,7 @@ impl RPMBuilder {
             arch: arch.to_string(),
             desc: desc.to_string(),
             release: "1".to_string(),
-            build_time,
-            build_host,
-            cookie: None,
-            uid: None,
-            gid: None,
-            provides: Vec::new(),
-            requires: Vec::new(),
-            obsoletes: Vec::new(),
-            conflicts: Vec::new(),
-            recommends: Vec::new(),
-            suggests: Vec::new(),
-            enhances: Vec::new(),
-            supplements: Vec::new(),
-            pre_inst_script: None,
-            post_inst_script: None,
-            pre_uninst_script: None,
-            post_uninst_script: None,
-            files: BTreeMap::new(),
-            changelog_authors: Vec::new(),
-            changelog_entries: Vec::new(),
-            changelog_times: Vec::new(),
-            compressor: Compressor::None(Vec::new()),
-            directories: BTreeSet::new(),
-            vendor: None,
-            url: None,
-            vcs: None,
+            ..Default::default()
         }
     }
 
@@ -197,18 +160,47 @@ impl RPMBuilder {
         self
     }
 
-    /// Override the automatically-detected name of the build host with a new value
-    pub fn build_host(mut self, build_host: &str) -> Self {
-        self.build_host = build_host.to_owned();
+    /// Define the name of the build host.
+    ///
+    /// Commonly used in conjunction with the `gethostname` crate.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL", "x86_64", "some bar package")
+    ///             .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
+    ///             .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
+        self.build_host = Some(build_host.as_ref().to_owned());
         self
     }
 
-    /// Provide a value that can be used for tracking packages built together, e.g.
-    /// packages built in one build operation.
+    /// Define the build time header of the package.
     ///
-    /// See: `get_build_cookie()`
-    pub fn cookie(mut self, cookie: &str) -> Self {
-        self.cookie = Some(cookie.to_owned());
+    /// Will be converted to UTC internally.
+    ///
+    /// Commonly used with the current time stamp.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
+    ///             .build_time(rpm::chrono::Utc::now())
+    ///             .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
+        self.build_time = Some(build_time.with_timezone(&chrono::Utc));
+        self
+    }
+
+    /// Returns a value that can be used for associating several package builds as being part of one operation
+    ///
+    /// You can use any value, but the standard format is "${build_host} ${build_time}"
+    pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
+        self.cookie = Some(cookie.as_ref().to_owned());
         self
     }
 
@@ -217,14 +209,45 @@ impl RPMBuilder {
         self
     }
 
-    pub fn add_changelog_entry<E, F>(mut self, author: E, entry: F, time: u32) -> Self
+    /// Add an entry to the changelog, compromised of changelog name (which includes author, email followed by
+    /// a dash followed by a version number),
+    /// description, and the date and time of the change.
+
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rpm::chrono::TimeZone;
+    ///
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .add_changelog_entry(
+    ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
+    ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
+    /// - Secondly."#,
+    ///         rpm::chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+    ///     )
+    ///     .add_changelog_entry(
+    ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
+    ///         " - Add enumerator.",
+    ///         rpm::chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
+    ///     )
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn add_changelog_entry<N, E, TZ>(
+        mut self,
+        name: N,
+        entry: E,
+        datetime: chrono::DateTime<TZ>,
+    ) -> Self
     where
-        E: Into<String>,
-        F: Into<String>,
+        N: AsRef<str>,
+        E: AsRef<str>,
+        TZ: chrono::TimeZone,
     {
-        self.changelog_authors.push(author.into());
-        self.changelog_entries.push(entry.into());
-        self.changelog_times.push(time);
+        self.changelog_names.push(name.as_ref().to_owned());
+        self.changelog_entries.push(entry.as_ref().to_owned());
+        self.changelog_times
+            .push(datetime.with_timezone(&chrono::Utc));
         self
     }
 
@@ -239,15 +262,9 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (async_file_mode(&input).await? as i32).into();
         }
-        let modified_at = input
-            .metadata()
-            .await?
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs();
+        let modified_at = input.metadata().await?.modified()?;
 
-        self.with_file_async_inner(input.compat(), modified_at, options)
+        self.with_file_async_inner(input.compat(), system_time_as_u32(modified_at), options)
             .await
     }
 
@@ -265,15 +282,9 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (async_file_mode(&input).await? as i32).into();
         }
-        let modified_at = input
-            .metadata()
-            .await?
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .expect("system time predates the Unix epoch?")
-            .as_secs();
+        let modified_at = input.metadata().await?.modified()?;
 
-        self.with_file_async_inner(input, modified_at, options)
+        self.with_file_async_inner(input, system_time_as_u32(modified_at), options)
             .await
     }
 
@@ -281,7 +292,7 @@ impl RPMBuilder {
     async fn with_file_async_inner<P>(
         mut self,
         mut input: P,
-        modified_at: u64,
+        modified_at: u32,
         options: RPMFileOptions,
     ) -> Result<Self, RPMError>
     where
@@ -289,10 +300,7 @@ impl RPMBuilder {
     {
         let mut content = Vec::new();
         input.read_to_end(&mut content).await?;
-        let mtime = modified_at
-            .try_into()
-            .expect("file mtime is likely wrong, too large to be stored as uint32");
-        self.add_data(content, mtime, options)?;
+        self.add_data(content, modified_at, options)?;
         Ok(self)
     }
 
@@ -308,18 +316,10 @@ impl RPMBuilder {
         if options.inherit_permissions {
             options.mode = (file_mode(&input)? as i32).into();
         }
-        self.add_data(
-            content,
-            input
-                .metadata()?
-                .modified()?
-                .duration_since(UNIX_EPOCH)
-                .expect("system time predates the Unix epoch?")
-                .as_secs()
-                .try_into()
-                .expect("file mtime is wrong, too large to be stored as uint32"),
-            options,
-        )?;
+
+        let modified_at = input.metadata()?.modified()?;
+
+        self.add_data(content, system_time_as_u32(modified_at), options)?;
         Ok(self)
     }
 
@@ -787,18 +787,8 @@ impl RPMBuilder {
                 offset,
                 IndexData::Int32(vec![self.epoch]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_BUILDTIME,
-                offset,
-                IndexData::Int32(vec![self.build_time]),
-            ),
             // @todo: write RPMTAG_RPMVERSION?
             // @todo: write RPMTAG_PLATFORM?
-            IndexEntry::new(
-                IndexTag::RPMTAG_BUILDHOST,
-                offset,
-                IndexData::StringTag(self.build_host),
-            ),
             IndexEntry::new(
                 IndexTag::RPMTAG_VERSION,
                 offset,
@@ -857,6 +847,23 @@ impl RPMBuilder {
                 IndexData::StringTag("cpio".to_string()),
             ),
         ];
+
+        if let Some(ref build_time) = self.build_time {
+            let build_time = date_time_as_u32(build_time);
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_BUILDTIME,
+                offset,
+                IndexData::Int32(vec![build_time]),
+            ));
+        }
+
+        if let Some(build_host) = self.build_host {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_BUILDHOST,
+                offset,
+                IndexData::StringTag(build_host),
+            ));
+        }
 
         // if we have an empty RPM, we have to leave out all file related index entries.
         if !self.files.is_empty() {
@@ -1009,11 +1016,11 @@ impl RPMBuilder {
             ));
         }
 
-        if !self.changelog_authors.is_empty() {
+        if !self.changelog_names.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGNAME,
                 offset,
-                IndexData::StringArray(self.changelog_authors),
+                IndexData::StringArray(self.changelog_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTEXT,
@@ -1023,7 +1030,9 @@ impl RPMBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTIME,
                 offset,
-                IndexData::Int32(self.changelog_times),
+                IndexData::Int32(Vec::from_iter(
+                    self.changelog_times.iter().map(date_time_as_u32),
+                )),
             ));
         }
 

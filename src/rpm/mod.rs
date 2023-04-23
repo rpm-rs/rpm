@@ -12,3 +12,5 @@ pub use compressor::*;
 pub use package::*;
 
 pub use builder::*;
+
+pub use ::chrono;
