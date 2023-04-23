@@ -196,7 +196,11 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         assert_eq!(*tag, actual_entry.tag);
     }
 
-    assert_eq!("xz", metadata.get_payload_compressor()?);
+    assert_eq!(
+        metadata.get_package_segment_boundaries(),
+        (96, 1384, 148172)
+    );
+    assert_eq!(metadata.get_payload_compressor()?, "xz");
 
     let expected_file_checksums = vec![
         "",
