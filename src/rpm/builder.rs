@@ -164,10 +164,13 @@ impl RPMBuilder {
     ///
     /// Commonly used in conjunction with the `gethostname` crate.
     ///
-    /// ```ignore
-    /// let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-    ///             .build_host(gethostname::gethostname().to_str().unwrap())
-    ///             // ..
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL", "x86_64", "some bar package")
+    ///             .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
+    ///             .build()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
         self.build_host = Some(build_host.as_ref().to_owned());
@@ -180,10 +183,13 @@ impl RPMBuilder {
     ///
     /// Commonly used with the current time stamp.
     ///
-    /// ```ignore
-    /// let pkg = rpm::RPMBuilder::new(..)
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
     ///             .build_time(rpm::chrono::Utc::now())
-    ///             // ..
+    ///             .build()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
         self.build_time = Some(build_time.with_timezone(&chrono::Utc));
@@ -206,9 +212,12 @@ impl RPMBuilder {
     /// Add an entry to the changelog, compromised of changelog name (which includes author, email followed by
     /// a dash followed by a version number),
     /// description, and the date and time of the change.
+
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rpm::chrono::TimeZone;
     ///
-    /// ```ignore
-    /// let pkg = rpm::RPMBuilder::new(..)
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .add_changelog_entry(
     ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
@@ -217,10 +226,12 @@ impl RPMBuilder {
     ///     )
     ///     .add_changelog_entry(
     ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
-    ///         " - Add enumerator."
+    ///         " - Add enumerator.",
     ///         rpm::chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
     ///     )
-    ///     //..
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn add_changelog_entry<N, E, TZ>(
         mut self,

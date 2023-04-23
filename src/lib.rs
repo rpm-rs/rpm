@@ -5,8 +5,7 @@
 //!
 //! # Example
 //!
-//! ```rust
-//!
+//! ```
 //! # #[cfg(feature = "signature-pgp")]
 //! use rpm::{
 //!     signature::pgp::{
@@ -18,6 +17,7 @@
 //! use std::str::FromStr;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # let _ = env_logger::Builder::new().filter_level(log::LevelFilter::Trace).is_test(true).try_init();
 //! # #[cfg(feature = "signature-pgp")]
 //! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
@@ -33,7 +33,7 @@
 //!                 "./test_assets/awesome.py",
 //!                 rpm::RPMFileOptions::new("/usr/bin/awesome"),
 //!             )?
-//!              .with_file(
+//!             .with_file(
 //!                 "./test_assets/awesome.toml",
 //!                 // you can set a custom mode and custom user too
 //!                 rpm::RPMFileOptions::new("/etc/awesome/second.toml")
@@ -42,9 +42,9 @@
 //!             )?
 //!             .pre_install_script("echo preinst")
 //!             .build_time(chrono::Utc::now())
-//!             .build_host(gethostname::gethostname().to_str().unwrap().to_string())
-//!             .add_changelog_entry("Max Mustermann <max@example.com>", "- was awesome, eh?", chrono::DateTime::parse_from_rfc2822("Wed, 19 April 2023 23:16:09 GMT").unwrap())
-//!             .add_changelog_entry("Charlie Yom <test2@example.com>", "- yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap())
+//!             .build_host(gethostname::gethostname().to_str().expect("Hostname works. qed").to_string())
+//!             .add_changelog_entry("Max Mustermann <max@example.com> - 0.1-29", "- was awesome, eh?", chrono::DateTime::parse_from_rfc2822("Wed, 19 Apr 2023 23:16:09 GMT").expect("Date 1 is correct. qed"))
+//!             .add_changelog_entry("Charlie Yom <test2@example.com> - 0.1-28", "- yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").expect("Date 2 is corrrect. qed"))
 //!             .requires(rpm::Dependency::any("wget"))
 //!             .vendor("corporation or individual")
 //!             .url("www.github.com/repo")
