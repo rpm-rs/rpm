@@ -12,7 +12,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     let metadata = &package.metadata;
     assert_eq!(metadata.signature.index_entries.len(), 7);
     assert_eq!(metadata.signature.index_entries[0].num_items, 16);
-    assert_eq!(metadata.signature.index_header.header_size, 1156);
+    assert_eq!(metadata.signature.index_header.data_section_size, 1156);
 
     assert_eq!(package.metadata.get_name().unwrap(), "389-ds-base-devel");
     assert!(package.metadata.get_epoch().is_err());
