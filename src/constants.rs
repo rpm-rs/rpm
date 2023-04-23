@@ -446,8 +446,12 @@ impl Tag for IndexSignatureTag {
     }
 }
 
-/// lead header size
-pub const LEAD_SIZE: usize = 96;
+/// Size (in bytes) of the package "lead" section
+pub const LEAD_SIZE: u32 = 96;
+/// Size (in bytes) of the index header (the fixed portion of each header)
+pub const INDEX_HEADER_SIZE: u32 = 16;
+/// Size (in bytes) of each entry in the index
+pub const INDEX_ENTRY_SIZE: u32 = 16;
 /// rpm magic as part of the lead header
 pub const RPM_MAGIC: [u8; 4] = [0xed, 0xab, 0xee, 0xdb];
 

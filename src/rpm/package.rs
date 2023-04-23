@@ -311,7 +311,7 @@ pub struct RPMPackageMetadata {
 impl RPMPackageMetadata {
     #[cfg(feature = "async-futures")]
     pub async fn parse_async<T: AsyncRead + Unpin>(input: &mut T) -> Result<Self, RPMError> {
-        let mut lead_buffer = [0; LEAD_SIZE];
+        let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer).await?;
         let lead = Lead::parse(&lead_buffer)?;
         let signature_header = Header::parse_signature_async(input).await?;
@@ -324,7 +324,7 @@ impl RPMPackageMetadata {
     }
 
     pub(crate) fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
-        let mut lead_buffer = [0; LEAD_SIZE];
+        let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;
         let signature_header = Header::parse_signature(input)?;

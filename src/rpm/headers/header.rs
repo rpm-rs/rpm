@@ -26,12 +26,26 @@ where
     pub(crate) async fn parse_async<I: AsyncRead + Unpin>(
         input: &mut I,
     ) -> Result<Header<T>, RPMError> {
-        let mut buf: [u8; 16] = [0; 16];
+        let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
         input.read_exact(&mut buf).await?;
         let index_header = IndexHeader::parse(&buf)?;
-        // read rest of header => each index consists of 16 bytes. The index header knows how large the store is.
-        let mut buf = vec![0; (index_header.header_size + index_header.num_entries * 16) as usize];
+        // read rest of header (index + data portions)
+        let size_rest =
+            (index_header.data_section_size + index_header.num_entries * INDEX_ENTRY_SIZE) as usize;
+        let mut buf = vec![0; size_rest];
         input.read_exact(&mut buf).await?;
+        Self::parse_header(index_header, &buf[..])
+    }
+
+    pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
+        let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
+        input.read_exact(&mut buf)?;
+        let index_header = IndexHeader::parse(&buf)?;
+        // read rest of header (index + data portions)
+        let size_rest =
+            (index_header.data_section_size + index_header.num_entries * INDEX_ENTRY_SIZE) as usize;
+        let mut buf = vec![0; size_rest];
+        input.read_exact(&mut buf)?;
         Self::parse_header(index_header, &buf[..])
     }
 
@@ -43,11 +57,11 @@ where
             let (rest, entry) = IndexEntry::parse(bytes)?;
             entries.push(entry);
             bytes = rest;
-            assert_eq!(16, buf_len - bytes.len());
+            debug_assert_eq!(INDEX_ENTRY_SIZE as usize, buf_len - bytes.len());
             buf_len = bytes.len();
         }
 
-        assert_eq!(bytes.len(), index_header.header_size as usize);
+        debug_assert_eq!(bytes.len(), index_header.data_section_size as usize);
 
         let store = Vec::from(bytes);
         // add data to entries
@@ -102,16 +116,6 @@ where
             index_entries: entries,
             store,
         })
-    }
-
-    pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
-        let mut buf: [u8; 16] = [0; 16];
-        input.read_exact(&mut buf)?;
-        let index_header = IndexHeader::parse(&buf)?;
-        // read rest of header => each index consists of 16 bytes. The index header knows how large the store is.
-        let mut buf = vec![0; (index_header.header_size + index_header.num_entries * 16) as usize];
-        input.read_exact(&mut buf)?;
-        Self::parse_header(index_header, &buf[..])
     }
 
     #[cfg(feature = "async-futures")]
@@ -324,10 +328,9 @@ impl Header<IndexSignatureTag> {
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
         let result = Self::parse_async(input).await?;
 
-        let modulo = result.index_header.header_size % 8;
-        if modulo > 0 {
-            let align_size = 8 - modulo;
-            let mut discard = vec![0; align_size as usize];
+        let padding = 8 - (result.index_header.data_section_size % 8);
+        if padding > 0 {
+            let mut discard = vec![0; padding as usize];
             input.read_exact(&mut discard).await?;
         }
         Ok(result)
@@ -338,11 +341,10 @@ impl Header<IndexSignatureTag> {
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
         let result = Self::parse(input)?;
         // this structure is aligned to 8 bytes - rest is filled up with zeros.
-        // if the size of our store is not a modulo of 8, we discard bytes to align to the 8 byte boundary.
-        let modulo = result.index_header.header_size % 8;
-        if modulo > 0 {
-            let align_size = 8 - modulo;
-            let mut discard = vec![0; align_size as usize];
+        // if the size of our store is not a modulo of 8, we discard the padding bytes
+        let padding = 8 - (result.index_header.data_section_size % 8);
+        if padding > 0 {
+            let mut discard = vec![0; padding as usize];
             input.read_exact(&mut discard)?;
         }
         Ok(result)
@@ -354,21 +356,22 @@ impl Header<IndexSignatureTag> {
         out: &mut W,
     ) -> Result<(), RPMError> {
         self.write_async(out).await?;
-        let modulo = self.index_header.header_size % 8;
-        if modulo > 0 {
-            let expansion = vec![0; 8 - modulo as usize];
-            out.write_all(&expansion).await?;
+        // align to 8 bytes
+        let padding_needed = 8 - (self.index_header.data_section_size % 8);
+        if padding_needed > 0 {
+            let padding = vec![0; padding_needed as usize];
+            out.write_all(&padding).await?;
         }
         Ok(())
     }
 
-    // @todo: share padding code
     pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.write(out)?;
-        let modulo = self.index_header.header_size % 8;
-        if modulo > 0 {
-            let expansion = vec![0; 8 - modulo as usize];
-            out.write_all(&expansion)?;
+        // align to 8 bytes
+        let padding_needed = 8 - (self.index_header.data_section_size % 8);
+        if padding_needed > 0 {
+            let padding = vec![0; padding_needed as usize];
+            out.write_all(&padding)?;
         }
         Ok(())
     }
@@ -383,7 +386,7 @@ impl Header<IndexSignatureTag> {
 
     pub fn clear(&mut self) {
         self.index_entries.clear();
-        self.index_header.header_size = 0;
+        self.index_header.data_section_size = 0;
         self.index_header.num_entries = 0;
         self.store.clear()
     }
@@ -521,8 +524,8 @@ pub(crate) struct IndexHeader {
     pub(crate) version: u8,
     /// number of header entries
     pub(crate) num_entries: u32,
-    /// total header size excluding the fixed part (@todo: verify this is correct)
-    pub(crate) header_size: u32,
+    /// total amount of data stored
+    pub(crate) data_section_size: u32,
 }
 
 impl IndexHeader {
@@ -539,24 +542,24 @@ impl IndexHeader {
                 });
             }
         }
-        // then version
+        // then one byte for version
         let (rest, version) = be_u8(rest)?;
 
         if version != 1 {
             return Err(RPMError::UnsupportedHeaderVersion(version));
         }
-        // then reserved
+        // then 4 bytes reserved
         let (rest, _) = complete::take(4usize)(rest)?;
-        // then number of of entries
+        // then number of of entries (u32, 4 bytes)
         let (rest, num_entries) = be_u32(rest)?;
-        // then size of header
-        let (_rest, header_size) = be_u32(rest)?;
+        // then size of header (u32, 4 bytes)
+        let (_rest, data_len) = be_u32(rest)?;
 
         Ok(IndexHeader {
             magic: HEADER_MAGIC,
             version: 1,
             num_entries,
-            header_size,
+            data_section_size: data_len,
         })
     }
 
@@ -565,7 +568,7 @@ impl IndexHeader {
         out.write_all(&self.version.to_be_bytes())?;
         out.write_all(&[0; 4])?;
         out.write_all(&self.num_entries.to_be_bytes())?;
-        out.write_all(&self.header_size.to_be_bytes())?;
+        out.write_all(&self.data_section_size.to_be_bytes())?;
         Ok(())
     }
 
@@ -578,16 +581,16 @@ impl IndexHeader {
         out.write_all(&self.version.to_be_bytes()).await?;
         out.write_all(&[0; 4]).await?;
         out.write_all(&self.num_entries.to_be_bytes()).await?;
-        out.write_all(&self.header_size.to_be_bytes()).await?;
+        out.write_all(&self.data_section_size.to_be_bytes()).await?;
         Ok(())
     }
 
-    pub(crate) fn new(num_entries: u32, header_size: u32) -> Self {
+    pub(crate) fn new(num_entries: u32, data_len: u32) -> Self {
         IndexHeader {
             magic: HEADER_MAGIC,
             version: 1,
             num_entries,
-            header_size,
+            data_section_size: data_len,
         }
     }
 }
@@ -604,14 +607,14 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
 impl<T: Tag> IndexEntry<T> {
     // 16 bytes
     pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
-        //first 4 bytes are the tag.
+        // first 4 bytes are the tag.
         let (input, raw_tag) = be_u32(input)?;
 
         let tag: T = num::FromPrimitive::from_u32(raw_tag).ok_or_else(|| RPMError::InvalidTag {
             raw_tag,
             store_type: T::tag_type_name(),
         })?;
-        //next 4 bytes is the tag type
+        // next 4 bytes is the tag type
         let (input, raw_tag_type) = be_u32(input)?;
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
@@ -649,7 +652,10 @@ impl<T: Tag> IndexEntry<T> {
         written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
         written += out.write(&self.offset.to_be_bytes()).await?;
         written += out.write(&self.num_items.to_be_bytes()).await?;
-        assert_eq!(16, written, "there should be 16 bytes written");
+        debug_assert_eq!(
+            INDEX_ENTRY_SIZE as usize, written,
+            "there should be 16 bytes written"
+        );
         Ok(())
     }
 
@@ -659,7 +665,10 @@ impl<T: Tag> IndexEntry<T> {
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
         written += out.write(&self.num_items.to_be_bytes())?;
-        assert_eq!(16, written, "there should be 16 bytes written");
+        debug_assert_eq!(
+            INDEX_ENTRY_SIZE as usize, written,
+            "there should be 16 bytes written"
+        );
         Ok(())
     }
 
