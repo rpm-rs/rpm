@@ -74,6 +74,8 @@ pub(crate) mod constants;
 pub use crate::constants::*;
 
 mod sequential_cursor;
+mod version_compare;
+pub use crate::version_compare::*;
 
 mod rpm;
 pub use crate::rpm::*;
