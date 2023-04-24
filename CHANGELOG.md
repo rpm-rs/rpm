@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `FileOptions::verify()`
+- Added `Evr` and `Nevra` structs and `rpm_evr_compare` function for comparing RPM versions.
 
 ### Changed
 
