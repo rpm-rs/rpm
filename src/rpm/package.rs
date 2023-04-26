@@ -597,13 +597,13 @@ impl RPMPackageMetadata {
     /// ```
     /// # use rpm::RPMPackage;
     /// # let package = RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm").unwrap();
-    /// let (sig_header_start, header_start, payload_start) = package.metadata.get_package_segment_boundaries();
-    /// let lead = 0..sig_header_start;
-    /// let sig_header = sig_header_start..header_start;
-    /// let header = header_start..payload_start;
-    /// let payload = payload_start..;
+    /// let offsets = package.metadata.get_package_segment_offsets();
+    /// let lead = offsets.lead..offsets.signature_header;
+    /// let sig_header = offsets.signature_header..offsets.header;
+    /// let header = offsets.header..offsets.payload;
+    /// let payload = offsets.payload..;
     /// ```
-    pub fn get_package_segment_boundaries(&self) -> (u64, u64, u64) {
+    pub fn get_package_segment_offsets(&self) -> RPMPackageSegmentOffsets {
         // Lead is 96 bytes.
 
         // Each Header starts like this (16 bytes)
@@ -632,11 +632,12 @@ impl RPMPackageMetadata {
 
         let payload_start = header_start + header_size;
 
-        (
-            sig_header_start as u64,
-            header_start as u64,
-            payload_start as u64,
-        )
+        RPMPackageSegmentOffsets {
+            lead: 0,
+            signature_header: sig_header_start as u64,
+            header: header_start as u64,
+            payload: payload_start as u64,
+        }
     }
 
     #[inline]

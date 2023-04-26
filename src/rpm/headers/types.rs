@@ -2,6 +2,17 @@
 use crate::{constants::*, errors};
 use digest::Digest;
 
+/// Offsets into an RPM Package (from the start of the file) demarking locations of each section
+///
+/// See: `RPMPackage::get_package_component_offsets()`
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct RPMPackageSegmentOffsets {
+    pub lead: u64,
+    pub signature_header: u64,
+    pub header: u64,
+    pub payload: u64,
+}
+
 /// Describes a file present in the rpm file.
 pub struct RPMFileEntry {
     pub(crate) size: u32,
