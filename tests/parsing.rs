@@ -18,8 +18,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     fn assert_boundaries(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::open(path)?;
         let package = RPMPackage::open(path)?;
-        let (sig_header_start, header_start, payload_start) =
-            package.metadata.get_package_segment_boundaries();
+        let offsets = package.metadata.get_package_segment_offsets();
 
         // Verify that we see an RPM magic #
         let mut buf = [0u8; 4];
@@ -28,30 +27,29 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(buf, RPM_MAGIC);
 
         // Seek to the start of the sig header and verify that we see a header magic #
-        f.seek(SeekFrom::Start(sig_header_start))?;
+        f.seek(SeekFrom::Start(offsets.signature_header))?;
         let mut buf = [0u8; 3];
         f.read_exact(&mut buf)?;
 
         assert_eq!(buf, HEADER_MAGIC);
 
         // Seek to the start of the header and verify that we see a header magic #
-        f.seek(SeekFrom::Start(header_start))?;
+        f.seek(SeekFrom::Start(offsets.header))?;
         let mut buf = [0u8; 3];
         f.read_exact(&mut buf)?;
 
         assert_eq!(buf, HEADER_MAGIC);
 
         // Seek to the start of the payload and verify that we see a magic # appropriate for the payload type
-        f.seek(SeekFrom::Start(payload_start))?;
+        f.seek(SeekFrom::Start(offsets.payload))?;
         let mut buf = [0u8; 10];
         f.read_exact(&mut buf)?;
 
-        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().unwrap_or("none")
-        {
-            "gzip" => &[0x1f, 0x8b],
-            "zstd" => &[0x28, 0xb5, 0x2f, 0xfd],
-            "xz" => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
-            "none" => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
+        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().ok() {
+            Some("gzip") => &[0x1f, 0x8b],
+            Some("zstd") => &[0x28, 0xb5, 0x2f, 0xfd],
+            Some("xz") => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
+            None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
             a => unimplemented!("{:?}", a),
         };
 
