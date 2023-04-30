@@ -77,7 +77,8 @@ impl SignatureHeaderBuilder<Empty> {
     /// add a digest over the header and a signature across header and source excluding the static lead
     pub fn add_digest(
         mut self,
-        digest_header_only: &str,
+        digest_header_sha1: &str,
+        digest_header_sha256: &str,
         digest_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithDigest> {
         let offset = 0i32; // filled externally later on
@@ -89,7 +90,12 @@ impl SignatureHeaderBuilder<Empty> {
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_SHA1,
             offset,
-            IndexData::StringTag(digest_header_only.to_string()),
+            IndexData::StringTag(digest_header_sha1.to_string()),
+        ));
+        self.entries.push(IndexEntry::new(
+            IndexSignatureTag::RPMSIGTAG_SHA256,
+            offset,
+            IndexData::StringTag(digest_header_sha256.to_string()),
         ));
         SignatureHeaderBuilder::<WithDigest> {
             entries: self.entries,
@@ -133,11 +139,17 @@ mod test {
         let rsa_sig_header_only = [0u8; 32];
         let rsa_sig_header_and_archive = [0u8; 32];
 
-        let digest_header_only = hex::encode(&[0u8; 64]);
+        let digest_header_sha1 = hex::encode(&[0u8; 64]);
+        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+
         let digest_header_and_archive = [0u8; 64];
 
         let header = builder
-            .add_digest(digest_header_only.as_str(), &digest_header_and_archive[..])
+            .add_digest(
+                digest_header_sha1.as_str(),
+                digest_header_sha256.as_str(),
+                &digest_header_and_archive[..],
+            )
             .add_signature(&rsa_sig_header_only[..], &rsa_sig_header_and_archive[..])
             .build(32);
 
@@ -153,17 +165,26 @@ mod test {
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .is_ok());
     }
 
     #[test]
     fn signature_builder_digest_only() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
 
-        let digest_header_only = hex::encode(&[0u8; 64]);
+        let digest_header_sha1 = hex::encode(&[0u8; 64]);
+        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+
         let digest_header_and_archive = [0u8; 64];
 
         let header = builder
-            .add_digest(digest_header_only.as_str(), &digest_header_and_archive[..])
+            .add_digest(
+                digest_header_sha1.as_str(),
+                digest_header_sha256.as_str(),
+                &digest_header_and_archive[..],
+            )
             .build(32);
 
         assert!(header
@@ -177,6 +198,9 @@ mod test {
             .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
             .is_ok());
     }
 }

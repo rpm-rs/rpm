@@ -22,6 +22,7 @@ impl<'s> SeqCursor<'s> {
     }
 
     /// Crate a new cursor based on a slice of bytes slices.
+    #[allow(unused)]
     pub(crate) fn new<'b>(slices: &[&'b [u8]]) -> Self
     where
         'b: 's,
@@ -38,6 +39,7 @@ impl<'s> SeqCursor<'s> {
     }
 
     /// Total length of all slices summed up.
+    #[allow(unused)]
     pub(crate) fn len(&self) -> usize {
         self.len
     }

@@ -7,13 +7,15 @@ use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
 
+use digest::Digest;
+
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
 use crate::constants::*;
 use crate::errors::*;
-use digest::Digest;
 
+#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -493,21 +495,18 @@ impl RPMBuilder {
 
         let digest_header = {
             let header = header;
+            let header_and_content_len = header.len() + content.len();
 
-            let header_and_content_cursor =
-                SeqCursor::new(&[header.as_slice(), content.as_slice()]);
-            let header_and_content_len = header_and_content_cursor.len();
             let Digests {
                 header_and_content_digest: header_and_content_digest_md5,
                 header_digest_sha1,
-            } = RPMPackage::create_legacy_header_digests(
-                &mut header.as_slice(),
-                header_and_content_cursor,
-            )?;
+                header_digest_sha256,
+            } = RPMPackage::create_sig_header_digests(header.as_slice(), content.as_slice())?;
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(
                     header_digest_sha1.as_str(),
+                    header_digest_sha256.as_str(),
                     header_and_content_digest_md5.as_slice(),
                 )
                 .build(header_and_content_len)
@@ -536,18 +535,17 @@ impl RPMBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let header_and_content_cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
-        let header_and_content_len = header_and_content_cursor.len();
+        let header_and_content_len = header.len() + content.len();
+
         let Digests {
             header_and_content_digest: header_and_content_digest_md5,
             header_digest_sha1,
-        } = RPMPackage::create_legacy_header_digests(
-            &mut header.as_slice(),
-            header_and_content_cursor,
-        )?;
+            header_digest_sha256,
+        } = RPMPackage::create_sig_header_digests(header.as_slice(), content.as_slice())?;
 
         let builder = Header::<IndexSignatureTag>::builder().add_digest(
             header_digest_sha1.as_str(),
+            header_digest_sha256.as_str(),
             header_and_content_digest_md5.as_slice(),
         );
 

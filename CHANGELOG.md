@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   different components (header, payload, etc.) from an on-disk package.
 - Added `CompressionType`.
 - Added support for `xz` compression type
+- Write a sha256 header digest to the signature header as the more modern equivalent of the sha1
+  header digest
 
 ### Fixed
 
