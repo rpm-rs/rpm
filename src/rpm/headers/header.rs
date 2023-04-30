@@ -1,9 +1,6 @@
 use nom::bytes::complete;
 use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
 
-#[cfg(feature = "async-futures")]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
 use crate::constants::{self, *};
 use std::fmt;
 use std::marker::PhantomData;
@@ -23,21 +20,6 @@ impl<T> Header<T>
 where
     T: Tag,
 {
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn parse_async<I: AsyncRead + Unpin>(
-        input: &mut I,
-    ) -> Result<Header<T>, RPMError> {
-        let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
-        input.read_exact(&mut buf).await?;
-        let index_header = IndexHeader::parse(&buf)?;
-        // read rest of header (index + data portions)
-        let size_rest =
-            (index_header.data_section_size + index_header.num_entries * INDEX_ENTRY_SIZE) as usize;
-        let mut buf = vec![0; size_rest];
-        input.read_exact(&mut buf).await?;
-        Self::parse_header(index_header, &buf[..])
-    }
-
     pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
         input.read_exact(&mut buf)?;
@@ -117,19 +99,6 @@ where
             index_entries: entries,
             store,
         })
-    }
-
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn write_async<W: AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
-        self.index_header.write_async(out).await?;
-        for entry in &self.index_entries {
-            entry.write_index_async(out).await?;
-        }
-        out.write_all(&self.store).await?;
-        Ok(())
     }
 
     pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
@@ -377,20 +346,6 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::<Empty>::new()
     }
 
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn parse_signature_async<I: AsyncRead + Unpin>(
-        input: &mut I,
-    ) -> Result<Header<IndexSignatureTag>, RPMError> {
-        let result = Self::parse_async(input).await?;
-
-        let padding = (8 - (result.index_header.data_section_size % 8)) % 8;
-        if padding > 0 {
-            let mut discard = vec![0; padding as usize];
-            input.read_exact(&mut discard).await?;
-        }
-        Ok(result)
-    }
-
     pub(crate) fn parse_signature<I: std::io::BufRead>(
         input: &mut I,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
@@ -403,21 +358,6 @@ impl Header<IndexSignatureTag> {
             input.read_exact(&mut discard)?;
         }
         Ok(result)
-    }
-
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn write_signature_async<W: AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
-        self.write_async(out).await?;
-        // align to 8 bytes
-        let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
-        if padding_needed > 0 {
-            let padding = vec![0; padding_needed as usize];
-            out.write_all(&padding).await?;
-        }
-        Ok(())
     }
 
     pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
@@ -627,19 +567,6 @@ impl IndexHeader {
         Ok(())
     }
 
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn write_async<W: AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
-        out.write_all(&self.magic).await?;
-        out.write_all(&self.version.to_be_bytes()).await?;
-        out.write_all(&[0; 4]).await?;
-        out.write_all(&self.num_entries.to_be_bytes()).await?;
-        out.write_all(&self.data_section_size.to_be_bytes()).await?;
-        Ok(())
-    }
-
     pub(crate) fn new(num_entries: u32, data_len: u32) -> Self {
         IndexHeader {
             magic: HEADER_MAGIC,
@@ -712,23 +639,6 @@ impl<T: Tag> IndexEntry<T> {
                 entry_type: PhantomData,
             },
         ))
-    }
-
-    #[cfg(feature = "async-futures")]
-    pub(crate) async fn write_index_async<W: AsyncWrite + Unpin>(
-        &self,
-        out: &mut W,
-    ) -> Result<(), RPMError> {
-        // unwrap() is safe because tags are predefined and are all within u32 range.
-        let mut written = out.write(&self.tag.to_be_bytes()).await?;
-        written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
-        written += out.write(&self.offset.to_be_bytes()).await?;
-        written += out.write(&self.num_items.to_be_bytes()).await?;
-        debug_assert_eq!(
-            INDEX_ENTRY_SIZE as usize, written,
-            "there should be 16 bytes written"
-        );
-        Ok(())
     }
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {

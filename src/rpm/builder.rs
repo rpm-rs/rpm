@@ -24,12 +24,6 @@ use crate::RPMPackage;
 use crate::RPMPackageMetadata;
 use crate::{CompressionType, CompressionWithLevel, Digests};
 
-#[cfg(feature = "with-file-async-tokio")]
-use tokio_util::compat::TokioAsyncReadCompatExt;
-
-#[cfg(feature = "async-futures")]
-use futures::io::{AsyncRead, AsyncReadExt};
-
 #[cfg(unix)]
 fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata()?.permissions().mode())
@@ -37,34 +31,6 @@ fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
 
 #[cfg(windows)]
 fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
-    Ok(0)
-}
-
-#[cfg(all(unix, feature = "with-file-async-tokio"))]
-async fn async_file_mode(file: &tokio::fs::File) -> Result<u32, RPMError> {
-    Ok(file.metadata().await?.permissions().mode())
-}
-
-#[cfg(all(
-    unix,
-    feature = "with-file-async-async-std",
-    not(feature = "with-file-async-tokio")
-))]
-async fn async_file_mode(file: &async_std::fs::File) -> Result<u32, RPMError> {
-    Ok(file.metadata().await?.permissions().mode())
-}
-
-#[cfg(all(windows, feature = "with-file-async-tokio"))]
-async fn async_file_mode(_file: &tokio::fs::File) -> Result<u32, RPMError> {
-    Ok(0)
-}
-
-#[cfg(all(
-    windows,
-    feature = "with-file-async-async-std",
-    not(feature = "with-file-async-tokio")
-))]
-async fn async_file_mode(_file: &async_std::fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
@@ -285,59 +251,6 @@ impl RPMBuilder {
         self.changelog_times
             .push(datetime.with_timezone(&chrono::Utc));
         self
-    }
-
-    #[cfg(feature = "with-file-async-tokio")]
-    pub async fn with_file_async<T, P>(self, source: P, options: T) -> Result<Self, RPMError>
-    where
-        P: AsRef<Path>,
-        T: Into<RPMFileOptions>,
-    {
-        let input = tokio::fs::File::open(source).await?;
-        let mut options = options.into();
-        if options.inherit_permissions {
-            options.mode = (async_file_mode(&input).await? as i32).into();
-        }
-        let modified_at = input.metadata().await?.modified()?;
-
-        self.with_file_async_inner(input.compat(), system_time_as_u32(modified_at), options)
-            .await
-    }
-
-    #[cfg(all(
-        feature = "with-file-async-async-std",
-        not(feature = "with-file-async-tokio")
-    ))]
-    pub async fn with_file_async<T, P>(self, source: P, options: T) -> Result<Self, RPMError>
-    where
-        P: AsRef<Path>,
-        T: Into<RPMFileOptions>,
-    {
-        let input = async_std::fs::File::open(source.as_ref()).await?;
-        let mut options = options.into();
-        if options.inherit_permissions {
-            options.mode = (async_file_mode(&input).await? as i32).into();
-        }
-        let modified_at = input.metadata().await?.modified()?;
-
-        self.with_file_async_inner(input, system_time_as_u32(modified_at), options)
-            .await
-    }
-
-    #[cfg(feature = "async-futures")]
-    async fn with_file_async_inner<P>(
-        mut self,
-        mut input: P,
-        modified_at: u32,
-        options: RPMFileOptions,
-    ) -> Result<Self, RPMError>
-    where
-        P: AsyncRead + Unpin,
-    {
-        let mut content = Vec::new();
-        input.read_to_end(&mut content).await?;
-        self.add_data(content, modified_at, options)?;
-        Ok(self)
     }
 
     pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>

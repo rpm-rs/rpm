@@ -63,7 +63,6 @@ jobs:
         flags:
           - "--all-features"
           - "--no-default-features"
-          - "--no-default-features --features signature-pgp,async-futures,with-file-async-async-std"
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -86,7 +85,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - run: cargo test --features test-with-podman,with-file-async-tokio
+      - run: cargo test --features test-with-podman
 
   fmt:
     name: Rustfmt

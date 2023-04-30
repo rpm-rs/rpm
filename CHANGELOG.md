@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Also, RPMs in the wild are "messy" and it is sadly commonplace for tags to present in the
   wrong header.
 
+### Removed
+
+- Removed async support. This crate is poorly suited for use in an async runtime as IO is intermixed
+  with computationally expensive compression/decompression, digest and signature verification which
+  is likely to take on the order of seconds in some cases. This is "computational blocking". As an
+  alternative, if you need to perform actions with this crate within an async runtime, use the
+  `spawn_blocking` function on your executor of choice e.g.
+  <https://docs.rs/tokio/latest/tokio/index.html#cpu-bound-tasks-and-blocking-code>
+
 ## 0.10.0
 
 ### Added
