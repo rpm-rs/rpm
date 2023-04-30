@@ -13,7 +13,20 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::rpm_empty_path().as_ref())?;
     assert_boundaries(common::rpm_empty_source_path().as_ref())?;
 
-    // @todo: write some packages ourselves and test it against those too
+    let constructed_pkg = RPMBuilder::new("empty-package", "0", "MIT", "x86_64", "").build()?;
+    constructed_pkg.write(&mut File::create("/tmp/empty_pkg.rpm")?)?;
+    assert_boundaries(Path::new("/tmp/empty_pkg.rpm"))?;
+
+    #[cfg(feature = "signature-meta")]
+    {
+        use rpm::signature::pgp::Signer;
+        let (signing_key, _) = common::load_asc_keys();
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
+        let constructed_pkg_with_sig =
+            RPMBuilder::new("empty-package", "0", "MIT", "x86_64", "").build_and_sign(signer)?;
+        constructed_pkg_with_sig.write(&mut File::create("/tmp/empty_pkg_with_sig.rpm")?)?;
+        assert_boundaries(Path::new("/tmp/empty_pkg_with_sig.rpm"))?;
+    }
 
     fn assert_boundaries(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::open(path)?;
