@@ -7,8 +7,6 @@ use std::str::FromStr;
 use chrono::offset::TimeZone;
 
 use digest::Digest;
-#[cfg(feature = "async-futures")]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use num_traits::FromPrimitive;
 
 use crate::constants::*;
@@ -59,14 +57,6 @@ impl RPMPackage {
         Self::parse(&mut buf_reader)
     }
 
-    #[cfg(feature = "async-futures")]
-    pub async fn parse_async<I: AsyncRead + Unpin>(input: &mut I) -> Result<Self, RPMError> {
-        let metadata = RPMPackageMetadata::parse_async(input).await?;
-        let mut content = Vec::new();
-        input.read_to_end(&mut content).await?;
-        Ok(RPMPackage { metadata, content })
-    }
-
     /// Parse an RPM package from an existing buffer
     pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
@@ -94,9 +84,6 @@ impl RPMPackage {
         Ok(())
     }
 
-    // @todo: delete most of this when EL7 goes EOL, the combination of SHA256HEADER and PAYLOADDIGEST
-    // have been available for a while.  EL7 has SHA1HEADER but not PAYLOADHEADER so the only digest which
-    // can verify both is SIGMD5. EL8+ (and similar distros) have both, so SHA1HEADER isn't needed anymore.
     /// Prepare both header and content digests as used by the `SignatureIndex`.
     pub(crate) fn create_sig_header_digests(
         header: &[u8],
@@ -287,20 +274,6 @@ pub struct RPMPackageMetadata {
 }
 
 impl RPMPackageMetadata {
-    #[cfg(feature = "async-futures")]
-    pub async fn parse_async<T: AsyncRead + Unpin>(input: &mut T) -> Result<Self, RPMError> {
-        let mut lead_buffer = [0; LEAD_SIZE as usize];
-        input.read_exact(&mut lead_buffer).await?;
-        let lead = Lead::parse(&lead_buffer)?;
-        let signature_header = Header::parse_signature_async(input).await?;
-        let header = Header::parse_async(input).await?;
-        Ok(RPMPackageMetadata {
-            lead,
-            signature: signature_header,
-            header,
-        })
-    }
-
     /// Open and parse RPMPackageMetadata from the file at the provided path
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
         let rpm_file = std::fs::File::open(path.as_ref())?;
@@ -327,14 +300,6 @@ impl RPMPackageMetadata {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;
-        Ok(())
-    }
-
-    #[cfg(feature = "async-futures")]
-    pub async fn write_async<W: AsyncWrite + Unpin>(&self, out: &mut W) -> Result<(), RPMError> {
-        self.lead.write_async(out).await?;
-        self.signature.write_signature_async(out).await?;
-        self.header.write_async(out).await?;
         Ok(())
     }
 
