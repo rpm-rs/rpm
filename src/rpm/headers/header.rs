@@ -259,7 +259,11 @@ where
 
     pub(crate) fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
         let mut header_immutable_index_data = vec![];
-        let mut hie = IndexEntry::new(tag, (records_count + 1) * -16, IndexData::Bin(Vec::new()));
+        let mut hie = IndexEntry::new(
+            tag,
+            (records_count + 1) * -(INDEX_ENTRY_SIZE as i32),
+            IndexData::Bin(Vec::new()),
+        );
         hie.num_items = 16;
         hie.write_index(&mut header_immutable_index_data)
             .expect("unable to write to memory buffer");

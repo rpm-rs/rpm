@@ -398,7 +398,7 @@ pub enum IndexSignatureTag {
     /// Size of combined header and payload if > 4GB.
     RPMSIGTAG_LONGSIZE = 270,
 
-    /// (Compressed) payload size when > 4GB.
+    /// This tag specifies the uncompressed size of the Payload archive, including the cpio headers, when >4gb.
     RPMSIGTAG_LONGARCHIVESIZE = IndexTag::RPMTAG_LONGARCHIVESIZE as u32,
 
     /// The tag contains the file signature of a file.
