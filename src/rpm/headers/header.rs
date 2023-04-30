@@ -321,11 +321,12 @@ impl Header<IndexSignatureTag> {
         headers_plus_payload_size: usize,
         md5sum: &[u8],
         sha1: &str,
+        sha256: &str,
         rsa_spanning_header: &[u8],
         rsa_spanning_header_and_archive: &[u8],
     ) -> Self {
         SignatureHeaderBuilder::new()
-            .add_digest(sha1, md5sum)
+            .add_digest(sha1, sha256, md5sum)
             .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
             .build(headers_plus_payload_size)
     }
@@ -660,7 +661,7 @@ impl<T: Tag> IndexEntry<T> {
         out: &mut W,
     ) -> Result<(), RPMError> {
         // unwrap() is safe because tags are predefined and are all within u32 range.
-        let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes()).await?;
+        let mut written = out.write(&self.tag.to_u32().to_be_bytes()).await?;
         written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
         written += out.write(&self.offset.to_be_bytes()).await?;
         written += out.write(&self.num_items.to_be_bytes()).await?;
@@ -969,6 +970,7 @@ mod test {
         let size: u64 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
         let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
+        let sha256 = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
         let rsa_spanning_header: &[u8] = b"111222333444";
         let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
 
@@ -992,6 +994,11 @@ mod test {
                     IndexData::StringTag(sha1.to_owned()),
                 ),
                 IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SHA256,
+                    offset,
+                    IndexData::StringTag(sha256.to_owned()),
+                ),
+                IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_RSA,
                     offset,
                     IndexData::Bin(rsa_spanning_header.to_vec()),
@@ -1009,6 +1016,7 @@ mod test {
             size as usize,
             md5sum,
             sha1,
+            sha256,
             rsa_spanning_header,
             rsa_spanning_header_and_archive,
         );

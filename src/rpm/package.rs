@@ -28,6 +28,8 @@ use super::Lead;
 /// in the 2020s.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Digests {
+    /// The sha256 digest of the header.
+    pub(crate) header_digest_sha256: String,
     /// The sha1 digest of the header.
     pub(crate) header_digest_sha1: String,
     /// The sha1 digest of the entire header + payload
@@ -84,48 +86,27 @@ impl RPMPackage {
         Ok(())
     }
 
-    fn read_and_update_digest(
-        hasher: &mut impl digest::Digest,
-        mut source: impl std::io::Read,
-    ) {
-        {
-            // avoid loading it into memory all at once
-            // since the content could be multiple 100s of MBs
-            let mut buf = [0u8; 256];
-            while let Ok(n) = source.read(&mut buf[..]) {
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[0..n]);
-            }
-        }
-    }
-
-    // @todo: delete when EL7 goes EOL, PAYLOADDIGEST has been available for years now.
+    // @todo: delete most of this when EL7 goes EOL, the combination of SHA256HEADER and PAYLOADDIGEST
+    // have been available for a while.  EL7 has SHA1HEADER but not PAYLOADHEADER so the only digest which
+    // can verify both is SIGMD5. EL8+ (and similar distros) have both, so SHA1HEADER isn't needed anymore.
     /// Prepare both header and content digests as used by the `SignatureIndex`.
-    pub(crate) fn create_legacy_header_digests<HC, HACC>(
-        header_cursor: HC,
-        header_and_content_cursor: HACC,
-    ) -> Result<Digests, RPMError>
-    where
-        HC: std::io::Read,
-        HACC: std::io::Read,
-    {
+    pub(crate) fn create_sig_header_digests(
+        header: &[u8],
+        payload: &[u8],
+    ) -> Result<Digests, RPMError> {
         let digest_md5 = {
             let mut hasher = md5::Md5::default();
-            Self::read_and_update_digest(&mut hasher, header_and_content_cursor);
+            hasher.update(header);
+            hasher.update(payload);
             let hash_result = hasher.finalize();
             hash_result.to_vec()
         };
 
-        let digest_sha1 = {
-            let mut hasher = sha1::Sha1::default();
-            Self::read_and_update_digest(&mut hasher, header_cursor);
-            let digest = hasher.finalize();
-            hex::encode(digest)
-        };
+        let digest_sha1 = hex::encode(sha1::Sha1::digest(header));
+        let digest_sha256 = hex::encode(sha2::Sha256::digest(header));
 
         Ok(Digests {
+            header_digest_sha256: digest_sha256,
             header_digest_sha1: digest_sha1,
             header_and_content_digest: digest_md5,
         })
@@ -144,19 +125,17 @@ impl RPMPackage {
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
 
-        let mut header_and_content_cursor =
-            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
-        let header_and_content_len = header_and_content_cursor.len();
+        let header_and_content_len = header_bytes.len() + self.content.len();
 
         let Digests {
-            header_digest_sha1: header_digest,
+            header_digest_sha256,
+            header_digest_sha1,
             header_and_content_digest,
-        } = Self::create_legacy_header_digests(
-            &mut header_bytes.as_slice(),
-            &mut header_and_content_cursor,
-        )?;
+        } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
 
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
+        let mut header_and_content_cursor =
+            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
 
         header_and_content_cursor.rewind()?;
         let rsa_signature_spanning_header_and_archive =
@@ -166,7 +145,8 @@ impl RPMPackage {
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
             header_and_content_len,
             &header_and_content_digest,
-            &header_digest,
+            &header_digest_sha1,
+            &header_digest_sha256,
             rsa_signature_spanning_header_only.as_slice(),
             rsa_signature_spanning_header_and_archive.as_slice(),
         );
@@ -221,10 +201,8 @@ impl RPMPackage {
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
 
-        let recreated_from_content = Self::create_legacy_header_digests(
-            &mut header.as_slice(),
-            SeqCursor::new(&[header.as_slice(), self.content.as_slice()]),
-        )?;
+        let pkg_actual_digests =
+            Self::create_sig_header_digests(header.as_slice(), self.content.as_slice())?;
 
         let md5 = self
             .metadata
@@ -240,24 +218,19 @@ impl RPMPackage {
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256);
 
         if let Ok(md5) = md5 {
-            if md5 != recreated_from_content.header_and_content_digest {
+            if md5 != pkg_actual_digests.header_and_content_digest {
                 return Err(RPMError::DigestMismatchError);
             }
         }
 
         if let Ok(sha1) = sha1 {
-            if sha1 != recreated_from_content.header_digest_sha1 {
+            if sha1 != pkg_actual_digests.header_digest_sha1 {
                 return Err(RPMError::DigestMismatchError);
             }
         }
 
         if let Ok(sha256) = sha256 {
-            let sha256_calculated = {
-                let mut hasher = sha2::Sha256::default();
-                hasher.update(self.content.as_slice());
-                hex::encode(hasher.finalize())
-            };
-            if sha256 != sha256_calculated {
+            if sha256 != pkg_actual_digests.header_digest_sha256 {
                 return Err(RPMError::DigestMismatchError);
             }
         }
