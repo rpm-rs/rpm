@@ -1,17 +1,19 @@
-use chrono::TimeZone;
-use rpm::*;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::prelude::*;
 use std::process::Stdio;
+
+use chrono::TimeZone;
+
+use rpm::*;
+use signature::{self, Verifying};
 
 mod common;
 
-use signature::{self, Verifying};
-
 mod pgp {
-    use super::*;
     use signature::pgp::{Signer, Verifier};
+
+    use super::*;
 
     #[serial_test::serial]
     fn create_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,7 +28,7 @@ mod pgp {
 
         let mut f = File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(CompressionType::Gzip)
+            .compression(GZIP)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/foo.toml"),
@@ -102,7 +104,7 @@ mod pgp {
         let pkg = RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
         let out_file = common::cargo_out_dir().join("test.rpm");
 
-        let mut f = std::fs::File::create(out_file)?;
+        let mut f = File::create(out_file)?;
         pkg.write(&mut f)?;
         let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
 
@@ -133,7 +135,7 @@ mod pgp {
 
         let mut f = std::fs::File::create(out_file)?;
         let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(CompressionType::Gzip)
+            .compression(GZIP)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/foo.toml"),
@@ -214,7 +216,7 @@ mod pgp {
         {
             let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
 
-            let mut f = std::fs::File::create(&out_file)?;
+            let mut f = File::create(&out_file)?;
             let pkg = RPMBuilder::new(
                 "roundtrip",
                 "1.0.0",
@@ -222,7 +224,7 @@ mod pgp {
                 "x86_64",
                 "spins round and round",
             )
-            .compression(CompressionType::Gzip)
+            .compression(GZIP)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
@@ -250,7 +252,7 @@ mod pgp {
 
         // verify
         {
-            let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
+            let out_file = File::open(&out_file).expect("should be able to open rpm file");
             let mut buf_reader = std::io::BufReader::new(out_file);
             let package = RPMPackage::parse(&mut buf_reader)?;
 

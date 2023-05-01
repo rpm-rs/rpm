@@ -41,7 +41,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
             "x86_64",
             "spins round and round",
         )
-        .compression(CompressionType::Gzip)
+        .compression(GZIP)
         .with_file(
             cargo_file.to_str().unwrap(),
             RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")

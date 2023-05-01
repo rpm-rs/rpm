@@ -2,13 +2,40 @@ use std::io::Write;
 
 use crate::errors::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub const GZIP: Gzip = Gzip::new();
+pub const ZSTD: Zstd = Zstd::new();
+pub const XZ: Xz = Xz::new();
+
+#[derive(Default, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompressionType {
     #[default]
     None,
-    Gzip,
-    Zstd,
-    Xz,
+    Gzip {
+        level: u8,
+    },
+    Zstd {
+        level: u8,
+    },
+    Xz {
+        level: u8,
+    },
+}
+
+pub struct Gzip {
+    level: u8,
+}
+pub struct Zstd {
+    level: u8,
+}
+pub struct Xz {
+    level: u8,
+}
+
+pub(crate) enum Compressor {
+    None(Vec<u8>),
+    Gzip(libflate::gzip::Encoder<Vec<u8>>),
+    Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
+    Xz(xz2::write::XzEncoder<Vec<u8>>),
 }
 
 // 19 is used here as its 19 for fedora
@@ -17,36 +44,46 @@ impl std::str::FromStr for CompressionType {
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
         match raw {
             "none" => Ok(CompressionType::None),
-            "gzip" => Ok(CompressionType::Gzip),
-            "zstd" => Ok(CompressionType::Zstd),
-            "xz" => Ok(CompressionType::Xz),
+            "gzip" => Ok(Gzip::new().into()),
+            "zstd" => Ok(Zstd::new().into()),
+            "xz" => Ok(Xz::new().into()),
             _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
         }
     }
 }
 
-pub enum Compressor {
-    None(Vec<u8>),
-    Gzip(libflate::gzip::Encoder<Vec<u8>>),
-    Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
-    Xz(xz2::write::XzEncoder<Vec<u8>>),
+impl AsRef<str> for CompressionType {
+    fn as_ref(&self) -> &str {
+        match self {
+            CompressionType::None => "none",
+            CompressionType::Gzip { .. } => "gzip",
+            CompressionType::Zstd { .. } => "zstd",
+            CompressionType::Xz { .. } => "xz",
+        }
+    }
 }
 
-impl TryFrom<CompressionType> for Compressor {
-    type Error = RPMError;
+impl From<Gzip> for CompressionType {
+    fn from(value: Gzip) -> Self {
+        CompressionType::Gzip { level: value.level }
+    }
+}
 
-    fn try_from(value: CompressionType) -> Result<Self, Self::Error> {
-        match value {
-            CompressionType::None => Ok(Compressor::None(Vec::new())),
-            CompressionType::Gzip => {
-                Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?))
-            }
-            CompressionType::Zstd => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
-                Vec::new(),
-                19,
-            )?)),
-            CompressionType::Xz => Ok(Compressor::Xz(xz2::write::XzEncoder::new(Vec::new(), 9))),
-        }
+impl From<Zstd> for CompressionType {
+    fn from(value: Zstd) -> Self {
+        CompressionType::Zstd { level: value.level }
+    }
+}
+
+impl From<Xz> for CompressionType {
+    fn from(value: Xz) -> Self {
+        CompressionType::Xz { level: value.level }
+    }
+}
+
+impl From<()> for CompressionType {
+    fn from(_: ()) -> Self {
+        CompressionType::None
     }
 }
 
@@ -78,27 +115,53 @@ impl Compressor {
             Compressor::Xz(encoder) => Ok(encoder.finish()?),
         }
     }
+}
 
-    pub(crate) fn get_details(&self) -> Option<CompressionDetails> {
-        match self {
-            Compressor::None(_) => None,
-            Compressor::Gzip(_) => Some(CompressionDetails {
-                compression_level: "9",
-                compression_name: "gzip",
-            }),
-            Compressor::Zstd(_) => Some(CompressionDetails {
-                compression_level: "19",
-                compression_name: "zstd",
-            }),
-            Compressor::Xz(_) => Some(CompressionDetails {
-                compression_level: "9",
-                compression_name: "xz",
-            }),
+impl Compressor {
+    pub(crate) fn new(compression: CompressionType) -> Result<Self, RPMError> {
+        match compression {
+            CompressionType::None => Ok(Compressor::None(Vec::new())),
+            CompressionType::Gzip { .. } => {
+                Ok(Compressor::Gzip(libflate::gzip::Encoder::new(Vec::new())?))
+            }
+            CompressionType::Zstd { level } => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
+                Vec::new(),
+                level as i32,
+            )?)),
+            CompressionType::Xz { level } => Ok(Compressor::Xz(xz2::write::XzEncoder::new(
+                Vec::new(),
+                level as u32,
+            ))),
         }
     }
 }
 
-pub(crate) struct CompressionDetails {
-    pub(crate) compression_level: &'static str,
-    pub(crate) compression_name: &'static str,
+impl Gzip {
+    pub const fn new() -> Self {
+        Self { level: 9 }
+    }
+
+    pub fn with_level(level: u8) -> Self {
+        Self { level }
+    }
+}
+
+impl Zstd {
+    pub const fn new() -> Self {
+        Self { level: 19 }
+    }
+
+    pub fn with_level(level: u8) -> Self {
+        Self { level }
+    }
+}
+
+impl Xz {
+    pub const fn new() -> Self {
+        Self { level: 9 }
+    }
+
+    pub fn with_level(level: u8) -> Self {
+        Self { level }
+    }
 }

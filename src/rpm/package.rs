@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use chrono::offset::TimeZone;
-
 use digest::Digest;
 #[cfg(feature = "async-futures")]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -84,10 +83,7 @@ impl RPMPackage {
         Ok(())
     }
 
-    fn read_and_update_digest_256(
-        hasher: &mut impl digest::Digest,
-        mut source: impl std::io::Read,
-    ) {
+    fn read_and_update_digest_256(hasher: &mut impl Digest, mut source: impl std::io::Read) {
         {
             // avoid loading it into memory all at once
             // since the content could be multiple 100s of MBs
@@ -192,14 +188,14 @@ impl RPMPackage {
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA)?;
 
-        crate::signature::echo_signature("signature_header(header only)", signature_header_only);
+        signature::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP)?;
 
-        crate::signature::echo_signature(
+        signature::echo_signature(
             "signature_header(header and content)",
             signature_header_and_content,
         );

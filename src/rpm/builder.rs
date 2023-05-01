@@ -204,8 +204,8 @@ impl RPMBuilder {
         self
     }
 
-    pub fn compression(mut self, comp: CompressionType) -> Self {
-        self.compressor = comp;
+    pub fn compression<T: Into<CompressionType>>(mut self, comp: T) -> Self {
+        self.compressor = comp.into();
         self
     }
 
@@ -586,8 +586,7 @@ impl RPMBuilder {
 
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
-        let mut compressor: Compressor = self.compressor.try_into()?;
-        let possible_compression_details = compressor.get_details();
+        let mut compressor = Compressor::new(self.compressor)?;
         let mut archive = Sha256Writer::new(&mut compressor);
 
         let mut ino_index = 1;
@@ -673,7 +672,7 @@ impl RPMBuilder {
             "4.0-1".to_string(),
         ));
 
-        if matches!(self.compressor, CompressionType::Zstd) {
+        if matches!(self.compressor, CompressionType::Zstd { .. }) {
             self.requires.push(Dependency::rpmlib(
                 "rpmlib(PayloadIsZstd)".to_string(),
                 "5.4.18-1".to_string(),
@@ -994,16 +993,22 @@ impl RPMBuilder {
             ),
         ]);
 
-        if let Some(details) = possible_compression_details {
+        let details = match self.compressor {
+            CompressionType::None => None,
+            CompressionType::Gzip { level }
+            | CompressionType::Zstd { level }
+            | CompressionType::Xz { level } => Some((self.compressor.as_ref(), level.to_string())),
+        };
+        if let Some((ty, level)) = details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
-                IndexData::StringTag(details.compression_name.to_string()),
+                IndexData::StringTag(ty.to_string()),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFLAGS,
                 offset,
-                IndexData::StringTag(details.compression_level.to_string()),
+                IndexData::StringTag(level),
             ));
         }
 

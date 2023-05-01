@@ -63,7 +63,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     assert_eq!(package.metadata.get_installed_size().unwrap(), 503853);
     assert_eq!(
         package.metadata.get_payload_compressor().unwrap(),
-        CompressionType::Xz
+        CompressionType::Xz { level: 9 }
     );
 
     assert_eq!(package.metadata.is_source_package(), false);
@@ -210,7 +210,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     );
     assert_eq!(
         metadata.get_payload_compressor().unwrap(),
-        CompressionType::Xz
+        CompressionType::Xz { level: 9 }
     );
 
     let expected_file_checksums = vec![
@@ -323,7 +323,7 @@ async fn test_rpm_builder_async() -> Result<(), Box<dyn std::error::Error>> {
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
     let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-        .compression(CompressionType::Gzip)
+        .compression(GZIP)
         .with_file_async(
             "Cargo.toml",
             RPMFileOptions::new("/etc/awesome/config.toml").is_config(),

@@ -22,7 +22,7 @@
 //! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-//!             .compression(rpm::CompressionType::Gzip)
+//!             .compression(rpm::GZIP)
 //!             .with_file(
 //!                 "./test_assets/awesome.toml",
 //!                 rpm::RPMFileOptions::new("/etc/awesome/config.toml")
