@@ -61,11 +61,10 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
     );
     assert_eq!(package.metadata.get_build_time().unwrap(), 1540945151);
     assert_eq!(package.metadata.get_installed_size().unwrap(), 503853);
-    assert!(matches!(
-        package.metadata.get_payload_compressor(),
-        Err(RPMError::UnknownCompressorType(xz)) if xz == "xz"
-    ));
-
+    assert_eq!(
+        package.metadata.get_payload_compressor().unwrap(),
+        CompressionType::Xz
+    );
 
     assert_eq!(package.metadata.is_source_package(), false);
 
@@ -209,11 +208,10 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
             payload: 148172
         }
     );
-    assert!(matches!(
-        metadata.get_payload_compressor(),
-        Err(RPMError::UnknownCompressorType(xz)) if xz == "xz"
-    ));
-
+    assert_eq!(
+        metadata.get_payload_compressor().unwrap(),
+        CompressionType::Xz
+    );
 
     let expected_file_checksums = vec![
         "",

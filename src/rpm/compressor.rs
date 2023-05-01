@@ -1,5 +1,6 @@
-use crate::errors::*;
 use std::io::Write;
+
+use crate::errors::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum CompressionType {
@@ -7,6 +8,7 @@ pub enum CompressionType {
     None,
     Gzip,
     Zstd,
+    Xz,
 }
 
 // 19 is used here as its 19 for fedora
@@ -17,6 +19,7 @@ impl std::str::FromStr for CompressionType {
             "none" => Ok(CompressionType::None),
             "gzip" => Ok(CompressionType::Gzip),
             "zstd" => Ok(CompressionType::Zstd),
+            "xz" => Ok(CompressionType::Xz),
             _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
         }
     }
@@ -26,6 +29,7 @@ pub enum Compressor {
     None(Vec<u8>),
     Gzip(libflate::gzip::Encoder<Vec<u8>>),
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
+    Xz(xz2::write::XzEncoder<Vec<u8>>),
 }
 
 impl TryFrom<CompressionType> for Compressor {
@@ -41,6 +45,7 @@ impl TryFrom<CompressionType> for Compressor {
                 Vec::new(),
                 19,
             )?)),
+            CompressionType::Xz => Ok(Compressor::Xz(xz2::write::XzEncoder::new(Vec::new(), 9))),
         }
     }
 }
@@ -51,6 +56,7 @@ impl Write for Compressor {
             Compressor::None(data) => data.write(content),
             Compressor::Gzip(encoder) => encoder.write(content),
             Compressor::Zstd(encoder) => encoder.write(content),
+            Compressor::Xz(encoder) => encoder.write(content),
         }
     }
     fn flush(&mut self) -> Result<(), std::io::Error> {
@@ -58,6 +64,7 @@ impl Write for Compressor {
             Compressor::None(data) => data.flush(),
             Compressor::Gzip(encoder) => encoder.flush(),
             Compressor::Zstd(encoder) => encoder.flush(),
+            Compressor::Xz(encoder) => encoder.flush(),
         }
     }
 }
@@ -68,6 +75,7 @@ impl Compressor {
             Compressor::None(data) => Ok(data),
             Compressor::Gzip(encoder) => Ok(encoder.finish().into_result()?),
             Compressor::Zstd(encoder) => Ok(encoder.finish()?),
+            Compressor::Xz(encoder) => Ok(encoder.finish()?),
         }
     }
 
@@ -81,6 +89,10 @@ impl Compressor {
             Compressor::Zstd(_) => Some(CompressionDetails {
                 compression_level: "19",
                 compression_name: "zstd",
+            }),
+            Compressor::Xz(_) => Some(CompressionDetails {
+                compression_level: "9",
+                compression_name: "xz",
             }),
         }
     }

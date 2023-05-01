@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `get_package_segment_boundaries()` to `RPMPackage` to enable reading the raw bytes of the
   different components (header, payload, etc.) from an on-disk package.
 - Added `CompressionType`.
+- Added support for `xz` compression type
 
 ### Fixed
 
