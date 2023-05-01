@@ -51,7 +51,8 @@ chrono = "0.4"
 log = "0.4"
 itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
-zstd = "0.12.0"
+zstd = "0.12"
+xz2 = "0.1"
 futures = { version = "0.3.25", optional = true }
 
 # Libraries required for with_file_async() implementations
