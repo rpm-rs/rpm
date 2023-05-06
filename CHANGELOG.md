@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 0.10.0
+
 ### Added
 
 - Added a `RPMPackage::open()` helper for working with files
