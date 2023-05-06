@@ -13,6 +13,7 @@ use num_traits::FromPrimitive;
 
 use crate::constants::*;
 use crate::errors::*;
+#[cfg(feature = "signature-meta")]
 use crate::sequential_cursor::SeqCursor;
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -596,7 +597,7 @@ impl RPMPackageMetadata {
 
         let sig_header_start = LEAD_SIZE;
         let sig_header_size = self.signature.size();
-        let padding = 8 - (sig_header_size % 8); // todo: share padding code
+        let padding = (8 - (sig_header_size % 8)) % 8; // todo: share padding code
 
         let header_start = sig_header_start + sig_header_size + padding;
         let header_size = self.header.size();
