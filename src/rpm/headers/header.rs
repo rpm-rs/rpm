@@ -341,7 +341,7 @@ impl Header<IndexSignatureTag> {
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
         let result = Self::parse_async(input).await?;
 
-        let padding = 8 - (result.index_header.data_section_size % 8);
+        let padding = (8 - (result.index_header.data_section_size % 8)) % 8;
         if padding > 0 {
             let mut discard = vec![0; padding as usize];
             input.read_exact(&mut discard).await?;
@@ -355,7 +355,7 @@ impl Header<IndexSignatureTag> {
         let result = Self::parse(input)?;
         // this structure is aligned to 8 bytes - rest is filled up with zeros.
         // if the size of our store is not a modulo of 8, we discard the padding bytes
-        let padding = 8 - (result.index_header.data_section_size % 8);
+        let padding = (8 - (result.index_header.data_section_size % 8)) % 8;
         if padding > 0 {
             let mut discard = vec![0; padding as usize];
             input.read_exact(&mut discard)?;
@@ -370,7 +370,7 @@ impl Header<IndexSignatureTag> {
     ) -> Result<(), RPMError> {
         self.write_async(out).await?;
         // align to 8 bytes
-        let padding_needed = 8 - (self.index_header.data_section_size % 8);
+        let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
         if padding_needed > 0 {
             let padding = vec![0; padding_needed as usize];
             out.write_all(&padding).await?;
@@ -381,7 +381,7 @@ impl Header<IndexSignatureTag> {
     pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.write(out)?;
         // align to 8 bytes
-        let padding_needed = 8 - (self.index_header.data_section_size % 8);
+        let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
         if padding_needed > 0 {
             let padding = vec![0; padding_needed as usize];
             out.write_all(&padding)?;
