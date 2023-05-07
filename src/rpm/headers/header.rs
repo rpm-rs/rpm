@@ -271,6 +271,9 @@ where
     }
 
     pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
+        // Ensure the tags in the header we're creating will be in sorted order
+        actual_records.sort_by(|e1, e2| e1.tag.to_u32().cmp(&e2.tag.to_u32()));
+
         let mut store = Vec::new();
         for record in &mut actual_records {
             record.offset = store.len() as i32;
@@ -674,7 +677,7 @@ impl<T: Tag> IndexEntry<T> {
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         // unwrap() is safe because tags are predefined.
-        let mut written = out.write(&self.tag.to_u32().unwrap().to_be_bytes())?;
+        let mut written = out.write(&self.tag.to_u32().to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
         written += out.write(&self.num_items.to_be_bytes())?;
