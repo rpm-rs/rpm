@@ -1,6 +1,6 @@
-use std::io::BufReader;
 #[cfg(feature = "signature-meta")]
 use std::io::Seek;
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -52,7 +52,7 @@ pub struct RPMPackage {
 }
 
 impl RPMPackage {
-    /// Open and parse a file at the provided path as an RPM package.
+    /// Open and parse a file at the provided path as an RPM package
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
         let rpm_file = std::fs::File::open(path.as_ref())?;
         let mut buf_reader = BufReader::new(rpm_file);
@@ -67,6 +67,7 @@ impl RPMPackage {
         Ok(RPMPackage { metadata, content })
     }
 
+    /// Parse an RPM package from an existing buffer
     pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
@@ -74,10 +75,16 @@ impl RPMPackage {
         Ok(RPMPackage { metadata, content })
     }
 
+    /// Write the RPM package to a buffer
     pub fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
+    }
+
+    /// Write the RPM package to a file
+    pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), RPMError> {
+        self.write(&mut BufWriter::new(std::fs::File::create(path)?))
     }
 
     #[cfg(feature = "async-futures")]
@@ -113,7 +120,7 @@ impl RPMPackage {
         })
     }
 
-    /// sign all headers (except for the lead) using an external key and store it as the initial header
+    /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
@@ -323,6 +330,7 @@ impl RPMPackageMetadata {
         Ok(())
     }
 
+    /// Whether this package is a source package, or not
     #[inline]
     pub fn is_source_package(&self) -> bool {
         self.header
@@ -330,68 +338,81 @@ impl RPMPackageMetadata {
             .is_ok()
     }
 
+    /// Get the package name
     #[inline]
     pub fn get_name(&self) -> Result<&str, RPMError> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
     }
 
     // TODO: infalliable?  default to 0
+    /// Get the package epoch
     #[inline]
     pub fn get_epoch(&self) -> Result<u32, RPMError> {
         self.header.get_entry_data_as_u32(IndexTag::RPMTAG_EPOCH)
     }
 
+    /// Get the package version (the upstream version string)
     #[inline]
     pub fn get_version(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_VERSION)
     }
 
+    /// Get the package release
     #[inline]
     pub fn get_release(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_RELEASE)
     }
 
+    /// Get the package architecture
     #[inline]
     pub fn get_arch(&self) -> Result<&str, RPMError> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
     }
 
+    /// Get the package vendor
     #[inline]
     pub fn get_vendor(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_VENDOR)
     }
 
+    /// Get the package URL. Most often this is the upstream project website for the software
+    /// being packaged.
     #[inline]
     pub fn get_url(&self) -> Result<&str, RPMError> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_URL)
     }
 
+    /// Get the package version control URL (of the upstream project)
     #[inline]
     pub fn get_vcs(&self) -> Result<&str, RPMError> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_VCS)
     }
 
+    /// Get the package license
     #[inline]
     pub fn get_license(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)
     }
 
+    /// Get the package summary (very brief description of the packaged software)
     #[inline]
     pub fn get_summary(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_SUMMARY)
     }
 
+    /// Get the package description (a full description of the packaged software)
     #[inline]
     pub fn get_description(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_DESCRIPTION)
     }
 
+    /// Get the package group (this is deprecated in most packaging guidelines)
     #[inline]
     pub fn get_group(&self) -> Result<&str, RPMError> {
         self.header
@@ -404,6 +425,7 @@ impl RPMPackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_PACKAGER)
     }
 
+    /// Get the timestamp when this package was built. This is commonly not present.
     #[inline]
     pub fn get_build_time(&self) -> Result<u64, RPMError> {
         self.header
@@ -411,18 +433,22 @@ impl RPMPackageMetadata {
             .map(|x| x as u64)
     }
 
+    /// Get the build host on which this package was built. This is commonly not present.
     #[inline]
     pub fn get_build_host(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_BUILDHOST)
     }
 
+    /// The cookie is a value that can be used for tracking packages built together, e.g.
+    /// packages built in one build operation (from a single source RPM, for example).
     #[inline]
     pub fn get_cookie(&self) -> Result<&str, RPMError> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_COOKIE)
     }
 
+    /// Get the filename of the source RPM package used to build this package
     #[inline]
     pub fn get_source_rpm(&self) -> Result<&str, RPMError> {
         self.header
