@@ -103,7 +103,7 @@ impl CompressionDetails {
 
 impl Default for CompressionDetails {
     fn default() -> Self {
-        CompressionDetails::None
+        CompressionType::Gzip.into()
     }
 }
 
