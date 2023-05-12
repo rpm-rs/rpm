@@ -222,7 +222,7 @@ mod pgp {
                 "x86_64",
                 "spins round and round",
             )
-            .compression(CompressionType::Gzip)
+            .compression(CompressionType::Zstd)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")

@@ -22,7 +22,7 @@ use crate::signature;
 
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
-use crate::{CompressionType, Digests};
+use crate::{CompressionDetails, CompressionType, Digests};
 
 #[cfg(feature = "with-file-async-tokio")]
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -118,7 +118,7 @@ pub struct RPMBuilder {
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
-    compressor: CompressionType,
+    compression: CompressionDetails,
 
     vendor: Option<String>,
     url: Option<String>,
@@ -168,7 +168,7 @@ impl RPMBuilder {
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL", "x86_64", "some bar package")
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
     ///             .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
     ///             .build()?;
     /// # Ok(())
@@ -198,7 +198,7 @@ impl RPMBuilder {
         self
     }
 
-    /// Returns a value that can be used for associating several package builds as being part of one operation
+    /// Define a value that can be used for associating several package builds as being part of one operation
     ///
     /// You can use any value, but the standard format is "${build_host} ${build_time}"
     pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
@@ -206,14 +206,48 @@ impl RPMBuilder {
         self
     }
 
-    pub fn compression(mut self, comp: CompressionType) -> Self {
-        self.compressor = comp;
+    /// Set the compression type and/or level to be used for the payload of the built package
+    ///
+    /// Passing a `CompressionType` value will use a default compression level which has been
+    /// optimized for package size over compression time.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .compression(rpm::CompressionType::Gzip)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    /// If you would like to specify a custom compression level (for faster package builds, at the
+    /// expense of package size), pass a `CompressionDetails` value instead.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .compression(rpm::CompressionDetails::Zstd(3))
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// For Gzip compression, the expected range is 0 to 9, with a default value of 9.
+    /// For Xz compression, the expected range is 0 to 9, with a default value of 9.
+    /// For Zstd compression, the expected range is 1 to 22, with a default value of 19.
+    ///
+    /// If this method is not called, the payload will be Gzip compressed by default. This may change
+    /// in future versions of the library.
+    pub fn compression<T: Into<CompressionDetails>>(mut self, comp: T) -> Self {
+        self.compression = comp.into();
         self
     }
 
-    /// Add an entry to the changelog, compromised of changelog name (which includes author, email followed by
-    /// a dash followed by a version number),
-    /// description, and the date and time of the change.
+    /// Add an entry to the package changelog.
+    ///
+    /// The a changelog entry consists of an entry name (which includes author, email followed by
+    /// a dash followed by a version number), description, and the date and time of the change.
 
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -584,8 +618,7 @@ impl RPMBuilder {
 
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
-        let mut compressor: Compressor = self.compressor.try_into()?;
-        let possible_compression_details = compressor.get_details();
+        let mut compressor: Compressor = self.compression.try_into()?;
         let mut archive = Sha256Writer::new(&mut compressor);
 
         let mut ino_index = 1;
@@ -671,7 +704,7 @@ impl RPMBuilder {
             "4.0-1".to_string(),
         ));
 
-        if matches!(self.compressor, CompressionType::Zstd) {
+        if self.compression.compression_type() == CompressionType::Zstd {
             self.requires.push(Dependency::rpmlib(
                 "rpmlib(PayloadIsZstd)".to_string(),
                 "5.4.18-1".to_string(),
@@ -992,16 +1025,23 @@ impl RPMBuilder {
             ),
         ]);
 
-        if let Some(details) = possible_compression_details {
+        let compression_details = match self.compression {
+            CompressionDetails::None => None,
+            CompressionDetails::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
+            CompressionDetails::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
+            CompressionDetails::Xz(level) => Some(("xz".to_owned(), level.to_string())),
+        };
+
+        if let Some((compression_name, compression_level)) = compression_details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 offset,
-                IndexData::StringTag(details.compression_name.to_string()),
+                IndexData::StringTag(compression_name),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFLAGS,
                 offset,
-                IndexData::StringTag(details.compression_level.to_string()),
+                IndexData::StringTag(compression_level),
             ));
         }
 
