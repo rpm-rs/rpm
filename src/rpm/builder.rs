@@ -22,7 +22,7 @@ use crate::signature;
 
 use crate::RPMPackage;
 use crate::RPMPackageMetadata;
-use crate::{CompressionDetails, CompressionType, Digests};
+use crate::{CompressionType, CompressionWithLevel, Digests};
 
 #[cfg(feature = "with-file-async-tokio")]
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -118,7 +118,7 @@ pub struct RPMBuilder {
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
-    compression: CompressionDetails,
+    compression: CompressionWithLevel,
 
     vendor: Option<String>,
     url: Option<String>,
@@ -221,13 +221,13 @@ impl RPMBuilder {
     /// # }
     /// ```
     /// If you would like to specify a custom compression level (for faster package builds, at the
-    /// expense of package size), pass a `CompressionDetails` value instead.
+    /// expense of package size), pass a `CompressionWithLevel` value instead.
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     ///
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
-    ///     .compression(rpm::CompressionDetails::Zstd(3))
+    ///     .compression(rpm::CompressionWithLevel::Zstd(3))
     ///     .build()?;
     /// # Ok(())
     /// # }
@@ -239,7 +239,7 @@ impl RPMBuilder {
     ///
     /// If this method is not called, the payload will be Gzip compressed by default. This may change
     /// in future versions of the library.
-    pub fn compression<T: Into<CompressionDetails>>(mut self, comp: T) -> Self {
+    pub fn compression<T: Into<CompressionWithLevel>>(mut self, comp: T) -> Self {
         self.compression = comp.into();
         self
     }
@@ -1026,10 +1026,10 @@ impl RPMBuilder {
         ]);
 
         let compression_details = match self.compression {
-            CompressionDetails::None => None,
-            CompressionDetails::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
-            CompressionDetails::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
-            CompressionDetails::Xz(level) => Some(("xz".to_owned(), level.to_string())),
+            CompressionWithLevel::None => None,
+            CompressionWithLevel::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
+            CompressionWithLevel::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
+            CompressionWithLevel::Xz(level) => Some(("xz".to_owned(), level.to_string())),
         };
 
         if let Some((compression_name, compression_level)) = compression_details {
