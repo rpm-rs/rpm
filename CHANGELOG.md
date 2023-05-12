@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The compression level to be used during package building is now configurable by passing
-  `CompressionDetails` to `RPMBuilder::compression`. Compatibility with passing
+  `CompressionWithLevel` to `RPMBuilder::compression`. Compatibility with passing
   `CompressionType` is retained - the default value will be used in that case.
 - The default compression for building a package, if the compression is not overridden using
   the above method, is now `Gzip` rather than `None`. This is chosen to keep package

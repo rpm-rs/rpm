@@ -30,21 +30,20 @@ pub enum Compressor {
     Xz(xz2::write::XzEncoder<Vec<u8>>),
 }
 
-impl TryFrom<CompressionDetails> for Compressor {
+impl TryFrom<CompressionWithLevel> for Compressor {
     type Error = RPMError;
 
-    fn try_from(value: CompressionDetails) -> Result<Self, Self::Error> {
+    fn try_from(value: CompressionWithLevel) -> Result<Self, Self::Error> {
         match value {
-            CompressionDetails::None => Ok(Compressor::None(Vec::new())),
-            CompressionDetails::Gzip(level) => Ok(Compressor::Gzip(flate2::write::GzEncoder::new(
-                Vec::new(),
-                flate2::Compression::new(level),
-            ))),
-            CompressionDetails::Zstd(level) => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
+            CompressionWithLevel::None => Ok(Compressor::None(Vec::new())),
+            CompressionWithLevel::Gzip(level) => Ok(Compressor::Gzip(
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(level)),
+            )),
+            CompressionWithLevel::Zstd(level) => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
                 Vec::new(),
                 level,
             )?)),
-            CompressionDetails::Xz(level) => Ok(Compressor::Xz(xz2::write::XzEncoder::new(
+            CompressionWithLevel::Xz(level) => Ok(Compressor::Xz(xz2::write::XzEncoder::new(
                 Vec::new(),
                 level,
             ))),
@@ -83,14 +82,14 @@ impl Compressor {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CompressionDetails {
+pub enum CompressionWithLevel {
     None,
     Zstd(i32),
     Gzip(u32),
     Xz(u32),
 }
 
-impl CompressionDetails {
+impl CompressionWithLevel {
     pub(crate) fn compression_type(&self) -> CompressionType {
         match self {
             Self::None => CompressionType::None,
@@ -101,19 +100,19 @@ impl CompressionDetails {
     }
 }
 
-impl Default for CompressionDetails {
+impl Default for CompressionWithLevel {
     fn default() -> Self {
         CompressionType::Gzip.into()
     }
 }
 
-impl From<CompressionType> for CompressionDetails {
+impl From<CompressionType> for CompressionWithLevel {
     fn from(value: CompressionType) -> Self {
         match value {
-            CompressionType::None => CompressionDetails::None,
-            CompressionType::Gzip => CompressionDetails::Gzip(9),
-            CompressionType::Xz => CompressionDetails::Xz(9),
-            CompressionType::Zstd => CompressionDetails::Zstd(19),
+            CompressionType::None => CompressionWithLevel::None,
+            CompressionType::Gzip => CompressionWithLevel::Gzip(9),
+            CompressionType::Xz => CompressionWithLevel::Xz(9),
+            CompressionType::Zstd => CompressionWithLevel::Zstd(19),
         }
     }
 }
