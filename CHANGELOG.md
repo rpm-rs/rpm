@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The compression level to be used during package building is now configurable by passing
+  `CompressionDetails` to `RPMBuilder::compression`. Compatibility with passing
+  `CompressionType` is retained - the default value will be used in that case.
+
+### Changed
+
+- `flate2` crate is now used in place of `libflate`. `flate2` is faster in both compression
+  and decompression and has better ratios, and includes features which `libflate` does not
+  such as configurable compression levels.
+
 ## 0.10.0
 
 ### Added
