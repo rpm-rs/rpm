@@ -25,11 +25,6 @@ pub enum RPMError {
     },
     #[error("unsupported Version {0} - only header version 1 is supported")]
     UnsupportedHeaderVersion(u8),
-    #[error("invalid tag {raw_tag} for store {store_type}")]
-    InvalidTag {
-        raw_tag: u32,
-        store_type: &'static str,
-    },
     #[error("invalid tag data type in store {store_type}: expected 0 - 9 but got {raw_data_type}")]
     InvalidTagDataType {
         raw_data_type: u32,
