@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and decompression and has better ratios, and includes features which `libflate` does not
   such as configurable compression levels.
 
+### Fixed
+
+- Made parsing more robust in the face of unknown or unexpected tags. This will prevent new
+  packages from causing the program to crash if rpm-rs does not yet have a constant defined.
+  Also, RPMs in the wild are "messy" and it is sadly commonplace for tags to present in the
+  wrong header.
+
 ## 0.10.0
 
 ### Added

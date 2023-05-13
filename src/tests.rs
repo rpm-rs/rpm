@@ -196,7 +196,7 @@ fn test_rpm_header_base(package: RPMPackage) -> Result<(), Box<dyn std::error::E
         let actual_entry = &metadata.signature.index_entries[i];
         assert_eq!(*len as u32, actual_entry.num_items);
         assert_eq!(*data, actual_entry.data);
-        assert_eq!(*tag, actual_entry.tag);
+        assert_eq!(*tag as u32, actual_entry.tag);
     }
 
     assert_eq!(

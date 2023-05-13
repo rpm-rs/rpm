@@ -6,6 +6,7 @@ use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::constants::{self, *};
 use std::fmt;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 
 use super::*;
@@ -143,7 +144,7 @@ where
     pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, RPMError> {
         self.index_entries
             .iter()
-            .find(|entry| entry.tag == tag)
+            .find(|entry| entry.tag == tag.to_u32())
             .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
         // @todo: this could be more efficient, if the tag is an integer, we can just pass around
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
@@ -272,7 +273,7 @@ where
 
     pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
         // Ensure the tags in the header we're creating will be in sorted order
-        actual_records.sort_by(|e1, e2| e1.tag.to_u32().cmp(&e2.tag.to_u32()));
+        actual_records.sort_by(|e1, e2| e1.tag.cmp(&e2.tag));
 
         let mut store = Vec::new();
         for record in &mut actual_records {
@@ -612,34 +613,50 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
-    pub(crate) tag: T,
+    pub(crate) tag: u32,
     pub(crate) data: IndexData,
     pub(crate) offset: i32,
     pub(crate) num_items: u32,
+
+    // Marks what type of IndexEntry it is
+    entry_type: PhantomData<T>,
+}
+
+/// Custom Debug impl for the benefit of showing the tag name, if we are familiar with it
+impl<T: Tag> std::fmt::Debug for IndexEntry<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tag = T::from_u32(self.tag);
+        let tag_val = if let Some(val) = tag {
+            format!("{:?}", val)
+        } else {
+            format!("UnknownTag[{:?}]", self.tag)
+        };
+
+        f.debug_struct(&format!("IndexEntry<{}>", T::tag_type_name()))
+         .field("tag", &tag_val)
+         .field("data", &self.data)
+         .field("offset", &self.offset)
+         .field("num_items", &self.num_items)
+         .finish()
+    }
 }
 
 impl<T: Tag> IndexEntry<T> {
     // 16 bytes
     pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
         // first 4 bytes are the tag.
-        let (input, raw_tag) = be_u32(input)?;
-
-        let tag: T = num::FromPrimitive::from_u32(raw_tag).ok_or_else(|| RPMError::InvalidTag {
-            raw_tag,
-            store_type: T::tag_type_name(),
-        })?;
+        let (input, tag) = be_u32(input)?;
         // next 4 bytes is the tag type
-        let (input, raw_tag_type) = be_u32(input)?;
+        let (input, tag_type) = be_u32(input)?;
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
-        let data = IndexData::from_type_as_u32(raw_tag_type).ok_or_else(|| {
-            RPMError::InvalidTagDataType {
-                raw_data_type: raw_tag_type,
+        let data =
+            IndexData::from_type_as_u32(tag_type).ok_or_else(|| RPMError::InvalidTagDataType {
+                raw_data_type: tag_type,
                 store_type: T::tag_type_name(),
-            }
-        })?;
+            })?;
 
         //  next 4 bytes is the offset relative to the beginning of the store
         let (input, offset) = be_i32(input)?;
@@ -654,6 +671,8 @@ impl<T: Tag> IndexEntry<T> {
                 data,
                 offset,
                 num_items,
+
+                entry_type: PhantomData,
             },
         ))
     }
@@ -664,7 +683,7 @@ impl<T: Tag> IndexEntry<T> {
         out: &mut W,
     ) -> Result<(), RPMError> {
         // unwrap() is safe because tags are predefined and are all within u32 range.
-        let mut written = out.write(&self.tag.to_u32().to_be_bytes()).await?;
+        let mut written = out.write(&self.tag.to_be_bytes()).await?;
         written += out.write(&self.data.type_as_u32().to_be_bytes()).await?;
         written += out.write(&self.offset.to_be_bytes()).await?;
         written += out.write(&self.num_items.to_be_bytes()).await?;
@@ -677,7 +696,7 @@ impl<T: Tag> IndexEntry<T> {
 
     pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         // unwrap() is safe because tags are predefined.
-        let mut written = out.write(&self.tag.to_u32().to_be_bytes())?;
+        let mut written = out.write(&self.tag.to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
         written += out.write(&self.num_items.to_be_bytes())?;
@@ -690,10 +709,26 @@ impl<T: Tag> IndexEntry<T> {
 
     pub(crate) fn new(tag: T, offset: i32, data: IndexData) -> IndexEntry<T> {
         IndexEntry {
-            tag,
+            tag: tag.to_u32(),
             offset,
             num_items: data.num_items(),
             data,
+
+            entry_type: PhantomData,
+        }
+    }
+}
+
+impl<T: Tag> fmt::Display for IndexEntry<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tag = T::from_u32(self.tag);
+        let tag_val = if let Some(val) = tag {
+            format!("{:?}", val)
+        } else {
+            format!("<< UnknownTag >> [{:?}]", self.tag)
+        };
+        match &self.data {
+            _ => f.write_fmt(format_args!("{}: {}", tag_val, self.data)),
         }
     }
 }
@@ -957,7 +992,7 @@ mod test {
 
         let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
 
-        assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES);
+        assert_eq!(entry.tag, IndexSignatureTag::HEADER_SIGNATURES as u32);
         assert_eq!(
             entry.data.type_as_u32(),
             IndexData::Bin(Vec::new()).type_as_u32()
