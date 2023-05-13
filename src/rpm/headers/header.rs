@@ -312,6 +312,44 @@ where
     }
 }
 
+impl fmt::Display for Header<IndexSignatureTag> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let summary = format!(
+            "Signature Header - Entries: {},  Data Section Size: {} bytes\n",
+            self.index_header.num_entries, self.index_header.data_section_size
+        );
+        f.write_str(&summary)?;
+        let separator = "=".repeat(summary.len());
+        f.write_str(&separator)?;
+        f.write_str("\n")?;
+
+        for entry in &self.index_entries {
+            f.write_fmt(format_args!("    {}\n", entry))?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Header<IndexTag> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let summary = format!(
+            "Header - Entries: {},  Data Section Size: {} bytes\n",
+            self.index_header.num_entries, self.index_header.data_section_size
+        );
+        f.write_str(&summary)?;
+        let separator = "=".repeat(summary.len());
+        f.write_str(&separator)?;
+        f.write_str("\n")?;
+
+        for entry in &self.index_entries {
+            f.write_fmt(format_args!("    {}\n", entry))?;
+        }
+
+        Ok(())
+    }
+}
+
 impl Header<IndexSignatureTag> {
     /// Create a new full signature header.
     ///
@@ -635,11 +673,11 @@ impl<T: Tag> std::fmt::Debug for IndexEntry<T> {
         };
 
         f.debug_struct(&format!("IndexEntry<{}>", T::tag_type_name()))
-         .field("tag", &tag_val)
-         .field("data", &self.data)
-         .field("offset", &self.offset)
-         .field("num_items", &self.num_items)
-         .finish()
+            .field("tag", &tag_val)
+            .field("data", &self.data)
+            .field("offset", &self.offset)
+            .field("num_items", &self.num_items)
+            .finish()
     }
 }
 
@@ -727,9 +765,7 @@ impl<T: Tag> fmt::Display for IndexEntry<T> {
         } else {
             format!("<< UnknownTag >> [{:?}]", self.tag)
         };
-        match &self.data {
-            _ => f.write_fmt(format_args!("{}: {}", tag_val, self.data)),
-        }
+        f.write_fmt(format_args!("{}: {}", tag_val, self.data))
     }
 }
 
