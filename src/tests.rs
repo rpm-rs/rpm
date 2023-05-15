@@ -319,7 +319,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 
     buf = Vec::new();
     package.metadata.signature.write_signature(&mut buf)?;
-    let signature = Header::parse_signature(&mut buf.as_ref())?;
+    let signature = Header::parse_signature(&mut buf.as_slice())?;
 
     assert_eq!(
         package.metadata.signature.index_header,
@@ -339,12 +339,12 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 
     buf = Vec::new();
     package.metadata.header.write(&mut buf)?;
-    let header = Header::parse(&mut buf.as_ref())?;
+    let header = Header::parse(&mut buf.as_slice())?;
     assert_eq!(package.metadata.header, header);
 
     buf = Vec::new();
     package.write(&mut buf)?;
-    let second_pkg = RPMPackage::parse(&mut buf.as_ref())?;
+    let second_pkg = RPMPackage::parse(&mut buf.as_slice())?;
     assert_eq!(package.content.len(), second_pkg.content.len());
     assert!(package.metadata == second_pkg.metadata);
 

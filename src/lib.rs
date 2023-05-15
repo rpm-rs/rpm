@@ -73,8 +73,6 @@ pub use crate::errors::*;
 pub(crate) mod constants;
 pub use crate::constants::*;
 
-mod sequential_cursor;
-
 mod rpm;
 pub use crate::rpm::*;
 
