@@ -657,7 +657,6 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) data: IndexData,
     pub(crate) offset: i32,
     pub(crate) num_items: u32,
-
     // Marks what type of IndexEntry it is
     entry_type: PhantomData<T>,
 }
@@ -665,15 +664,15 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
 /// Custom Debug impl for the benefit of showing the tag name, if we are familiar with it
 impl<T: Tag> std::fmt::Debug for IndexEntry<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tag = T::from_u32(self.tag);
-        let tag_val = if let Some(val) = tag {
+        let known_tag: Option<T> = num::FromPrimitive::from_u32(self.tag);
+        let tag_name = if let Some(val) = known_tag {
             format!("{:?}", val)
         } else {
             format!("UnknownTag[{:?}]", self.tag)
         };
 
         f.debug_struct(&format!("IndexEntry<{}>", T::tag_type_name()))
-            .field("tag", &tag_val)
+            .field("tag", &tag_name)
             .field("data", &self.data)
             .field("offset", &self.offset)
             .field("num_items", &self.num_items)
@@ -759,13 +758,14 @@ impl<T: Tag> IndexEntry<T> {
 
 impl<T: Tag> fmt::Display for IndexEntry<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tag = T::from_u32(self.tag);
-        let tag_val = if let Some(val) = tag {
+        let known_tag: Option<T> = num::FromPrimitive::from_u32(self.tag);
+        let tag_name = if let Some(val) = known_tag {
             format!("{:?}", val)
         } else {
             format!("<< UnknownTag >> [{:?}]", self.tag)
         };
-        f.write_fmt(format_args!("{}: {}", tag_val, self.data))
+
+        f.write_fmt(format_args!("{}: {}", tag_name, self.data))
     }
 }
 
