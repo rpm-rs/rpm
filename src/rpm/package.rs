@@ -1,6 +1,5 @@
-#[cfg(feature = "signature-meta")]
-use std::io::Seek;
-use std::io::{BufReader, BufWriter};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -12,10 +11,10 @@ use num_traits::FromPrimitive;
 use crate::constants::*;
 use crate::errors::*;
 #[cfg(feature = "signature-meta")]
-use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
 use crate::CompressionType;
+#[cfg(feature = "signature-meta")]
+use std::io::Read;
 
 use super::headers::*;
 use super::Lead;
@@ -52,13 +51,13 @@ pub struct RPMPackage {
 impl RPMPackage {
     /// Open and parse a file at the provided path as an RPM package
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
-        let rpm_file = std::fs::File::open(path.as_ref())?;
-        let mut buf_reader = BufReader::new(rpm_file);
+        let rpm_file = fs::File::open(path.as_ref())?;
+        let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse an RPM package from an existing buffer
-    pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -66,7 +65,7 @@ impl RPMPackage {
     }
 
     /// Write the RPM package to a buffer
-    pub fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
@@ -74,7 +73,7 @@ impl RPMPackage {
 
     /// Write the RPM package to a file
     pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), RPMError> {
-        self.write(&mut BufWriter::new(std::fs::File::create(path)?))
+        self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
     #[cfg(feature = "async-futures")]
@@ -130,9 +129,8 @@ impl RPMPackage {
 
         let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
         let mut header_and_content_cursor =
-            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
+            io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
 
-        header_and_content_cursor.rewind()?;
         let rsa_signature_spanning_header_and_archive =
             signer.sign(&mut header_and_content_cursor)?;
 
@@ -167,14 +165,14 @@ impl RPMPackage {
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA)?;
 
-        crate::signature::echo_signature("signature_header(header only)", signature_header_only);
+        signature::echo_signature("signature_header(header only)", signature_header_only);
 
         let signature_header_and_content = self
             .metadata
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP)?;
 
-        crate::signature::echo_signature(
+        signature::echo_signature(
             "signature_header(header and content)",
             signature_header_and_content,
         );
@@ -183,8 +181,7 @@ impl RPMPackage {
         self.verify_digests()?;
 
         let header_and_content_cursor =
-            SeqCursor::new(&[header_bytes.as_slice(), self.content.as_slice()]);
-
+            io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
         verifier.verify(header_and_content_cursor, signature_header_and_content)?;
 
         Ok(())
@@ -278,13 +275,13 @@ pub struct RPMPackageMetadata {
 impl RPMPackageMetadata {
     /// Open and parse RPMPackageMetadata from the file at the provided path
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
-        let rpm_file = std::fs::File::open(path.as_ref())?;
-        let mut buf_reader = BufReader::new(rpm_file);
+        let rpm_file = fs::File::open(path.as_ref())?;
+        let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse RPMPackageMetadata from the provided reader
-    pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;
@@ -298,7 +295,7 @@ impl RPMPackageMetadata {
         })
     }
 
-    pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;

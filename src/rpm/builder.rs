@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 
+use std::fs;
+#[cfg(feature = "signature-meta")]
+use std::io;
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -16,8 +19,6 @@ use crate::constants::*;
 use crate::errors::*;
 
 #[cfg(feature = "signature-meta")]
-use crate::sequential_cursor::SeqCursor;
-#[cfg(feature = "signature-meta")]
 use crate::signature;
 
 use crate::RPMPackage;
@@ -25,12 +26,12 @@ use crate::RPMPackageMetadata;
 use crate::{CompressionType, CompressionWithLevel, Digests};
 
 #[cfg(unix)]
-fn file_mode(file: &std::fs::File) -> Result<u32, RPMError> {
+fn file_mode(file: &fs::File) -> Result<u32, RPMError> {
     Ok(file.metadata()?.permissions().mode())
 }
 
 #[cfg(windows)]
-fn file_mode(_file: &std::fs::File) -> Result<u32, RPMError> {
+fn file_mode(_file: &fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
@@ -154,7 +155,7 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
-    ///             .build_time(rpm::chrono::Utc::now())
+    ///             .build_time(chrono::Utc::now())
     ///             .build()?;
     /// # Ok(())
     /// # }
@@ -224,7 +225,7 @@ impl RPMBuilder {
     ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
     /// - Secondly."#,
-    ///         rpm::chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+    ///         chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
     ///     )
     ///     .add_changelog_entry(
     ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
@@ -258,7 +259,7 @@ impl RPMBuilder {
         P: AsRef<Path>,
         T: Into<RPMFileOptions>,
     {
-        let mut input = std::fs::File::open(source)?;
+        let mut input = fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
         let mut options = options.into();
@@ -474,7 +475,7 @@ impl RPMBuilder {
     #[cfg(feature = "signature-meta")]
     pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
     where
-        S: signature::Signing<crate::signature::algorithm::RSA>,
+        S: signature::Signing<signature::algorithm::RSA>,
     {
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
@@ -499,7 +500,7 @@ impl RPMBuilder {
         let signature_header = {
             let rsa_sig_header_only = signer.sign(header.as_slice())?;
 
-            let cursor = SeqCursor::new(&[header.as_slice(), content.as_slice()]);
+            let cursor = io::Cursor::new(header).chain(io::Cursor::new(&content));
             let rsa_sig_header_and_archive = signer.sign(cursor)?;
 
             builder

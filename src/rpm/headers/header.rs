@@ -593,7 +593,6 @@ impl<T: Tag> IndexEntry<T> {
                 data,
                 offset,
                 num_items,
-
                 entry_type: PhantomData,
             },
         ))
@@ -618,7 +617,6 @@ impl<T: Tag> IndexEntry<T> {
             offset,
             num_items: data.num_items(),
             data,
-
             entry_type: PhantomData,
         }
     }
