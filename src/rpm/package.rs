@@ -301,7 +301,15 @@ impl RPMPackageMetadata {
         })
     }
 
-    pub(crate) fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    /// Open and parse RPMPackageMetadata from the file at the provided path
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+        let rpm_file = std::fs::File::open(path.as_ref())?;
+        let mut buf_reader = BufReader::new(rpm_file);
+        Self::parse(&mut buf_reader)
+    }
+
+    /// Parse RPMPackageMetadata from the provided reader
+    pub fn parse<T: std::io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;

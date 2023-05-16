@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default compression for building a package, if the compression is not overridden using
   the above method, is now `Gzip` rather than `None`. This is chosen to keep package
   sizes reasonable while maintaining maximum compatibility and minimizing computational cost.
+- Exposed `RPMPackageMetadata::parse()` and `RPMPackageMetadata::open()` so that it is
+  possible to read only package metadata without loading the payload into memory. This saves
+  time and memory over reading the entire file.
 
 ### Changed
 
