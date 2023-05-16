@@ -77,8 +77,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = common::rpm_ima_signed_file_path();
-    let package = RPMPackage::open(rpm_file_path)?;
-    let metadata = &package.metadata;
+    let metadata = RPMPackageMetadata::open(rpm_file_path)?;
 
     let signatures = metadata.get_file_ima_signatures()?;
 
