@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 0.11.0
+
 ### Breaking Changes
 
 - `CompressionType::None` is now returned instead of an error when calling `get_compression()` on
