@@ -626,10 +626,18 @@ impl RPMPackageMetadata {
 
     #[inline]
     pub fn get_payload_compressor(&self) -> Result<CompressionType, RPMError> {
-        let comp_str = self
-            .header
-            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)?;
-        CompressionType::from_str(comp_str)
+        self.header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
+            .map_or_else(
+                |e| {
+                    if matches!(e, RPMError::TagNotFound(_)) {
+                        Ok(CompressionType::None)
+                    } else {
+                        Err(e)
+                    }
+                },
+                CompressionType::from_str,
+            )
     }
 
     #[inline]
