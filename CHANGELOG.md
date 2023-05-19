@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- `CompressionType::None` is now returned instead of an error when calling `get_compression()` on
+  a package with an uncompressed payload.
+- Moved many constants to the bitflag-like types `DependencyFlags`, `FileVerifyFlags` and `FileFlags`
+- Changed the `FileEntry.category` field to `FileEntry.flags` and changed its type from an
+  enum to a bitflag-like type.
+- Renamed `FileDigestAlgorithm` to `DigestAlgorithm`, renamed `UnsupportedFileDigestAlgorithm`
+  to `UnsupportedDigestAlgorithm`
+
 ### Added
 
 - The compression level to be used during package building is now configurable by passing
@@ -19,24 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time and memory over reading the entire file.
 - Exposed the fields on the `Dependency` and `RPMFileEntry` structs.
 
-### Changed
-
-- `flate2` crate is now used in place of `libflate`. `flate2` is faster in both compression
-  and decompression and has better ratios, and includes features which `libflate` does not
-  such as configurable compression levels.
-- Moved many constants to the bitflag-like types `DependencyFlags`, `FileVerifyFlags` and `FileFlags`
-- Changed the `FileEntry.category` field to `FileEntry.flags` and changed its type from an
-  enum to a bitflag-like type.
-- Renamed `FileDigestAlgorithm` to `DigestAlgorithm`, renamed `UnsupportedFileDigestAlgorithm`
-  to `UnsupportedDigestAlgorithm`
-
-### Fixed
-
-- Made parsing more robust in the face of unknown or unexpected tags. This will prevent new
-  packages from causing the program to crash if rpm-rs does not yet have a constant defined.
-  Also, RPMs in the wild are "messy" and it is sadly commonplace for tags to present in the
-  wrong header.
-
 ### Removed
 
 - Removed async support. This crate is poorly suited for use in an async runtime as IO is intermixed
@@ -45,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alternative, if you need to perform actions with this crate within an async runtime, use the
   `spawn_blocking` function on your executor of choice e.g.
   <https://docs.rs/tokio/latest/tokio/index.html#cpu-bound-tasks-and-blocking-code>
+
+### Changed
+
+- `flate2` crate is now used in place of `libflate`. `flate2` is faster in both compression
+  and decompression and has better ratios, and includes features which `libflate` does not
+  such as configurable compression levels.
+
+### Fixed
+
+- Made parsing more robust in the face of unknown or unexpected tags. This will prevent new
+  packages from causing the program to crash if rpm-rs does not yet have a constant defined.
+  Also, RPMs in the wild are "messy" and it is sadly commonplace for tags to present in the
+  wrong header.
 
 ## 0.10.0
 

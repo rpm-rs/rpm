@@ -58,12 +58,11 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = [0u8; 10];
         f.read_exact(&mut buf)?;
 
-        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().ok() {
-            Some(CompressionType::Gzip) => &[0x1f, 0x8b],
-            Some(CompressionType::Zstd) => &[0x28, 0xb5, 0x2f, 0xfd],
-            Some(CompressionType::Xz) => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
-            None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
-            a => unimplemented!("{:?}", a),
+        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().unwrap() {
+            CompressionType::Gzip => &[0x1f, 0x8b],
+            CompressionType::Zstd => &[0x28, 0xb5, 0x2f, 0xfd],
+            CompressionType::Xz => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
+            CompressionType::None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
         };
 
         assert!(buf.starts_with(payload_magic));
