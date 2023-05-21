@@ -450,7 +450,7 @@ impl RPMPackageMetadata {
             (Ok(names), Ok(flags), Ok(versions)) => {
                 let v = Vec::from_iter(itertools::multizip((names, flags, versions)).map(
                     |(name, flags, version)| Dependency {
-                        dep_name: name.to_owned(),
+                        name: name.to_owned(),
                         flags: DependencyFlags::from_bits_retain(flags),
                         version: version.to_owned(),
                     },

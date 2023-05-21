@@ -630,7 +630,7 @@ impl RPMBuilder {
         let mut provide_versions = Vec::new();
 
         for d in self.provides.into_iter() {
-            provide_names.push(d.dep_name);
+            provide_names.push(d.name);
             provide_flags.push(d.flags.bits());
             provide_versions.push(d.version);
         }
@@ -640,7 +640,7 @@ impl RPMBuilder {
         let mut obsolete_versions = Vec::new();
 
         for d in self.obsoletes.into_iter() {
-            obsolete_names.push(d.dep_name);
+            obsolete_names.push(d.name);
             obsolete_flags.push(d.flags.bits());
             obsolete_versions.push(d.version);
         }
@@ -650,7 +650,7 @@ impl RPMBuilder {
         let mut require_versions = Vec::new();
 
         for d in self.requires.into_iter() {
-            require_names.push(d.dep_name);
+            require_names.push(d.name);
             require_flags.push(d.flags.bits());
             require_versions.push(d.version);
         }
@@ -660,7 +660,7 @@ impl RPMBuilder {
         let mut conflicts_versions = Vec::new();
 
         for d in self.conflicts.into_iter() {
-            conflicts_names.push(d.dep_name);
+            conflicts_names.push(d.name);
             conflicts_flags.push(d.flags.bits());
             conflicts_versions.push(d.version);
         }
@@ -670,7 +670,7 @@ impl RPMBuilder {
         let mut recommends_versions = Vec::new();
 
         for d in self.recommends.into_iter() {
-            recommends_names.push(d.dep_name);
+            recommends_names.push(d.name);
             recommends_flags.push(d.flags.bits());
             recommends_versions.push(d.version);
         }
@@ -680,7 +680,7 @@ impl RPMBuilder {
         let mut suggests_versions = Vec::new();
 
         for d in self.suggests.into_iter() {
-            suggests_names.push(d.dep_name);
+            suggests_names.push(d.name);
             suggests_flags.push(d.flags.bits());
             suggests_versions.push(d.version);
         }
@@ -690,7 +690,7 @@ impl RPMBuilder {
         let mut enhances_versions = Vec::new();
 
         for d in self.enhances.into_iter() {
-            enhances_names.push(d.dep_name);
+            enhances_names.push(d.name);
             enhances_flags.push(d.flags.bits());
             enhances_versions.push(d.version);
         }
@@ -700,7 +700,7 @@ impl RPMBuilder {
         let mut supplements_versions = Vec::new();
 
         for d in self.supplements.into_iter() {
-            supplements_names.push(d.dep_name);
+            supplements_names.push(d.name);
             supplements_flags.push(d.flags.bits());
             supplements_versions.push(d.version);
         }

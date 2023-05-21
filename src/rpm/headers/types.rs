@@ -15,17 +15,16 @@ pub struct RPMPackageSegmentOffsets {
 
 /// Describes a file present in the rpm file.
 pub struct RPMFileEntry {
-    pub(crate) size: u64,
-    pub(crate) mode: FileMode,
-    pub(crate) modified_at: u32,
-    pub(crate) sha_checksum: String,
-    pub(crate) link: String,
-    pub(crate) flags: FileFlags,
-    pub(crate) user: String,
-    pub(crate) group: String,
-    pub(crate) base_name: String,
-    #[allow(unused)]
-    pub(crate) dir: String,
+    pub size: u64,
+    pub mode: FileMode,
+    pub modified_at: u32,
+    pub sha_checksum: String,
+    pub link: String,
+    pub flags: FileFlags,
+    pub user: String,
+    pub group: String,
+    pub base_name: String,
+    pub dir: String,
     pub(crate) content: Vec<u8>,
 }
 
@@ -260,9 +259,9 @@ impl From<RPMFileOptionsBuilder> for RPMFileOptions {
 /// Description of a dependency as present in a RPM header record.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Dependency {
-    pub(crate) dep_name: String,
-    pub(crate) flags: DependencyFlags,
-    pub(crate) version: String,
+    pub name: String,
+    pub flags: DependencyFlags,
+    pub version: String,
 }
 
 impl Dependency {
@@ -335,7 +334,7 @@ impl Dependency {
 
     fn new(dep_name: String, flags: DependencyFlags, version: String) -> Self {
         Dependency {
-            dep_name,
+            name: dep_name,
             flags,
             version,
         }
