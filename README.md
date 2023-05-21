@@ -1,7 +1,6 @@
 [![crates.io](https://img.shields.io/crates/v/rpm.svg)](https://crates.io/crates/rpm)
 [![docs.rs](https://docs.rs/rpm/badge.svg)](https://docs.rs/rpm)
-[![MSRV](https://img.shields.io/badge/rustc-1.63.0+-ab6000.svg)](https://blog.rust-lang.org/2022/08/11/Rust-1.63.0.html)
-![status](https://github.com/rpm-rs/rpm/actions/workflows/ci.yml/badge.svg)
+[![MSRV](https://img.shields.io/badge/rustc-1.65.0+-ab6000.svg)](https://blog.rust-lang.org/2022/11/03/Rust-1.65.0.html)
 
 ## RPM-RS
 
@@ -12,7 +11,7 @@ A pure rust library for parsing and creating RPM files.
 - Easy to use API
 - Pure rust to make it easy to use in larger Projects
 - Independence of Spec files. Pure programmatic interface for Packaging.
-- Compatibility  to Centos 7 / Fedora (I may extend test cases for SUSE)
+- Compatibility to Centos 7 / Fedora (I may extend test cases for SUSE)
 
 ### Non Goals
 
@@ -25,21 +24,17 @@ This library does not build software like rpmbuild. It is meant for finished art
 - [x] RPM Creation
 - [x] Basic RPM Reading
 - [x] RPM Signing and Signature Verification
-- [ ] High Level API for RPM Reading
-
-
+- [x] High Level API for RPM Reading
 
 ### Examples
 
 ```rust
-use std::str::FromStr;
-
 use rpm;
 use rpm::signature::pgp::{Signer,Verifier};
 
 let raw_secret_key = std::fs::read("/path/to/gpg.secret.key")?;
 let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-            .compression(rpm::Compressor::from_str("gzip")?)
+            .compression(rpm::CompressionType::Zstd)
             .with_file(
                 "./awesome-config.toml",
                 rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
@@ -63,12 +58,22 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
             .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
             .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?);
 
-let mut f = std::fs::File::create("./awesome.rpm")?;
-pkg.write(&mut f)?;
+pkg.write_file("./awesome.rpm")?;
 
 // reading
 let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
 let pkg = rpm::RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+
+let name = pkg.metadata.get_name()?;
+let version = pkg.metadata.get_version()?;
+let release = pkg.metadata.get_release()?;
+let arch = pkg.metadata.get_arch()?;
+
+println!("{}-{}-{}.{}", name, version, release, arch);
+
+for changelog in pkg.metadata.get_changelog_entries()? {
+    println!("{}\n{}\n", changelog.name, changelog.description);
+}
 
 // verifying
 pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
