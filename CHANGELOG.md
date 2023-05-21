@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exposed `RPMPackageMetadata::parse()` and `RPMPackageMetadata::open()` so that it is
   possible to read only package metadata without loading the payload into memory. This saves
   time and memory over reading the entire file.
+- Exposed the fields on the `Dependency` and `RPMFileEntry` structs.
 
 ### Changed
 

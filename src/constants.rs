@@ -1,7 +1,6 @@
 //! RPM specific constants
 //!
-//! These constants were extracted from the rpm upstream project
-//! C headers.
+//! These constants were extracted from the rpm upstream project C headers.
 
 use std::fmt::Display;
 
