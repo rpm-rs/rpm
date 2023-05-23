@@ -76,13 +76,6 @@ impl RPMPackage {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
-    #[cfg(feature = "async-futures")]
-    pub async fn write_async<W: AsyncWrite + Unpin>(&self, out: &mut W) -> Result<(), RPMError> {
-        self.metadata.write_async(out).await?;
-        out.write_all(&self.content).await?;
-        Ok(())
-    }
-
     /// Prepare both header and content digests as used by the `SignatureIndex`.
     pub(crate) fn create_sig_header_digests(
         header: &[u8],
