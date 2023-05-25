@@ -46,9 +46,7 @@ fn system_time_as_u32(when: std::time::SystemTime) -> u32 {
     date_time_as_u32(&dt)
 }
 
-/// Builder pattern for a full rpm file.
-///
-/// Preferred method of creating a rpm file.
+/// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
 pub struct RPMBuilder {
     name: String,
@@ -97,6 +95,24 @@ pub struct RPMBuilder {
 }
 
 impl RPMBuilder {
+    /// Create a new package, providing the required metadata.
+    ///
+    /// Additional metadata is added using the builder pattern. However `name`, `version`, `license`,
+    /// `arch`, and `description` are mandatory and must be provided.
+    ///
+    /// `name` - The name of the software being packaged. It should not contain any whitespace.
+    /// `version` - The version of the software being packaged. It should be as close as possible to
+    ///     the format of the original software's version.
+    /// `license` - The license terms applicable to the software being packaged (preferably using SPDX)
+    /// `arch` - The architecture that the package was built for, or "noarch" if not architecture specific
+    /// `description` - A detailed description of what the packaged software does.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package").build();
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
         RPMBuilder {
             name: name.to_string(),
@@ -254,6 +270,31 @@ impl RPMBuilder {
         self
     }
 
+    /// Add a file to the package.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rpm::chrono::TimeZone;
+    ///
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .with_file(
+    ///         "./awesome-config.toml",
+    ///         rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+    ///     )?
+    ///     // file mode is inherited from source file
+    ///     .with_file(
+    ///         "./awesome-bin",
+    ///         rpm::RPMFileOptions::new("/usr/bin/awesome"),
+    ///     )?
+    ///      .with_file(
+    ///         "./awesome-config.toml",
+    ///         // you can set a custom mode and custom user too
+    ///         rpm::RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
+    ///     )?
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
     where
         P: AsRef<Path>,
