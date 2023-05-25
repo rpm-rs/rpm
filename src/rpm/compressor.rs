@@ -2,6 +2,7 @@ use std::io::Write;
 
 use crate::errors::*;
 
+/// Supported payload compression types.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum CompressionType {
     #[default]
@@ -81,6 +82,8 @@ impl Compressor {
     }
 }
 
+/// Supported compression types, with an associated compression level. This is used for setting
+/// a custom compression configuration during RPM building.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompressionWithLevel {
     None,

@@ -309,7 +309,6 @@ impl RPMPackageMetadata {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
     }
 
-    // TODO: infalliable?  default to 0
     /// Get the package epoch
     #[inline]
     pub fn get_epoch(&self) -> Result<u32, RPMError> {
@@ -336,7 +335,7 @@ impl RPMPackageMetadata {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
     }
 
-    /// Get the package vendor
+    /// Get the package vendor - the organization that produced the package
     #[inline]
     pub fn get_vendor(&self) -> Result<&str, RPMError> {
         self.header

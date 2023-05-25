@@ -32,6 +32,7 @@ where
         Self::parse_header(index_header, &buf[..])
     }
 
+    /// Given a pre-parsed index header, parse the rest of the header
     fn parse_header(index_header: IndexHeader, mut bytes: &[u8]) -> Result<Header<T>, RPMError> {
         // parse all entries
         let mut entries: Vec<IndexEntry<T>> = Vec::new();
@@ -550,6 +551,8 @@ pub(crate) struct IndexEntry<T: num::FromPrimitive> {
 impl<T: Tag> std::fmt::Debug for IndexEntry<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let known_tag: Option<T> = num::FromPrimitive::from_u32(self.tag);
+        // An RPM package could have tags which we don't know about, or expect. So if we don't
+        // recognize the tag as being a known valid one for this header type, print UnknownTag[$id]
         let tag_name = if let Some(val) = known_tag {
             format!("{:?}", val)
         } else {
@@ -625,6 +628,8 @@ impl<T: Tag> IndexEntry<T> {
 impl<T: Tag> fmt::Display for IndexEntry<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let known_tag: Option<T> = num::FromPrimitive::from_u32(self.tag);
+        // An RPM package could have tags which we don't know about, or expect. So if we don't
+        // recognize the tag as being a known valid one for this header type, print << UnknownTag >> [$id]
         let tag_name = if let Some(val) = known_tag {
             format!("{:?}", val)
         } else {
