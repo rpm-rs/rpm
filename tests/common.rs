@@ -37,3 +37,31 @@ pub fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
     let verification_key = include_bytes!("../test_assets/public_key.asc");
     (signing_key.to_vec(), verification_key.to_vec())
 }
+
+pub fn load_rsa_keys() -> (Vec<u8>, Vec<u8>) {
+    let signing_key_path =
+        cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/secret_rsa4096.asc");
+    let signing_key = std::fs::read(signing_key_path).unwrap();
+
+    let verification_key_path =
+        cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/public_rsa4096.asc");
+    let verification_key = std::fs::read(verification_key_path).unwrap();
+
+    (signing_key.to_vec(), verification_key.to_vec())
+}
+
+pub fn eddsa_private_key() -> Vec<u8> {
+    let private_key =
+        cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/secret_ed25519.asc");
+    std::fs::read(private_key).unwrap()
+}
+
+pub fn eddsa_public_key() -> Vec<u8> {
+    let public_key =
+        cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/public_ed25519.asc");
+    std::fs::read(public_key).unwrap()
+}
+
+pub fn load_eddsa_keys() -> (Vec<u8>, Vec<u8>) {
+    (eddsa_private_key(), eddsa_public_key())
+}
