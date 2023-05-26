@@ -154,7 +154,7 @@ impl SignatureHeaderBuilder<WithDigest> {
 mod test {
     use super::*;
     #[test]
-    fn signature_builder_w_digest_and_signature() {
+    fn signature_builder_w_digest_and_rsa_signature() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
 
         let sig_header_only = [0u8; 32];
@@ -171,7 +171,7 @@ mod test {
                 digest_header_sha256.as_str(),
                 &digest_header_and_archive[..],
             )
-            .add_signature(&sig_header_only[..], &sig_header_and_archive[..])
+            .add_rsa_signature(&sig_header_only[..], &sig_header_and_archive[..])
             .build(32);
 
         assert!(header
@@ -179,6 +179,41 @@ mod test {
             .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_PGP)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
+            .is_ok());
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .is_ok());
+    }
+
+    #[test]
+    fn signature_builder_w_digest_and_eddsa_signature() {
+        let builder = SignatureHeaderBuilder::<Empty>::new();
+
+        let sig_header_only = [0u8; 32];
+        let sig_header_and_archive = [0u8; 32];
+
+        let digest_header_sha1 = hex::encode(&[0u8; 64]);
+        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+
+        let digest_header_and_archive = [0u8; 64];
+
+        let header = builder
+            .add_digest(
+                digest_header_sha1.as_str(),
+                digest_header_sha256.as_str(),
+                &digest_header_and_archive[..],
+            )
+            .add_eddsa_signature(&sig_header_only[..])
+            .build(32);
+
+        assert!(header
+            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_DSA)
             .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)

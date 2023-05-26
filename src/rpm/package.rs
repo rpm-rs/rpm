@@ -130,7 +130,7 @@ impl Package {
         t: impl TryInto<Timestamp, Error = impl Debug>,
     ) -> Result<(), Error>
     where
-        S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
+        S: signature::Signing<Signature = Vec<u8>>,
     {
         let t = t.try_into().unwrap();
         // create a temporary byte repr of the header
@@ -148,23 +148,31 @@ impl Package {
         } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
 
         let signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
-        let mut header_and_content_cursor =
-            io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
 
-        let signature_spanning_header_and_archive = signer.sign(&mut header_and_content_cursor, t)?;
+        let builder = Header::<IndexSignatureTag>::builder().add_digest(
+            &header_digest_sha1,
+            &header_digest_sha256,
+            &header_and_content_digest,
+        );
 
-        // NOTE: size stands for the combined size of header and payload.
-        self.metadata.signature = Header::<IndexSignatureTag>::builder()
-            .add_digest(
-                &header_digest_sha1,
-                &header_digest_sha256,
-                &header_and_content_digest,
-            )
-            .add_rsa_signature(
-                signature_spanning_header_only.as_slice(),
-                signature_spanning_header_and_archive.as_slice(),
-            )
-            .build(header_and_content_len);
+        let builder = match signer.algorithm() {
+            crate::signature::AlgorithmType::RSA => {
+                let mut header_and_content_cursor =
+                    io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
+
+                let signature_spanning_header_and_archive =
+                    signer.sign(&mut header_and_content_cursor, t)?;
+                builder.add_rsa_signature(
+                    signature_spanning_header_only.as_slice(),
+                    signature_spanning_header_and_archive.as_slice(),
+                )
+            }
+            crate::signature::AlgorithmType::EdDSA => {
+                builder.add_eddsa_signature(signature_spanning_header_only.as_slice())
+            }
+        };
+
+        self.metadata.signature = builder.build(header_and_content_len);
         Ok(())
     }
 
@@ -180,30 +188,50 @@ impl Package {
     {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
-
-        let signature_header_only = self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA)?;
-
-        signature::echo_signature("signature_header(header only)", signature_header_only);
-
-        let signature_header_and_content = self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP)?;
-
-        signature::echo_signature(
-            "signature_header(header and content)",
-            signature_header_and_content,
-        );
-
-        verifier.verify(header_bytes.as_slice(), signature_header_only)?;
         self.verify_digests()?;
 
-        let header_and_content_cursor =
-            io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
-        verifier.verify(header_and_content_cursor, signature_header_and_content)?;
+        match verifier.algorithm() {
+            signature::AlgorithmType::RSA => {
+                if let Ok(signature_header_and_content) = self
+                    .metadata
+                    .signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP)
+                {
+                    signature::echo_signature(
+                        "signature_header(header and content)",
+                        signature_header_and_content,
+                    );
+                    let header_and_content_cursor =
+                        io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
+                    verifier.verify(header_and_content_cursor, signature_header_and_content)?;
+                }
+
+                if let Ok(signature_header_only) = self
+                    .metadata
+                    .signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA)
+                {
+                    signature::echo_signature(
+                        "signature_header(header only)",
+                        signature_header_only,
+                    );
+                    verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+                }
+            }
+            signature::AlgorithmType::EdDSA => {
+                if let Ok(signature_header_only) = self
+                    .metadata
+                    .signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA)
+                {
+                    signature::echo_signature(
+                        "signature_header(header only)",
+                        signature_header_only,
+                    );
+                    verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+                }
+            }
+        }
 
         Ok(())
     }

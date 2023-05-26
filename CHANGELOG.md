@@ -22,11 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Package::sign_with_timestamp` method.s
 - The "rpmversion" tag is now populated so that packages know which library (and version)
   they were built with.
+- Support for signing and verification with EdDSA signatures
 
 ### Changed
 
 - Build time metadata is now included in the built package by default
 - The algorithm type is no longer baked into the Signing and Verifying APIs as it is unnecessary.
+
+### Breaking Changes
+
+- Several of the signer and verifier trait APIs were changed
 
 ### Fixed
 

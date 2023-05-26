@@ -1,6 +1,7 @@
 use std::io;
 
 use thiserror::Error;
+use pgp;
 
 use crate::{DigestAlgorithm, TimestampError};
 
@@ -79,6 +80,10 @@ pub enum Error {
 
     #[error("unsupported digest algorithm {0:?}")]
     UnsupportedDigestAlgorithm(DigestAlgorithm),
+
+    #[cfg(feature = "signature-pgp")]
+    #[error("unsupported PGP key type {0:?}")]
+    UnsupportedPGPKeyType(pgp::crypto::public_key::PublicKeyAlgorithm),
 
     #[error("invalid file mode {raw_mode} - {reason}")]
     InvalidFileMode { raw_mode: i32, reason: &'static str },
