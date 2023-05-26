@@ -18,7 +18,7 @@ pub struct Signer {
     secret_key: ::pgp::composed::signed_key::SignedSecretKey,
 }
 
-impl traits::Signing<traits::algorithm::RSA> for Signer {
+impl traits::Signing for Signer {
     type Signature = Vec<u8>;
 
     /// Despite the fact the API suggest zero copy pattern,
@@ -35,7 +35,7 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
         let sig_cfg = SignatureConfig {
             version: SignatureVersion::V4,
             typ: SignatureType::Binary,
-            pub_alg: ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
+            pub_alg: self.secret_key.algorithm(),
             hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
             issuer: Some(self.secret_key.key_id()),
             created: Some(t),
@@ -107,7 +107,7 @@ impl Verifier {
     }
 }
 
-impl traits::Verifying<traits::algorithm::RSA> for Verifier {
+impl traits::Verifying for Verifier {
     type Signature = Vec<u8>;
     /// Despite the fact the API suggest zero copy pattern,
     /// it internally creates a copy until crate `pgp` provides

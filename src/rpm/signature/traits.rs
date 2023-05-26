@@ -5,38 +5,21 @@
 
 #[allow(unused)]
 use crate::errors::*;
+use std::fmt::Debug;
+use std::io::Read;
 use crate::Timestamp;
-use std::{fmt::Debug, io};
-
-pub mod algorithm {
-
-    pub trait Algorithm: super::Debug {}
-    /// currently only RSA is required
-    ///
-    /// Farsight for future algorithm extensions of rpm
-    /// without breaking the API
-    #[derive(Debug, Clone, Copy)]
-    #[allow(non_camel_case_types)]
-
-    pub struct RSA;
-
-    impl Algorithm for RSA {}
-}
-
 /// Signing trait to be implement for RPM signing.
-pub trait Signing<A>: Debug
+pub trait Signing: Debug
 where
-    A: algorithm::Algorithm,
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
     fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, Error>;
 }
 
-impl<A, T, S> Signing<A> for &T
+impl<T, S> Signing for &T
 where
-    T: Signing<A, Signature = S>,
-    A: algorithm::Algorithm,
+    T: Signing<Signature = S>,
     S: AsRef<[u8]>,
 {
     type Signature = S;
@@ -46,19 +29,17 @@ where
 }
 
 /// Verification trait to be implement for RPM signature verification.
-pub trait Verifying<A>: Debug
+pub trait Verifying: Debug
 where
-    A: algorithm::Algorithm,
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
     fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), Error>;
 }
 
-impl<A, T, S> Verifying<A> for &T
+impl<T, S> Verifying for &T
 where
-    T: Verifying<A, Signature = S>,
-    A: algorithm::Algorithm,
+    T: Verifying<Signature = S>,
     S: AsRef<[u8]>,
 {
     type Signature = S;
@@ -86,10 +67,7 @@ pub mod key {
 }
 
 /// Implement unreachable signer for empty tuple `()`
-impl<A> Signing<A> for std::marker::PhantomData<A>
-where
-    A: algorithm::Algorithm,
-{
+impl<T> Signing for std::marker::PhantomData<T> {
     type Signature = Vec<u8>;
     fn sign(&self, _data: impl io::Read, _t: Timestamp) -> Result<Self::Signature, Error> {
         unreachable!("if you want to verify, you need to implement `sign` of the `Signing` trait")
@@ -97,10 +75,7 @@ where
 }
 
 /// Implement unreachable verifier for the empty tuple`()`
-impl<A> Verifying<A> for std::marker::PhantomData<A>
-where
-    A: algorithm::Algorithm,
-{
+impl<T> Verifying for std::marker::PhantomData<T> {
     type Signature = Vec<u8>;
     fn verify(&self, _data: impl io::Read, _x: &[u8]) -> Result<(), Error> {
         unreachable!(

@@ -319,28 +319,6 @@ impl fmt::Display for Header<IndexTag> {
 }
 
 impl Header<IndexSignatureTag> {
-    /// Create a new full signature header.
-    ///
-    /// `size` is combined size of header, header store and the payload
-    ///
-    /// PGP and RSA tags expect signatures according to [RFC2440](https://tools.ietf.org/html/rfc2440)
-    ///
-    /// Please use the [`builder`](Self::builder()) which has modular and safe API.
-    #[cfg(feature = "signature-meta")]
-    pub(crate) fn new_signature_header(
-        headers_plus_payload_size: usize,
-        md5sum: &[u8],
-        sha1: &str,
-        sha256: &str,
-        rsa_spanning_header: &[u8],
-        rsa_spanning_header_and_archive: &[u8],
-    ) -> Self {
-        SignatureHeaderBuilder::new()
-            .add_digest(sha1, sha256, md5sum)
-            .add_signature(rsa_spanning_header, rsa_spanning_header_and_archive)
-            .build(headers_plus_payload_size)
-    }
-
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
         SignatureHeaderBuilder::<Empty>::new()
     }

@@ -101,7 +101,7 @@ impl Package {
     #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), Error>
     where
-        S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
+        S: signature::Signing<Signature = Vec<u8>>,
     {
         self.sign_with_timestamp(signer, Timestamp::now())
     }
@@ -147,23 +147,24 @@ impl Package {
             header_and_content_digest,
         } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
 
-        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
+        let signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
         let mut header_and_content_cursor =
             io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
 
-        let rsa_signature_spanning_header_and_archive =
-            signer.sign(&mut header_and_content_cursor, t)?;
+        let signature_spanning_header_and_archive = signer.sign(&mut header_and_content_cursor, t)?;
 
         // NOTE: size stands for the combined size of header and payload.
-        self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
-            header_and_content_len,
-            &header_and_content_digest,
-            &header_digest_sha1,
-            &header_digest_sha256,
-            rsa_signature_spanning_header_only.as_slice(),
-            rsa_signature_spanning_header_and_archive.as_slice(),
-        );
-
+        self.metadata.signature = Header::<IndexSignatureTag>::builder()
+            .add_digest(
+                &header_digest_sha1,
+                &header_digest_sha256,
+                &header_and_content_digest,
+            )
+            .add_rsa_signature(
+                signature_spanning_header_only.as_slice(),
+                signature_spanning_header_and_archive.as_slice(),
+            )
+            .build(header_and_content_len);
         Ok(())
     }
 
@@ -175,7 +176,7 @@ impl Package {
     #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), Error>
     where
-        V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
+        V: signature::Verifying<Signature = Vec<u8>>,
     {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.metadata.header.write(&mut header_bytes)?;
