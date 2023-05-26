@@ -1,4 +1,4 @@
-use super::traits;
+use super::{traits, AlgorithmType};
 use crate::errors::Error;
 use crate::Timestamp;
 
@@ -16,6 +16,16 @@ use ::pgp::packet::*;
 #[derive(Clone, Debug)]
 pub struct Signer {
     secret_key: ::pgp::composed::signed_key::SignedSecretKey,
+    algorithm: traits::AlgorithmType,
+}
+
+impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorithm {
+    fn from(value: traits::AlgorithmType) -> Self {
+        match value {
+            traits::AlgorithmType::RSA => ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
+            traits::AlgorithmType::EdDSA => ::pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA,
+        }
+    }
 }
 
 impl traits::Signing for Signer {
@@ -35,7 +45,7 @@ impl traits::Signing for Signer {
         let sig_cfg = SignatureConfig {
             version: SignatureVersion::V4,
             typ: SignatureType::Binary,
-            pub_alg: self.secret_key.algorithm(),
+            pub_alg: self.algorithm().into(),
             hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
             issuer: Some(self.secret_key.key_id()),
             created: Some(t),
@@ -59,6 +69,10 @@ impl traits::Signing for Signer {
 
         Ok(signature_bytes)
     }
+
+    fn algorithm(&self) -> traits::AlgorithmType {
+        self.algorithm
+    }
 }
 
 impl Signer {
@@ -78,7 +92,17 @@ impl Signer {
                 source: Box::new(e),
                 details: "Failed to parse bytes as ascii armored key",
             })?;
-        Ok(Self { secret_key })
+        match secret_key.algorithm() {
+            pgp::crypto::public_key::PublicKeyAlgorithm::RSA => Ok(Self {
+                secret_key,
+                algorithm: AlgorithmType::RSA,
+            }),
+            pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA => Ok(Self {
+                secret_key,
+                algorithm: AlgorithmType::EdDSA,
+            }),
+            a => Err(Error::UnsupportedPGPKeyType(a)),
+        }
     }
 }
 
@@ -90,6 +114,7 @@ impl Signer {
 #[derive(Clone, Debug)]
 pub struct Verifier {
     public_key: ::pgp::composed::signed_key::SignedPublicKey,
+    algorithm: AlgorithmType,
 }
 
 impl Verifier {
@@ -183,6 +208,10 @@ impl traits::Verifying for Verifier {
                 })
         }
     }
+
+    fn algorithm(&self) -> super::AlgorithmType {
+        self.algorithm
+    }
 }
 
 impl Verifier {
@@ -202,7 +231,17 @@ impl Verifier {
                 details: "Failed to parse bytes as ascii armored key",
             })?;
 
-        Ok(Self { public_key })
+        match public_key.algorithm() {
+            pgp::crypto::public_key::PublicKeyAlgorithm::RSA => Ok(Self {
+                public_key,
+                algorithm: AlgorithmType::RSA,
+            }),
+            pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA => Ok(Self {
+                public_key,
+                algorithm: AlgorithmType::EdDSA,
+            }),
+            a => Err(Error::UnsupportedPGPKeyType(a)),
+        }
     }
 }
 

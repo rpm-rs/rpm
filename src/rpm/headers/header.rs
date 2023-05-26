@@ -889,11 +889,11 @@ mod test {
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
-        let md5sum: &[u8] = &[22u8; 16];
-        let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
-        let sha256 = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
-        let rsa_spanning_header: &[u8] = b"111222333444";
-        let rsa_spanning_header_and_archive: &[u8] = b"7777888899990000";
+        let digest_header_and_archive: &[u8] = &[22u8; 16];
+        let digest_header_sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
+        let digest_header_sha256 = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
+        let sig_header_only: &[u8] = b"111222333444";
+        let sig_header_and_archive: &[u8] = b"7777888899990000";
 
         let truth = {
             let offset = 0;
@@ -907,40 +907,36 @@ mod test {
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_MD5,
                     offset,
-                    IndexData::Bin(md5sum.to_vec()),
+                    IndexData::Bin(digest_header_and_archive.to_vec()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA1,
                     offset,
-                    IndexData::StringTag(sha1.to_owned()),
+                    IndexData::StringTag(digest_header_sha1.to_owned()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA256,
                     offset,
-                    IndexData::StringTag(sha256.to_owned()),
+                    IndexData::StringTag(digest_header_sha256.to_owned()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_RSA,
                     offset,
-                    IndexData::Bin(rsa_spanning_header.to_vec()),
+                    IndexData::Bin(sig_header_only.to_vec()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_PGP,
                     offset,
-                    IndexData::Bin(rsa_spanning_header_and_archive.to_vec()),
+                    IndexData::Bin(sig_header_and_archive.to_vec()),
                 ),
             ];
             Header::<IndexSignatureTag>::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
         };
 
-        let built = Header::<IndexSignatureTag>::new_signature_header(
-            size as usize,
-            md5sum,
-            sha1,
-            sha256,
-            rsa_spanning_header,
-            rsa_spanning_header_and_archive,
-        );
+        let built = Header::<IndexSignatureTag>::builder()
+            .add_digest(digest_header_sha1, digest_header_sha256, digest_header_and_archive)
+            .add_rsa_signature(sig_header_only, sig_header_and_archive)
+            .build(size as usize);
 
         assert_eq!(built, truth);
     }
