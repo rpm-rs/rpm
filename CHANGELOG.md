@@ -1,4 +1,5 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -16,15 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Added
 
 - `PackageBuilder::source_date` method for clamping modification time of files,
-  build time of the package, and signature time. This functionality is required for
+  build time of the package, and signature timestamp. This functionality is required for
   reproducible generation of packages.
-- `Package::sign_with_timestamp` method.
+- `Package::sign_with_timestamp` method.s
 - The "rpmversion" tag is now populated so that packages know which library (and version)
   they were built with.
 
 ### Changed
 
 - Build time metadata is now included in the built package by default
+- The algorithm type is no longer baked into the Signing and Verifying APIs as it is unnecessary.
 
 ### Fixed
 

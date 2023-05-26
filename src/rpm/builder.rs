@@ -499,7 +499,7 @@ impl PackageBuilder {
     #[cfg(feature = "signature-meta")]
     pub fn build_and_sign<S>(self, signer: S) -> Result<Package, Error>
     where
-        S: signature::Signing<signature::algorithm::RSA>,
+        S: signature::Signing,
     {
         let source_date = self.source_date;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
@@ -528,16 +528,13 @@ impl PackageBuilder {
                 Some(sde) if sde < now => sde,
                 _ => now,
             };
-            let rsa_sig_header_only = signer.sign(header.as_slice(), t)?;
+            let sig_header_only = signer.sign(header.as_slice(), t)?;
 
             let cursor = io::Cursor::new(header).chain(io::Cursor::new(&content));
-            let rsa_sig_header_and_archive = signer.sign(cursor, t)?;
+            let sig_header_and_archive = signer.sign(cursor, t)?;
 
             builder
-                .add_signature(
-                    rsa_sig_header_only.as_ref(),
-                    rsa_sig_header_and_archive.as_ref(),
-                )
+                .add_rsa_signature(sig_header_only.as_ref(), sig_header_and_archive.as_ref())
                 .build(header_and_content_len)
         };
 

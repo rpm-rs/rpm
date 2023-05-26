@@ -111,21 +111,37 @@ impl SignatureHeaderBuilder<Empty> {
 
 impl SignatureHeaderBuilder<WithDigest> {
     /// add a signature over the header and a signature across header and source excluding the static lead
-    pub fn add_signature(
+    pub fn add_rsa_signature(
         mut self,
-        rsa_sig_header_only: &[u8],
-        rsa_sig_header_and_archive: &[u8],
+        sig_header_only: &[u8],
+        sig_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithSignature> {
         let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_RSA,
             offset,
-            IndexData::Bin(rsa_sig_header_only.to_vec()),
+            IndexData::Bin(sig_header_only.to_vec()),
         ));
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_PGP,
             offset,
-            IndexData::Bin(rsa_sig_header_and_archive.to_vec()),
+            IndexData::Bin(sig_header_and_archive.to_vec()),
+        ));
+        SignatureHeaderBuilder::<WithSignature> {
+            entries: self.entries,
+            phantom: Default::default(),
+        }
+    }
+
+    pub fn add_eddsa_signature(
+        mut self,
+        sig_header_only: &[u8],
+    ) -> SignatureHeaderBuilder<WithSignature> {
+        let offset = 0i32; // filled externally later on
+        self.entries.push(IndexEntry::new(
+            IndexSignatureTag::RPMSIGTAG_DSA,
+            offset,
+            IndexData::Bin(sig_header_only.to_vec()),
         ));
         SignatureHeaderBuilder::<WithSignature> {
             entries: self.entries,
@@ -141,8 +157,8 @@ mod test {
     fn signature_builder_w_digest_and_signature() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
 
-        let rsa_sig_header_only = [0u8; 32];
-        let rsa_sig_header_and_archive = [0u8; 32];
+        let sig_header_only = [0u8; 32];
+        let sig_header_and_archive = [0u8; 32];
 
         let digest_header_sha1 = hex::encode([0u8; 64]);
         let digest_header_sha256: String = hex::encode([0u8; 64]);
@@ -155,7 +171,7 @@ mod test {
                 digest_header_sha256.as_str(),
                 &digest_header_and_archive[..],
             )
-            .add_signature(&rsa_sig_header_only[..], &rsa_sig_header_and_archive[..])
+            .add_signature(&sig_header_only[..], &sig_header_and_archive[..])
             .build(32);
 
         assert!(header
