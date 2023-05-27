@@ -109,6 +109,12 @@ where
         Ok(())
     }
 
+    pub fn entry_is_present(&self, tag: T) -> bool {
+        self.index_entries
+            .iter()
+            .any(|entry| entry.tag == tag.to_u32())
+    }
+
     pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, Error> {
         self.index_entries
             .iter()
