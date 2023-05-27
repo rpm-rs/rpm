@@ -120,7 +120,7 @@ pub struct Verifier {
 }
 
 impl Verifier {
-    fn parse_signature(signature: &[u8]) -> Result<::pgp::packet::Signature, Error> {
+    pub(crate) fn parse_signature(signature: &[u8]) -> Result<pgp::packet::Signature, Error> {
         let mut cursor = io::Cursor::new(signature);
         let parser = pgp::packet::PacketParser::new(&mut cursor);
         let signature = parser
