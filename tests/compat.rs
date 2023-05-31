@@ -373,12 +373,11 @@ fn wait_and_print_helper(mut child: std::process::Child, stdin_cmd: &str) -> std
             let mut done: bool = false;
             while !done {
                 done = true;
-                // can not be written as for loop
-                while let Some(line) = stdout_line.next() {
+                for line in &mut stdout_line {
                     done = false;
                     println!("[stdout] {}", line.unwrap().as_str());
                 }
-                while let Some(line) = stderr_line.next() {
+                for line in &mut stderr_line {
                     done = false;
                     println!("[stderr] {}", line.unwrap().as_str());
                 }

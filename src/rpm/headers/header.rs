@@ -907,7 +907,7 @@ mod test {
     #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
-        let size: u64 = 209_348;
+        let size: u32 = 209_348;
         let md5sum: &[u8] = &[22u8; 16];
         let sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
         let sha256 = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
@@ -918,9 +918,9 @@ mod test {
             let offset = 0;
             let entries = vec![
                 IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_LONGSIZE,
+                    IndexSignatureTag::RPMSIGTAG_SIZE,
                     offset,
-                    IndexData::Int64(vec![size]),
+                    IndexData::Int32(vec![size]),
                 ),
                 // TODO consider dropping md5 in favour of sha256
                 IndexEntry::new(

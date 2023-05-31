@@ -115,7 +115,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
         CompressionType::Xz
     );
 
-    assert_eq!(package.metadata.is_source_package(), false);
+    assert!(!package.metadata.is_source_package());
 
     let expected_data = vec![
         (

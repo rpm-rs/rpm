@@ -57,14 +57,19 @@ where
 {
     /// Construct the complete signature header.
     pub fn build(mut self, headers_plus_payload_size: usize) -> Header<IndexSignatureTag> {
-        self.entries.insert(
-            0,
-            IndexEntry::new(
+        let entry = match headers_plus_payload_size.try_into() {
+            Ok(size) => IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_SIZE,
+                0i32,
+                IndexData::Int32(vec![size]),
+            ),
+            Err(_) => IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_LONGSIZE,
-                0i32, // externally filled
+                0i32,
                 IndexData::Int64(vec![headers_plus_payload_size as u64]),
             ),
-        );
+        };
+        self.entries.insert(0, entry);
 
         Header::<IndexSignatureTag>::from_entries(
             self.entries,
@@ -139,8 +144,8 @@ mod test {
         let rsa_sig_header_only = [0u8; 32];
         let rsa_sig_header_and_archive = [0u8; 32];
 
-        let digest_header_sha1 = hex::encode(&[0u8; 64]);
-        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+        let digest_header_sha1 = hex::encode([0u8; 64]);
+        let digest_header_sha256: String = hex::encode([0u8; 64]);
 
         let digest_header_and_archive = [0u8; 64];
 
@@ -174,8 +179,8 @@ mod test {
     fn signature_builder_digest_only() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
 
-        let digest_header_sha1 = hex::encode(&[0u8; 64]);
-        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+        let digest_header_sha1 = hex::encode([0u8; 64]);
+        let digest_header_sha256: String = hex::encode([0u8; 64]);
 
         let digest_header_and_archive = [0u8; 64];
 
