@@ -46,8 +46,8 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
             created: Some(now),
             unhashed_subpackets: vec![],
             hashed_subpackets: vec![
-                Subpacket::SignatureCreationTime(now),
-                Subpacket::Issuer(self.secret_key.key_id()),
+                Subpacket::critical(SubpacketData::SignatureCreationTime(now)),
+                Subpacket::critical(SubpacketData::Issuer(self.secret_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
         };
@@ -282,11 +282,19 @@ pub(crate) mod test {
 
         // stage 1: verify created signature is fine
         let signature = signing_key
-            .create_signature(passwd_fn, ::pgp::crypto::HashAlgorithm::SHA2_256, digest)
+            .create_signature(
+                passwd_fn,
+                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+                digest,
+            )
             .expect("Failed to crate signature");
 
         verification_key
-            .verify_signature(::pgp::crypto::HashAlgorithm::SHA2_256, digest, &signature)
+            .verify_signature(
+                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+                digest,
+                &signature,
+            )
             .expect("Failed to validate signature");
 
         // stage 2: check parsing success
@@ -300,8 +308,8 @@ pub(crate) mod test {
             [digest[0], digest[1]],
             signature,
             vec![
-                ::pgp::packet::Subpacket::SignatureCreationTime(now()),
-                ::pgp::packet::Subpacket::Issuer(signing_key.key_id()),
+                ::pgp::packet::Subpacket::critical(SubpacketData::SignatureCreationTime(now())),
+                ::pgp::packet::Subpacket::critical(SubpacketData::Issuer(signing_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
             vec![],
@@ -319,7 +327,11 @@ pub(crate) mod test {
         assert_eq!(signature, wrapped);
         let signature = signature.signature;
         verification_key
-            .verify_signature(::pgp::crypto::HashAlgorithm::SHA2_256, digest, &signature)
+            .verify_signature(
+                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+                digest,
+                &signature,
+            )
             .expect("Verify must succeed");
     }
 
@@ -343,8 +355,8 @@ pub(crate) mod test {
             created: Some(now),
             unhashed_subpackets: vec![],
             hashed_subpackets: vec![
-                Subpacket::SignatureCreationTime(now),
-                Subpacket::Issuer(signer.secret_key.key_id()),
+                Subpacket::critical(SubpacketData::SignatureCreationTime(now)),
+                Subpacket::critical(SubpacketData::Issuer(signer.secret_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
         };
