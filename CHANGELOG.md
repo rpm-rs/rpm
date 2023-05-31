@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Breaking Change
+## 0.12.0
 
-- Removed `RPM` prefix from type names, e.g. `RPMPackage` is renamed to `Package`.
-- `RPMBuilder` is renamed to `PackageBuilder`.
+### Breaking Changes
+
+- Removed `RPM` prefix from type names, e.g. `RPMPackage` is renamed to `Package`,
+  `RPMBuilder` is renamed to `PackageBuilder`, etc. Many other type names are adjusted
+  likewise.
 - The `PackageBuilder::build_time` method is removed. Package build time is now
   included by default and can be clamped using the `PackageBuilder::source_date` method.
 - Several of the signer and verifier trait APIs were changed
+
+Note: The pace of breaking changes ought to slow down significantly from this point forwards.
+Most of the substantial changes which needed to be made have now been made. Thank you for your
+patience.
 
 ### Added
 
