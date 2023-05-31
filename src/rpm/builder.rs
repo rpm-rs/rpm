@@ -748,6 +748,7 @@ impl RPMBuilder {
         }
 
         let offset = 0;
+        let small_package = combined_file_sizes <= u32::MAX.into();
 
         let mut actual_records = vec![
             IndexEntry::new(
@@ -787,11 +788,22 @@ impl RPMBuilder {
                 offset,
                 IndexData::I18NString(vec![self.desc]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_LONGSIZE,
-                offset,
-                IndexData::Int64(vec![combined_file_sizes]),
-            ),
+            if small_package {
+                let combined_file_sizes = combined_file_sizes
+                    .try_into()
+                    .expect("combined_file_sizes should be smaller than 4 GiB");
+                IndexEntry::new(
+                    IndexTag::RPMTAG_SIZE,
+                    offset,
+                    IndexData::Int32(vec![combined_file_sizes]),
+                )
+            } else {
+                IndexEntry::new(
+                    IndexTag::RPMTAG_LONGSIZE,
+                    offset,
+                    IndexData::Int64(vec![combined_file_sizes]),
+                )
+            },
             IndexEntry::new(
                 IndexTag::RPMTAG_LICENSE,
                 offset,
@@ -845,12 +857,29 @@ impl RPMBuilder {
 
         // if we have an empty RPM, we have to leave out all file related index entries.
         if !self.files.is_empty() {
-            actual_records.extend([
+            let size_entry = if small_package {
+                let file_sizes = file_sizes
+                    .into_iter()
+                    .map(u32::try_from)
+                    .collect::<Result<_, _>>()
+                    .expect(
+                        "combined_file_sizes and thus all file sizes \
+                         should be smaller than 4 GiB",
+                    );
+                IndexEntry::new(
+                    IndexTag::RPMTAG_FILESIZES,
+                    offset,
+                    IndexData::Int32(file_sizes),
+                )
+            } else {
                 IndexEntry::new(
                     IndexTag::RPMTAG_LONGFILESIZES,
                     offset,
                     IndexData::Int64(file_sizes),
-                ),
+                )
+            };
+            actual_records.extend([
+                size_entry,
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEMODES,
                     offset,

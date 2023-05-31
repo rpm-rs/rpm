@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CentOS 7 support by using long sizes only for packages bigger than 4 GiB
+
 ## 0.11.0
 
 ### Breaking Changes
