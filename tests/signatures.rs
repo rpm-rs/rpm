@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use rpm::chrono::TimeZone;
+use chrono::TimeZone;
+
 use rpm::signature::pgp::{Signer, Verifier};
 use rpm::*;
 

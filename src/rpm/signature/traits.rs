@@ -3,10 +3,10 @@
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.
 
-use std::io;
-use std::fmt::Debug;
 use crate::errors::*;
 use crate::Timestamp;
+use std::fmt::Debug;
+use std::io;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AlgorithmType {

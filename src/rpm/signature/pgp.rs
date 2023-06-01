@@ -4,9 +4,11 @@ use crate::Timestamp;
 
 use std::io;
 
-use ::pgp::{composed::Deserializable, types::KeyTrait};
-
-use ::pgp::packet::*;
+use pgp::crypto::hash::HashAlgorithm;
+use pgp::crypto::public_key::PublicKeyAlgorithm;
+use pgp::packet::{SignatureConfig, SignatureType, SignatureVersion, Subpacket, SubpacketData};
+use pgp::{self, composed::Deserializable, types::KeyTrait};
+use pgp::{SignedPublicKey, SignedSecretKey};
 
 /// Signer implementation using the `pgp` crate.
 ///
@@ -15,15 +17,15 @@ use ::pgp::packet::*;
 /// by i.e. `gpg`.
 #[derive(Clone, Debug)]
 pub struct Signer {
-    secret_key: ::pgp::composed::signed_key::SignedSecretKey,
+    secret_key: SignedSecretKey,
     algorithm: traits::AlgorithmType,
 }
 
 impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorithm {
     fn from(value: traits::AlgorithmType) -> Self {
         match value {
-            traits::AlgorithmType::RSA => ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
-            traits::AlgorithmType::EdDSA => ::pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA,
+            traits::AlgorithmType::RSA => PublicKeyAlgorithm::RSA,
+            traits::AlgorithmType::EdDSA => PublicKeyAlgorithm::EdDSA,
         }
     }
 }
@@ -46,7 +48,7 @@ impl traits::Signing for Signer {
             version: SignatureVersion::V4,
             typ: SignatureType::Binary,
             pub_alg: self.algorithm().into(),
-            hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+            hash_alg: HashAlgorithm::SHA2_256,
             issuer: Some(self.secret_key.key_id()),
             created: Some(t),
             unhashed_subpackets: vec![],
@@ -64,7 +66,7 @@ impl traits::Signing for Signer {
 
         let mut signature_bytes = Vec::with_capacity(1024);
         let mut cursor = io::Cursor::new(&mut signature_bytes);
-        ::pgp::packet::write_packet(&mut cursor, &signature_packet)
+        pgp::packet::write_packet(&mut cursor, &signature_packet)
             .map_err(|e| Error::SignError(Box::new(e)))?;
 
         Ok(signature_bytes)
@@ -79,7 +81,7 @@ impl Signer {
     /// load the private key for signing
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
+        let input = std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
             source: Box::new(e),
             details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
@@ -87,17 +89,17 @@ impl Signer {
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
-        let (secret_key, _) = ::pgp::composed::signed_key::SignedSecretKey::from_string(input)
-            .map_err(|e| Error::KeyLoadError {
+        let (secret_key, _) =
+            SignedSecretKey::from_string(input).map_err(|e| Error::KeyLoadError {
                 source: Box::new(e),
                 details: "Failed to parse bytes as ascii armored key",
             })?;
         match secret_key.algorithm() {
-            pgp::crypto::public_key::PublicKeyAlgorithm::RSA => Ok(Self {
+            PublicKeyAlgorithm::RSA => Ok(Self {
                 secret_key,
                 algorithm: AlgorithmType::RSA,
             }),
-            pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA => Ok(Self {
+            PublicKeyAlgorithm::EdDSA => Ok(Self {
                 secret_key,
                 algorithm: AlgorithmType::EdDSA,
             }),
@@ -113,14 +115,14 @@ impl Signer {
 /// by i.e. `gpg`.
 #[derive(Clone, Debug)]
 pub struct Verifier {
-    public_key: ::pgp::composed::signed_key::SignedPublicKey,
+    public_key: SignedPublicKey,
     algorithm: AlgorithmType,
 }
 
 impl Verifier {
     fn parse_signature(signature: &[u8]) -> Result<::pgp::packet::Signature, Error> {
         let mut cursor = io::Cursor::new(signature);
-        let parser = ::pgp::packet::PacketParser::new(&mut cursor);
+        let parser = pgp::packet::PacketParser::new(&mut cursor);
         let signature = parser
             .filter_map(|res| match res {
                 Ok(::pgp::packet::Packet::Signature(sig_packet)) => Some(sig_packet),
@@ -217,7 +219,7 @@ impl traits::Verifying for Verifier {
 impl Verifier {
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
+        let input = std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
             source: Box::new(e),
             details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
@@ -225,18 +227,18 @@ impl Verifier {
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
-        let (public_key, _) = ::pgp::composed::signed_key::SignedPublicKey::from_string(input)
-            .map_err(|e| Error::KeyLoadError {
+        let (public_key, _) =
+            SignedPublicKey::from_string(input).map_err(|e| Error::KeyLoadError {
                 source: Box::new(e),
                 details: "Failed to parse bytes as ascii armored key",
             })?;
 
         match public_key.algorithm() {
-            pgp::crypto::public_key::PublicKeyAlgorithm::RSA => Ok(Self {
+            PublicKeyAlgorithm::RSA => Ok(Self {
                 public_key,
                 algorithm: AlgorithmType::RSA,
             }),
-            pgp::crypto::public_key::PublicKeyAlgorithm::EdDSA => Ok(Self {
+            PublicKeyAlgorithm::EdDSA => Ok(Self {
                 public_key,
                 algorithm: AlgorithmType::EdDSA,
             }),
@@ -308,8 +310,9 @@ pub(crate) mod test {
 
     #[test]
     fn verify_pgp_crate() {
-        use ::chrono::{TimeZone, Utc};
-        use ::pgp::types::{PublicKeyTrait, SecretKeyTrait};
+        use chrono::{TimeZone, Utc};
+        use pgp::types::{PublicKeyTrait, SecretKeyTrait};
+        use pgp::Signature;
 
         const RPM_SHA2_256: [u8; 32] =
             hex!("d92bfe276e311a67fe128768c5df4d06fd461e043afdf872ba4c679d860db81e");
@@ -323,35 +326,27 @@ pub(crate) mod test {
 
         // stage 1: verify created signature is fine
         let signature = signing_key
-            .create_signature(
-                passwd_fn,
-                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
-                digest,
-            )
+            .create_signature(passwd_fn, HashAlgorithm::SHA2_256, digest)
             .expect("Failed to crate signature");
 
         verification_key
-            .verify_signature(
-                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
-                digest,
-                &signature,
-            )
+            .verify_signature(HashAlgorithm::SHA2_256, digest, &signature)
             .expect("Failed to validate signature");
 
         let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
         // stage 2: check parsing success
         //
-        let wrapped = ::pgp::Signature::new(
-            ::pgp::types::Version::Old,
-            ::pgp::packet::SignatureVersion::V4,
-            ::pgp::packet::SignatureType::Binary,
-            ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
-            ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+        let wrapped = Signature::new(
+            pgp::types::Version::Old,
+            SignatureVersion::V4,
+            SignatureType::Binary,
+            PublicKeyAlgorithm::RSA,
+            HashAlgorithm::SHA2_256,
             [digest[0], digest[1]],
             signature,
             vec![
-                ::pgp::packet::Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
-                ::pgp::packet::Subpacket::critical(SubpacketData::Issuer(signing_key.key_id())),
+                Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
+                Subpacket::critical(SubpacketData::Issuer(signing_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
             vec![],
@@ -360,7 +355,7 @@ pub(crate) mod test {
         let mut x = Vec::with_capacity(1024);
 
         let mut buff = Cursor::new(&mut x);
-        ::pgp::packet::write_packet(&mut buff, &wrapped).expect("Write should be ok");
+        pgp::packet::write_packet(&mut buff, &wrapped).expect("Write should be ok");
 
         log::debug!("{:02x?}", &x[0..15]);
 
@@ -369,11 +364,7 @@ pub(crate) mod test {
         assert_eq!(signature, wrapped);
         let signature = signature.signature;
         verification_key
-            .verify_signature(
-                ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
-                digest,
-                &signature,
-            )
+            .verify_signature(HashAlgorithm::SHA2_256, digest, &signature)
             .expect("Verify must succeed");
     }
 
@@ -392,8 +383,8 @@ pub(crate) mod test {
         let sig_cfg = SignatureConfig {
             version: SignatureVersion::V4,
             typ: SignatureType::Binary,
-            pub_alg: ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
-            hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
+            pub_alg: PublicKeyAlgorithm::RSA,
+            hash_alg: HashAlgorithm::SHA2_256,
             issuer: Some(signer.secret_key.key_id()),
             created: Some(sig_time),
             unhashed_subpackets: vec![],
