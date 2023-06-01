@@ -1,7 +1,7 @@
 use std::io;
 
-use thiserror::Error;
 use pgp;
+use thiserror::Error;
 
 use crate::{DigestAlgorithm, TimestampError};
 
