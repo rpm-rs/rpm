@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Added
 
-- `source_date` method for clamping modification time of files
+- `RPMBuilder::source_date()` method for clamping modification time of files. This allows reproducible builds when included files are re-generated (having the same content but with different mtimes).
 
 ## Changed
 
