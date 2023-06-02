@@ -91,6 +91,7 @@ pub struct RPMBuilder {
     cookie: Option<String>,
 
     build_time: Option<u32>,
+    source_date: Option<u32>,
     build_host: Option<String>,
 }
 
@@ -179,6 +180,13 @@ impl RPMBuilder {
     /// ```
     pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
         self.build_time = Some(date_time_as_u32(&build_time.with_timezone(&chrono::Utc)));
+        self
+    }
+
+    /// Set source date (usually the date of the latest commit in VCS) used
+    /// to clamp modification time of included files.
+    pub fn source_date<TZ: chrono::TimeZone>(mut self, source_date: chrono::DateTime<TZ>) -> Self {
+        self.source_date = Some(date_time_as_u32(&source_date.with_timezone(&chrono::Utc)));
         self
     }
 
@@ -579,21 +587,22 @@ impl RPMBuilder {
 
         let mut ino_index = 1;
 
-        let mut file_sizes = Vec::new();
-        let mut file_modes = Vec::new();
-        let mut file_rdevs = Vec::new();
-        let mut file_mtimes = Vec::new();
-        let mut file_hashes = Vec::new();
-        let mut file_linktos = Vec::new();
-        let mut file_flags = Vec::new();
-        let mut file_usernames = Vec::new();
-        let mut file_groupnames = Vec::new();
-        let mut file_devices = Vec::new();
-        let mut file_inodes = Vec::new();
-        let mut file_langs = Vec::new();
-        let mut file_verify_flags = Vec::new();
-        let mut dir_indixes = Vec::new();
-        let mut base_names = Vec::new();
+        let files_len = self.files.len();
+        let mut file_sizes = Vec::with_capacity(files_len);
+        let mut file_modes = Vec::with_capacity(files_len);
+        let mut file_rdevs = Vec::with_capacity(files_len);
+        let mut file_mtimes = Vec::with_capacity(files_len);
+        let mut file_hashes = Vec::with_capacity(files_len);
+        let mut file_linktos = Vec::with_capacity(files_len);
+        let mut file_flags = Vec::with_capacity(files_len);
+        let mut file_usernames = Vec::with_capacity(files_len);
+        let mut file_groupnames = Vec::with_capacity(files_len);
+        let mut file_devices = Vec::with_capacity(files_len);
+        let mut file_inodes = Vec::with_capacity(files_len);
+        let mut file_langs = Vec::with_capacity(files_len);
+        let mut file_verify_flags = Vec::with_capacity(files_len);
+        let mut dir_indixes = Vec::with_capacity(files_len);
+        let mut base_names = Vec::with_capacity(files_len);
 
         let mut combined_file_sizes: u64 = 0;
 
@@ -605,7 +614,11 @@ impl RPMBuilder {
             // Who knows, who cares.
             file_rdevs.push(0);
             file_devices.push(1);
-            file_mtimes.push(entry.modified_at);
+            let mtime = match self.source_date {
+                Some(d) if d < entry.modified_at => d,
+                _ => entry.modified_at,
+            };
+            file_mtimes.push(mtime);
             file_hashes.push(entry.sha_checksum.to_owned());
             file_linktos.push(entry.link.to_owned());
             file_flags.push(entry.flags.bits());
