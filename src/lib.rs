@@ -21,6 +21,8 @@
 //! # #[cfg(feature = "signature-pgp")]
 //! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+//! // Use date of last commit in your VCS for reproducible builds
+//! let source_date = chrono::Utc::now();
 //! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
 //!             .compression(rpm::CompressionType::Gzip)
 //!             .with_file(
@@ -41,6 +43,10 @@
 //!                         .user("hugo"),
 //!             )?
 //!             .pre_install_script("echo preinst")
+//!             // You can remove the following two methods,
+//!             // if you don't need reproducible builds
+//!             .build_time(source_date)
+//!             .source_date(source_date)
 //!             .build_host(gethostname::gethostname().to_str().expect("Hostname works. qed").to_string())
 //!             .add_changelog_entry("Max Mustermann <max@example.com> - 0.1-29", "- was awesome, eh?", chrono::DateTime::parse_from_rfc2822("Wed, 19 Apr 2023 23:16:09 GMT").expect("Date 1 is correct. qed"))
 //!             .add_changelog_entry("Charlie Yom <test2@example.com> - 0.1-28", "- yeah, it was", chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").expect("Date 2 is corrrect. qed"))

@@ -6,9 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- `source_date` method for clamping modification time of files
+
 ## Changed
 
-- Build time is now included into package by default.
+- Build time is now included into package by default
 
 ### Fixed
 
