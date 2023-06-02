@@ -90,7 +90,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    build_time: Option<chrono::DateTime<chrono::Utc>>, // because `rpm_time_t` is an `uint32`
+    build_time: Option<u32>,
     build_host: Option<String>,
 }
 
@@ -162,22 +162,23 @@ impl RPMBuilder {
         self
     }
 
-    /// Define the build time header of the package.
+    /// Overwrite the build time header of the package.
     ///
     /// Will be converted to UTC internally.
     ///
-    /// Commonly used with the current time stamp.
+    /// Commonly used for reproducible builds.
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rpm::chrono::TimeZone;
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
-    ///             .build_time(chrono::Utc::now())
+    ///             .build_time(chrono::Utc.timestamp_opt(0, 0).unwrap())
     ///             .build()?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
-        self.build_time = Some(build_time.with_timezone(&chrono::Utc));
+        self.build_time = Some(date_time_as_u32(&build_time.with_timezone(&chrono::Utc)));
         self
     }
 
@@ -838,14 +839,14 @@ impl RPMBuilder {
             ),
         ];
 
-        if let Some(ref build_time) = self.build_time {
-            let build_time = date_time_as_u32(build_time);
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_BUILDTIME,
-                offset,
-                IndexData::Int32(vec![build_time]),
-            ));
-        }
+        let build_time = self
+            .build_time
+            .unwrap_or_else(|| date_time_as_u32(&chrono::Utc::now()));
+        actual_records.push(IndexEntry::new(
+            IndexTag::RPMTAG_BUILDTIME,
+            offset,
+            IndexData::Int32(vec![build_time]),
+        ));
 
         if let Some(build_host) = self.build_host {
             actual_records.push(IndexEntry::new(

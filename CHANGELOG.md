@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Changed
+
+- Build time is now included into package by default.
+
 ### Fixed
 
 - CentOS 7 support by using long sizes only for packages bigger than 4 GiB
