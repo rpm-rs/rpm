@@ -47,7 +47,7 @@ sha2 = "0.10"
 md-5 = "0.10"
 sha1 = "0.10"
 pgp = { version = "0.10", optional = true }
-chrono = "0.4"
+chrono = { version = "0.4", optional = true }
 log = "0.4"
 itertools = "0.10"
 hex = { version = "0.4", features = ["std"] }
@@ -65,7 +65,7 @@ gethostname = "0.4"
 [features]
 default = ["signature-pgp"]
 
-signature-pgp = ["signature-meta", "pgp"]
+signature-pgp = ["signature-meta", "pgp", "chrono"]
 signature-meta = []
 
 # Segregate tests that require podman to be installed

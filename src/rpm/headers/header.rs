@@ -6,8 +6,8 @@ use nom::bytes::complete;
 use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
 
 use super::*;
-use crate::constants::*;
 use crate::errors::*;
+use crate::{constants::*, Timestamp};
 
 #[derive(Debug, PartialEq)]
 pub struct Header<T: Tag> {
@@ -441,7 +441,7 @@ pub struct FileEntry {
     /// Defines the owning user and group.
     pub ownership: FileOwnership,
     /// Clocks the last access time.
-    pub modified_at: chrono::DateTime<chrono::Utc>,
+    pub modified_at: Timestamp,
     /// The size of this file, dirs have the inode size (which is insane)
     pub size: usize,
     /// Flags describing the file or directory into three groups.

@@ -271,6 +271,7 @@ pub(crate) mod test {
 
     #[test]
     fn verify_pgp_crate() {
+        use ::chrono::{TimeZone, Utc};
         use ::pgp::types::{PublicKeyTrait, SecretKeyTrait};
 
         let (signer, verifier) = prep();
@@ -297,6 +298,7 @@ pub(crate) mod test {
             )
             .expect("Failed to validate signature");
 
+        let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
         // stage 2: check parsing success
         //
         let wrapped = ::pgp::Signature::new(
@@ -308,7 +310,7 @@ pub(crate) mod test {
             [digest[0], digest[1]],
             signature,
             vec![
-                ::pgp::packet::Subpacket::critical(SubpacketData::SignatureCreationTime(now())),
+                ::pgp::packet::Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
                 ::pgp::packet::Subpacket::critical(SubpacketData::Issuer(signing_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
@@ -337,6 +339,7 @@ pub(crate) mod test {
 
     #[test]
     fn verify_pgp_crate2() {
+        use ::chrono::{TimeZone, Utc};
         let (signer, verifier) = prep();
 
         let data = [1u8; 322];
@@ -344,7 +347,7 @@ pub(crate) mod test {
 
         let passwd_fn = String::new;
 
-        let now = now();
+        let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
 
         let sig_cfg = SignatureConfig {
             version: SignatureVersion::V4,
@@ -352,10 +355,10 @@ pub(crate) mod test {
             pub_alg: ::pgp::crypto::public_key::PublicKeyAlgorithm::RSA,
             hash_alg: ::pgp::crypto::hash::HashAlgorithm::SHA2_256,
             issuer: Some(signer.secret_key.key_id()),
-            created: Some(now),
+            created: Some(sig_time),
             unhashed_subpackets: vec![],
             hashed_subpackets: vec![
-                Subpacket::critical(SubpacketData::SignatureCreationTime(now)),
+                Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
                 Subpacket::critical(SubpacketData::Issuer(signer.secret_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
@@ -397,6 +400,11 @@ pub(crate) mod test {
     #[test]
     fn static_parse_rpm_sign_signature() {
         let _ = env_logger::try_init();
+
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("some.sig");
+        println!("{}", path.display());
 
         std::fs::write(
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

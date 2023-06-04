@@ -3,8 +3,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use chrono::offset::TimeZone;
-
 use digest::Digest;
 use num_traits::FromPrimitive;
 
@@ -773,7 +771,6 @@ impl RPMPackageMetadata {
                         } else {
                             Some(FileDigest::load_from_str(algorithm, digest)?)
                         };
-                        let utc = chrono::Utc;
                         acc.push(FileEntry {
                             path,
                             ownership: FileOwnership {
@@ -781,7 +778,7 @@ impl RPMPackageMetadata {
                                 group: group.to_owned(),
                             },
                             mode: mode.into(),
-                            modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
+                            modified_at: crate::Timestamp(mtime),
                             digest,
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,

@@ -12,7 +12,6 @@
 //!         Signer,
 //!         Verifier
 //!     },
-//!     chrono::TimeZone,
 //! };
 //! use std::str::FromStr;
 //!
@@ -55,20 +54,20 @@
 //!     .add_changelog_entry(
 //!         "Charlie Yom <test2@example.com> - 0.1-28",
 //!         "- yeah, it was",
-//!         chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
-//!             .expect("Date 2 is corrrect. qed"),
+//!         // Raw timestamp for 2023-06-04 21:40:57
+//!         840_000_000,
 //!     )
 //!     .requires(rpm::Dependency::any("wget"))
 //!     .vendor("corporation or individual")
 //!     .url("www.github.com/repo")
 //!     .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
 //!     .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)?;
-//! let mut f = std::fs::File::create("./target/awesome.rpm")?;
+//! let mut f = std::fs::File::create("/tmp/awesome.rpm")?;
 //! pkg.write(&mut f)?;
 //!
 //! // reading
-//! let raw_pub_key = std::fs::read("./test_assets/public_key.asc")?;
-//! let pkg = rpm::RPMPackage::open("./target/awesome.rpm")?;
+//! let raw_pub_key = std::fs::read("test_assets/public_key.asc")?;
+//! let pkg = rpm::RPMPackage::open("/tmp/awesome.rpm")?;
 //! // verifying
 //! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 //! # }

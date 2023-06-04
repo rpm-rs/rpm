@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use crate::DigestAlgorithm;
+use crate::{DigestAlgorithm, TimestampError};
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
@@ -82,6 +82,9 @@ pub enum RPMError {
 
     #[error("invalid file mode {raw_mode} - {reason}")]
     InvalidFileMode { raw_mode: i32, reason: &'static str },
+
+    #[error("timestamp conversion error: {0:?}")]
+    TimestampConv(TimestampError),
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
@@ -92,5 +95,11 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
             }
             nom::Err::Incomplete(_) => RPMError::Nom("unhandled incomplete".to_string()),
         }
+    }
+}
+
+impl From<TimestampError> for RPMError {
+    fn from(error: TimestampError) -> Self {
+        RPMError::TimestampConv(error)
     }
 }

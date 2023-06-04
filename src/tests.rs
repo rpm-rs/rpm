@@ -10,8 +10,6 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 
 #[test]
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
-    use chrono::TimeZone;
-
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
     let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -30,16 +28,8 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
                 .user("hugo"),
         )?
         .pre_install_script("echo preinst")
-        .add_changelog_entry(
-            "me",
-            "was awesome, eh?",
-            chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
-        )
-        .add_changelog_entry(
-            "you",
-            "yeah, it was",
-            chrono::DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap(),
-        )
+        .add_changelog_entry("me", "was awesome, eh?", 1_681_411_811)
+        .add_changelog_entry("you", "yeah, it was", 850_984_797)
         .requires(Dependency::any("wget"))
         .vendor("dummy vendor")
         .url("dummy url")

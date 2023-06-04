@@ -1,5 +1,5 @@
 //! A collection of types used in various header records.
-use crate::{constants::*, errors};
+use crate::{constants::*, errors, Timestamp};
 use digest::Digest;
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
@@ -17,7 +17,7 @@ pub struct RPMPackageSegmentOffsets {
 pub struct RPMFileEntry {
     pub size: u64,
     pub mode: FileMode,
-    pub modified_at: u32,
+    pub modified_at: Timestamp,
     pub sha_checksum: String,
     pub link: String,
     pub flags: FileFlags,

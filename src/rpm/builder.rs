@@ -8,16 +8,16 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use digest::Digest;
 
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
-use crate::constants::*;
 use crate::errors::*;
+use crate::{constants::*, Timestamp};
 
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -34,22 +34,6 @@ fn file_mode(file: &fs::File) -> Result<u32, RPMError> {
 #[cfg(windows)]
 fn file_mode(_file: &fs::File) -> Result<u32, RPMError> {
     Ok(0)
-}
-
-static PAST_ERROR: &str = "1970 has already passed";
-static FUTURE_ERROR: &str =
-    "By 2100 we have a new, modern, package format spec and implementation. qed";
-
-fn date_time_as_u32(when: &chrono::DateTime<chrono::Utc>) -> u32 {
-    when.timestamp().try_into().expect(FUTURE_ERROR)
-}
-
-fn system_time_as_u32(dt: std::time::SystemTime) -> u32 {
-    dt.duration_since(SystemTime::UNIX_EPOCH)
-        .expect(PAST_ERROR)
-        .as_secs()
-        .try_into()
-        .expect(FUTURE_ERROR)
 }
 
 /// Create an RPM file by specifying metadata and files using the builder pattern.
@@ -88,7 +72,7 @@ pub struct RPMBuilder {
     /// `Max Mustermann <max@example.com> - 0.1-1`
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
+    changelog_times: Vec<Timestamp>,
     compression: CompressionWithLevel,
 
     vendor: Option<String>,
@@ -96,7 +80,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    source_date_epoch: Option<u32>,
+    source_date_epoch: Option<Timestamp>,
     build_host: Option<String>,
 }
 
@@ -184,8 +168,8 @@ impl RPMBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn source_date_epoch(mut self, dt: u32) -> Self {
-        self.source_date_epoch = Some(dt);
+    pub fn source_date_epoch(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
+        self.source_date_epoch = Some(t.try_into().unwrap());
         self
     }
 
@@ -241,15 +225,15 @@ impl RPMBuilder {
     /// a dash followed by a version number), description, and the date and time of the change.
 
     /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
+    /// # #[cfg(feature = "chrono")]
+    /// # || -> Result<(), Box<dyn std::error::Error>> {
     ///
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .add_changelog_entry(
     ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
     /// - Secondly."#,
-    ///         chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+    ///         1_681_411_811,
     ///     )
     ///     .add_changelog_entry(
     ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
@@ -258,23 +242,17 @@ impl RPMBuilder {
     ///     )
     ///     .build()?;
     /// # Ok(())
-    /// # }
+    /// # }();
     /// ```
-    pub fn add_changelog_entry<N, E, TZ>(
+    pub fn add_changelog_entry(
         mut self,
-        name: N,
-        entry: E,
-        datetime: chrono::DateTime<TZ>,
-    ) -> Self
-    where
-        N: AsRef<str>,
-        E: AsRef<str>,
-        TZ: chrono::TimeZone,
-    {
+        name: impl AsRef<str>,
+        entry: impl AsRef<str>,
+        timestamp: impl TryInto<Timestamp, Error = impl Debug>,
+    ) -> Self {
         self.changelog_names.push(name.as_ref().to_owned());
         self.changelog_entries.push(entry.as_ref().to_owned());
-        self.changelog_times
-            .push(datetime.with_timezone(&chrono::Utc));
+        self.changelog_times.push(timestamp.try_into().unwrap());
         self
     }
 
@@ -282,7 +260,6 @@ impl RPMBuilder {
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
     ///
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .with_file(
@@ -316,16 +293,16 @@ impl RPMBuilder {
             options.mode = (file_mode(&input)? as i32).into();
         }
 
-        let modified_at = input.metadata()?.modified()?;
+        let modified_at = input.metadata()?.modified()?.try_into()?;
 
-        self.add_data(content, system_time_as_u32(modified_at), options)?;
+        self.add_data(content, modified_at, options)?;
         Ok(self)
     }
 
     fn add_data(
         &mut self,
         content: Vec<u8>,
-        modified_at: u32,
+        modified_at: Timestamp,
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
         let dest = options.destination;
@@ -617,7 +594,7 @@ impl RPMBuilder {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
-            file_mtimes.push(mtime);
+            file_mtimes.push(mtime.into());
             file_hashes.push(entry.sha_checksum.to_owned());
             file_linktos.push(entry.link.to_owned());
             file_flags.push(entry.flags.bits());
@@ -851,7 +828,7 @@ impl RPMBuilder {
             ),
         ];
 
-        let now = system_time_as_u32(SystemTime::now());
+        let now = Timestamp::now();
         let build_time = match self.source_date_epoch {
             Some(t) if t < now => t,
             _ => now,
@@ -859,7 +836,7 @@ impl RPMBuilder {
         actual_records.push(IndexEntry::new(
             IndexTag::RPMTAG_BUILDTIME,
             offset,
-            IndexData::Int32(vec![build_time]),
+            IndexData::Int32(vec![build_time.into()]),
         ));
 
         if let Some(build_host) = self.build_host {
@@ -1059,9 +1036,7 @@ impl RPMBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTIME,
                 offset,
-                IndexData::Int32(Vec::from_iter(
-                    self.changelog_times.iter().map(date_time_as_u32),
-                )),
+                IndexData::Int32(self.changelog_times.into_iter().map(Into::into).collect()),
             ));
         }
 
