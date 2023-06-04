@@ -9,6 +9,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use digest::Digest;
 
@@ -35,15 +36,20 @@ fn file_mode(_file: &fs::File) -> Result<u32, RPMError> {
     Ok(0)
 }
 
+static PAST_ERROR: &str = "1970 has already passed";
+static FUTURE_ERROR: &str =
+    "By 2100 we have a new, modern, package format spec and implementation. qed";
+
 fn date_time_as_u32(when: &chrono::DateTime<chrono::Utc>) -> u32 {
-    when.timestamp()
-        .try_into()
-        .expect("By 2100 we have a new, modern, package format spec and implementation. qed")
+    when.timestamp().try_into().expect(FUTURE_ERROR)
 }
 
-fn system_time_as_u32(when: std::time::SystemTime) -> u32 {
-    let dt = chrono::DateTime::<chrono::Utc>::from(when);
-    date_time_as_u32(&dt)
+fn system_time_as_u32(dt: std::time::SystemTime) -> u32 {
+    dt.duration_since(SystemTime::UNIX_EPOCH)
+        .expect(PAST_ERROR)
+        .as_secs()
+        .try_into()
+        .expect(FUTURE_ERROR)
 }
 
 /// Create an RPM file by specifying metadata and files using the builder pattern.
@@ -90,8 +96,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    build_time: Option<u32>,
-    source_date: Option<u32>,
+    source_date_epoch: Option<u32>,
     build_host: Option<String>,
 }
 
@@ -153,8 +158,8 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
-    ///             .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
-    ///             .build()?;
+    ///     .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -163,30 +168,24 @@ impl RPMBuilder {
         self
     }
 
-    /// Overwrite the build time header of the package.
+    /// Set source date (usually the date of the latest commit in VCS) used
+    /// to clamp modification time of included files and build time of the package.
     ///
-    /// Will be converted to UTC internally.
-    ///
-    /// Commonly used for reproducible builds.
+    /// `dt` is number of seconds since the UNIX Epoch.
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
-    ///             .build_time(chrono::Utc.timestamp_opt(0, 0).unwrap())
-    ///             .build()?;
+    /// // It's recommended to use timestamp of last commit in your VCS
+    /// let source_date_epoch = 1_600_000_000;
+    /// // Do not forget
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
+    ///     .source_date_epoch(source_date_epoch)
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
-        self.build_time = Some(date_time_as_u32(&build_time.with_timezone(&chrono::Utc)));
-        self
-    }
-
-    /// Set source date (usually the date of the latest commit in VCS) used
-    /// to clamp modification time of included files.
-    pub fn source_date<TZ: chrono::TimeZone>(mut self, source_date: chrono::DateTime<TZ>) -> Self {
-        self.source_date = Some(date_time_as_u32(&source_date.with_timezone(&chrono::Utc)));
+    pub fn source_date_epoch(mut self, dt: u32) -> Self {
+        self.source_date_epoch = Some(dt);
         self
     }
 
@@ -614,7 +613,7 @@ impl RPMBuilder {
             // Who knows, who cares.
             file_rdevs.push(0);
             file_devices.push(1);
-            let mtime = match self.source_date {
+            let mtime = match self.source_date_epoch {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
@@ -852,9 +851,11 @@ impl RPMBuilder {
             ),
         ];
 
-        let build_time = self
-            .build_time
-            .unwrap_or_else(|| date_time_as_u32(&chrono::Utc::now()));
+        let now = system_time_as_u32(SystemTime::now());
+        let build_time = match self.source_date_epoch {
+            Some(t) if t < now => t,
+            _ => now,
+        };
         actual_records.push(IndexEntry::new(
             IndexTag::RPMTAG_BUILDTIME,
             offset,
