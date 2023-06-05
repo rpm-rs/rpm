@@ -116,16 +116,16 @@ impl RPMBuilder {
         }
     }
 
-    pub fn vendor<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn vendor(mut self, content: impl Into<String>) -> Self {
         self.vendor = Some(content.into());
         self
     }
-    pub fn url<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn url(mut self, content: impl Into<String>) -> Self {
         self.url = Some(content.into());
         self
     }
 
-    pub fn vcs<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn vcs(mut self, content: impl Into<String>) -> Self {
         self.vcs = Some(content.into());
         self
     }
@@ -214,7 +214,7 @@ impl RPMBuilder {
     ///
     /// If this method is not called, the payload will be Gzip compressed by default. This may change
     /// in future versions of the library.
-    pub fn compression<T: Into<CompressionWithLevel>>(mut self, comp: T) -> Self {
+    pub fn compression(mut self, comp: impl Into<CompressionWithLevel>) -> Self {
         self.compression = comp.into();
         self
     }
@@ -280,11 +280,11 @@ impl RPMBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
-    where
-        P: AsRef<Path>,
-        T: Into<RPMFileOptions>,
-    {
+    pub fn with_file(
+        mut self,
+        source: impl AsRef<Path>,
+        options: impl Into<RPMFileOptions>,
+    ) -> Result<Self, RPMError> {
         let mut input = fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -359,28 +359,28 @@ impl RPMBuilder {
         Ok(())
     }
 
-    pub fn pre_install_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn pre_install_script(mut self, content: impl Into<String>) -> Self {
         self.pre_inst_script = Some(content.into());
         self
     }
 
-    pub fn post_install_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn post_install_script(mut self, content: impl Into<String>) -> Self {
         self.post_inst_script = Some(content.into());
         self
     }
 
-    pub fn pre_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn pre_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.pre_uninst_script = Some(content.into());
         self
     }
 
-    pub fn post_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn post_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.post_uninst_script = Some(content.into());
         self
     }
 
-    pub fn release<T: ToString>(mut self, release: T) -> Self {
-        self.release = release.to_string();
+    pub fn release(mut self, release: impl Into<String>) -> Self {
+        self.release = release.into();
         self
     }
 

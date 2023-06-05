@@ -48,14 +48,14 @@ pub struct RPMPackage {
 
 impl RPMPackage {
     /// Open and parse a file at the provided path as an RPM package
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse an RPM package from an existing buffer
-    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -63,14 +63,14 @@ impl RPMPackage {
     }
 
     /// Write the RPM package to a buffer
-    pub fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
     }
 
     /// Write the RPM package to a file
-    pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), RPMError> {
+    pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), RPMError> {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
@@ -265,14 +265,14 @@ pub struct RPMPackageMetadata {
 
 impl RPMPackageMetadata {
     /// Open and parse RPMPackageMetadata from the file at the provided path
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse RPMPackageMetadata from the provided reader
-    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;
@@ -286,7 +286,7 @@ impl RPMPackageMetadata {
         })
     }
 
-    pub(crate) fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;

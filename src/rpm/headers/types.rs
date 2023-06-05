@@ -183,7 +183,7 @@ pub struct RPMFileOptions {
 
 impl RPMFileOptions {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new<T: Into<String>>(dest: T) -> RPMFileOptionsBuilder {
+    pub fn new(dest: impl Into<String>) -> RPMFileOptionsBuilder {
         RPMFileOptionsBuilder {
             inner: RPMFileOptions {
                 destination: dest.into(),
@@ -203,22 +203,22 @@ pub struct RPMFileOptionsBuilder {
 }
 
 impl RPMFileOptionsBuilder {
-    pub fn user<T: Into<String>>(mut self, user: T) -> Self {
+    pub fn user(mut self, user: impl Into<String>) -> Self {
         self.inner.user = user.into();
         self
     }
 
-    pub fn group<T: Into<String>>(mut self, group: T) -> Self {
+    pub fn group(mut self, group: impl Into<String>) -> Self {
         self.inner.group = group.into();
         self
     }
 
-    pub fn symlink<T: Into<String>>(mut self, symlink: T) -> Self {
+    pub fn symlink(mut self, symlink: impl Into<String>) -> Self {
         self.inner.symlink = symlink.into();
         self
     }
 
-    pub fn mode<T: Into<FileMode>>(mut self, mode: T) -> Self {
+    pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
         self.inner.inherit_permissions = false;
         self
@@ -265,19 +265,11 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    pub fn less<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn less(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::LESS, version.into())
     }
 
-    pub fn less_eq<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn less_eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
             DependencyFlags::LESS | DependencyFlags::EQUAL,
@@ -285,27 +277,15 @@ impl Dependency {
         )
     }
 
-    pub fn eq<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::EQUAL, version.into())
     }
 
-    pub fn greater<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn greater(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::GREATER, version.into())
     }
 
-    pub fn greater_eq<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn greater_eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
             DependencyFlags::GREATER | DependencyFlags::EQUAL,
@@ -313,18 +293,11 @@ impl Dependency {
         )
     }
 
-    pub fn any<T>(dep_name: T) -> Self
-    where
-        T: Into<String>,
-    {
+    pub fn any(dep_name: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::ANY, "".to_string())
     }
 
-    pub fn rpmlib<E, T>(dep_name: T, version: E) -> Self
-    where
-        T: Into<String>,
-        E: Into<String>,
-    {
+    pub fn rpmlib(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
             DependencyFlags::RPMLIB | DependencyFlags::EQUAL,
