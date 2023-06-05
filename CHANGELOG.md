@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Breaking Change
 
 - The `RPMBuilder::build_time` method is removed. Package build time is now included by default and can be clamped using the `RPMBuilder::source_date_epoch` method.
+- The `RPMPackage::sign` method now requires to pass timestamp used for signing.
 
 ## Added
 
-- `RPMBuilder::source_date_epoch` method for clamping modification time of files and build time of the package. This allows reproducible builds when included files are re-generated (having the same content but with different mtimes).
+- `RPMBuilder::source_date_epoch` method for clamping modification time of files, build time of the package, and signature time. This functionality is required for reproducible generation of packages.
 
 ### Fixed
 

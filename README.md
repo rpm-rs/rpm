@@ -66,7 +66,7 @@ let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome p
     .add_changelog_entry(
         "Charlie Yom <test2@example.com> - 0.1-28",
         "- yeah, it was",
-        // Raw timestamp for 2023-06-04 21:40:57
+        // Raw timestamp for 1996-08-14 05:20:00
         840_000_000,
     )
     .requires(rpm::Dependency::any("wget"))

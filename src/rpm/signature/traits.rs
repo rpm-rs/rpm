@@ -5,8 +5,8 @@
 
 #[allow(unused)]
 use crate::errors::*;
-use std::fmt::Debug;
-use std::io::Read;
+use crate::Timestamp;
+use std::{fmt::Debug, io};
 
 pub mod algorithm {
 
@@ -30,7 +30,7 @@ where
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
-    fn sign<R: Read>(&self, data: R) -> Result<Self::Signature, RPMError>;
+    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, RPMError>;
 }
 
 impl<A, T, S> Signing<A> for &T
@@ -40,8 +40,8 @@ where
     S: AsRef<[u8]>,
 {
     type Signature = S;
-    fn sign<R: Read>(&self, data: R) -> Result<Self::Signature, RPMError> {
-        T::sign::<R>(self, data)
+    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, RPMError> {
+        T::sign(self, data, t)
     }
 }
 
@@ -52,7 +52,7 @@ where
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
-    fn verify<R: Read>(&self, data: R, signature: &[u8]) -> Result<(), RPMError>;
+    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), RPMError>;
 }
 
 impl<A, T, S> Verifying<A> for &T
@@ -62,8 +62,8 @@ where
     S: AsRef<[u8]>,
 {
     type Signature = S;
-    fn verify<R: Read>(&self, data: R, signature: &[u8]) -> Result<(), RPMError> {
-        T::verify::<R>(self, data, signature)
+    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), RPMError> {
+        T::verify(self, data, signature)
     }
 }
 
@@ -91,7 +91,7 @@ where
     A: algorithm::Algorithm,
 {
     type Signature = Vec<u8>;
-    fn sign<R: Read>(&self, _data: R) -> Result<Self::Signature, RPMError> {
+    fn sign(&self, _data: impl io::Read, _t: Timestamp) -> Result<Self::Signature, RPMError> {
         unreachable!("if you want to verify, you need to implement `sign` of the `Signing` trait")
     }
 }
@@ -102,7 +102,7 @@ where
     A: algorithm::Algorithm,
 {
     type Signature = Vec<u8>;
-    fn verify<R: Read>(&self, _data: R, _x: &[u8]) -> Result<(), RPMError> {
+    fn verify(&self, _data: impl io::Read, _x: &[u8]) -> Result<(), RPMError> {
         unreachable!(
             "if you want to verify, you need to implement `verify` of the `Verifying` trait"
         )

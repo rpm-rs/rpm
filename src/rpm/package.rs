@@ -1,16 +1,16 @@
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::constants::*;
-use crate::errors::*;
+use crate::{constants::*, errors::*, CompressionType};
+
 #[cfg(feature = "signature-meta")]
-use crate::signature;
-use crate::CompressionType;
+use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
 use std::io::Read;
 
@@ -99,7 +99,7 @@ impl RPMPackage {
 
     /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
-    pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
+    pub fn sign<S>(&mut self, signer: S, t: Timestamp) -> Result<(), RPMError>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
@@ -118,12 +118,12 @@ impl RPMPackage {
             header_and_content_digest,
         } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
 
-        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
+        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
         let mut header_and_content_cursor =
             io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
 
         let rsa_signature_spanning_header_and_archive =
-            signer.sign(&mut header_and_content_cursor)?;
+            signer.sign(&mut header_and_content_cursor, t)?;
 
         // NOTE: size stands for the combined size of header and payload.
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(

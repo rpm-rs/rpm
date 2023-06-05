@@ -503,6 +503,7 @@ impl RPMBuilder {
     where
         S: signature::Signing<signature::algorithm::RSA>,
     {
+        let sde = self.source_date_epoch;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
@@ -524,10 +525,15 @@ impl RPMBuilder {
         );
 
         let signature_header = {
-            let rsa_sig_header_only = signer.sign(header.as_slice())?;
+            let now = Timestamp::now();
+            let t = match sde {
+                Some(sde) if sde < now => sde,
+                _ => now,
+            };
+            let rsa_sig_header_only = signer.sign(header.as_slice(), t)?;
 
             let cursor = io::Cursor::new(header).chain(io::Cursor::new(&content));
-            let rsa_sig_header_and_archive = signer.sign(cursor)?;
+            let rsa_sig_header_and_archive = signer.sign(cursor, t)?;
 
             builder
                 .add_signature(
