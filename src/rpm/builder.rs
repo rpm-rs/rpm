@@ -80,7 +80,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    source_date_epoch: Option<Timestamp>,
+    source_date: Option<Timestamp>,
     build_host: Option<String>,
 }
 
@@ -160,16 +160,16 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// // It's recommended to use timestamp of last commit in your VCS
-    /// let source_date_epoch = 1_600_000_000;
+    /// let source_date = 1_600_000_000;
     /// // Do not forget
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
-    ///     .source_date_epoch(source_date_epoch)
+    ///     .source_date(source_date)
     ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn source_date_epoch(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
-        self.source_date_epoch = Some(t.try_into().unwrap());
+    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
+        self.source_date = Some(t.try_into().unwrap());
         self
     }
 
@@ -503,7 +503,7 @@ impl RPMBuilder {
     where
         S: signature::Signing<signature::algorithm::RSA>,
     {
-        let sde = self.source_date_epoch;
+        let source_date = self.source_date;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
@@ -526,7 +526,7 @@ impl RPMBuilder {
 
         let signature_header = {
             let now = Timestamp::now();
-            let t = match sde {
+            let t = match source_date {
                 Some(sde) if sde < now => sde,
                 _ => now,
             };
@@ -596,7 +596,7 @@ impl RPMBuilder {
             // Who knows, who cares.
             file_rdevs.push(0);
             file_devices.push(1);
-            let mtime = match self.source_date_epoch {
+            let mtime = match self.source_date {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
@@ -835,7 +835,7 @@ impl RPMBuilder {
         ];
 
         let now = Timestamp::now();
-        let build_time = match self.source_date_epoch {
+        let build_time = match self.source_date {
             Some(t) if t < now => t,
             _ => now,
         };

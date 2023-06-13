@@ -21,7 +21,7 @@
 //! # {
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! // It's recommended to use timestamp of last commit in your VCS
-//! let source_date_epoch = 1_600_000_000;
+//! let source_date = 1_600_000_000;
 //! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
 //!     .compression(rpm::CompressionType::Gzip)
 //!     .with_file(
@@ -43,7 +43,7 @@
 //!     .pre_install_script("echo preinst")
 //!     // If you don't need reproducible builds,
 //!     // you can remove the following line
-//!     .source_date_epoch(source_date_epoch)
+//!     .source_date(source_date)
 //!     .build_host(gethostname::gethostname().to_str().unwrap_or("host"))
 //!     .add_changelog_entry(
 //!         "Max Mustermann <max@example.com> - 0.1-29",
