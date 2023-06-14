@@ -1,20 +1,18 @@
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
-use chrono::offset::TimeZone;
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::constants::*;
-use crate::errors::*;
+use crate::{constants::*, errors::*, CompressionType};
+
 #[cfg(feature = "signature-meta")]
-use crate::signature;
-use crate::CompressionType;
+use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
-use std::io::Read;
+use std::{fmt::Debug, io::Read};
 
 use super::headers::*;
 use super::Lead;
@@ -36,7 +34,7 @@ pub struct Digests {
 
 /// A complete rpm file.
 ///
-/// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
+/// Can either be created using the [`RPMBuilder`](super::builder::RPMBuilder)
 /// or used with [`parse`](`self::RPMPackage::parse`) to obtain from a file.
 #[derive(Debug)]
 pub struct RPMPackage {
@@ -50,14 +48,14 @@ pub struct RPMPackage {
 
 impl RPMPackage {
     /// Open and parse a file at the provided path as an RPM package
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse an RPM package from an existing buffer
-    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
         let metadata = RPMPackageMetadata::parse(input)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -65,14 +63,14 @@ impl RPMPackage {
     }
 
     /// Write the RPM package to a buffer
-    pub fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
     }
 
     /// Write the RPM package to a file
-    pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), RPMError> {
+    pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), RPMError> {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
@@ -105,9 +103,38 @@ impl RPMPackage {
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
+        self.sign_with_timestamp(signer, Timestamp::now())
+    }
+
+    /// Create package signatures using an external key and provided timestamp.
+    /// Adds geenrated signatures to the signature header.
+    ///
+    /// This method is usually used for reproducible builds, otherwise you should
+    /// prefer using the [`sign`][RPMPackage::sign] method instead.
+    ///
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut package = rpm::RPMPackage::open("test_assets/monkeysphere-0.37-1.el7.noarch.rpm")?;
+    /// let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+    /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
+    /// // It's recommended to use timestamp of last commit in your VCS
+    /// let source_date = 1_600_000_000;
+    /// package.sign_with_timestamp(signer, source_date)?;
+    /// # Ok(()) }
+    /// ```
+    #[cfg(feature = "signature-meta")]
+    pub fn sign_with_timestamp<S>(
+        &mut self,
+        signer: S,
+        t: impl TryInto<Timestamp, Error = impl Debug>,
+    ) -> Result<(), RPMError>
+    where
+        S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
+    {
+        let t = t.try_into().unwrap();
         // create a temporary byte repr of the header
         // and re-create all hashes
-
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
@@ -120,12 +147,12 @@ impl RPMPackage {
             header_and_content_digest,
         } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
 
-        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice())?;
+        let rsa_signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
         let mut header_and_content_cursor =
             io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
 
         let rsa_signature_spanning_header_and_archive =
-            signer.sign(&mut header_and_content_cursor)?;
+            signer.sign(&mut header_and_content_cursor, t)?;
 
         // NOTE: size stands for the combined size of header and payload.
         self.metadata.signature = Header::<IndexSignatureTag>::new_signature_header(
@@ -267,14 +294,14 @@ pub struct RPMPackageMetadata {
 
 impl RPMPackageMetadata {
     /// Open and parse RPMPackageMetadata from the file at the provided path
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, RPMError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse RPMPackageMetadata from the provided reader
-    pub fn parse<T: io::BufRead>(input: &mut T) -> Result<Self, RPMError> {
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
         let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;
@@ -288,7 +315,7 @@ impl RPMPackageMetadata {
         })
     }
 
-    pub(crate) fn write<W: io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;
@@ -773,7 +800,6 @@ impl RPMPackageMetadata {
                         } else {
                             Some(FileDigest::load_from_str(algorithm, digest)?)
                         };
-                        let utc = chrono::Utc;
                         acc.push(FileEntry {
                             path,
                             ownership: FileOwnership {
@@ -781,7 +807,7 @@ impl RPMPackageMetadata {
                                 group: group.to_owned(),
                             },
                             mode: mode.into(),
-                            modified_at: utc.timestamp_opt(mtime as i64, 0u32).unwrap(), // shouldn't fail as we are using 0 nanoseconds
+                            modified_at: crate::Timestamp(mtime),
                             digest,
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,

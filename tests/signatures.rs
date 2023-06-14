@@ -1,4 +1,3 @@
-use rpm::chrono::TimeZone;
 use rpm::signature::pgp::{Signer, Verifier};
 use rpm::*;
 
@@ -12,7 +11,7 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let private_key_content = std::fs::read(common::test_private_key_path())?;
     let signer = Signer::load_from_asc_bytes(&private_key_content)?;
 
-    package.sign(&signer)?;
+    package.sign_with_timestamp(&signer, 1_600_000_000)?;
 
     let public_key_content = std::fs::read(common::test_public_key_path())?;
     let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();
@@ -54,7 +53,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
         )?
         .epoch(3)
         .pre_install_script("echo preinst")
-        .add_changelog_entry("you", "yada yada", chrono::Utc.timestamp_opt(1, 0).unwrap())
+        .add_changelog_entry("you", "yada yada", 1)
         .requires(Dependency::any("rpm-sign".to_string()))
         .build_and_sign(&signer)?;
 

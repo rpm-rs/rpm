@@ -6,17 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Breaking Change
+
+- The `RPMBuilder::build_time` method is removed. Package build time is now included by default and can be clamped using the `RPMBuilder::source_date` method.
+
 ## Added
 
-- `RPMBuilder::source_date()` method for clamping modification time of files. This allows reproducible builds when included files are re-generated (having the same content but with different mtimes).
-
-## Changed
-
-- Build time is now included into package by default
+- `RPMBuilder::source_date` method for clamping modification time of files, build time of the package, and signature time. This functionality is required for reproducible generation of packages.
+- `RPMPackage::sign_with_timestamp` method.
+- Package build time is now included by default.
 
 ### Fixed
 
-- CentOS 7 support by using long sizes only for packages bigger than 4 GiB
+- CentOS 7 support by using long sizes only for packages bigger than 4 GiB.
+- Avoid a longstanding bug in `rpm --rebuilddb` by adding a package build time by default.
 
 ## 0.11.0
 

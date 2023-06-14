@@ -76,7 +76,7 @@ impl Lead {
         })
     }
 
-    pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
         out.write_all(&self.magic)?;
         out.write_all(&self.major.to_be_bytes())?;
         out.write_all(&self.minor.to_be_bytes())?;

@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use digest::Digest;
@@ -15,8 +16,8 @@ use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
-use crate::constants::*;
 use crate::errors::*;
+use crate::{constants::*, Timestamp};
 
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -33,17 +34,6 @@ fn file_mode(file: &fs::File) -> Result<u32, RPMError> {
 #[cfg(windows)]
 fn file_mode(_file: &fs::File) -> Result<u32, RPMError> {
     Ok(0)
-}
-
-fn date_time_as_u32(when: &chrono::DateTime<chrono::Utc>) -> u32 {
-    when.timestamp()
-        .try_into()
-        .expect("By 2100 we have a new, modern, package format spec and implementation. qed")
-}
-
-fn system_time_as_u32(when: std::time::SystemTime) -> u32 {
-    let dt = chrono::DateTime::<chrono::Utc>::from(when);
-    date_time_as_u32(&dt)
 }
 
 /// Create an RPM file by specifying metadata and files using the builder pattern.
@@ -82,7 +72,7 @@ pub struct RPMBuilder {
     /// `Max Mustermann <max@example.com> - 0.1-1`
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
-    changelog_times: Vec<chrono::DateTime<chrono::Utc>>,
+    changelog_times: Vec<Timestamp>,
     compression: CompressionWithLevel,
 
     vendor: Option<String>,
@@ -90,8 +80,7 @@ pub struct RPMBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    build_time: Option<u32>,
-    source_date: Option<u32>,
+    source_date: Option<Timestamp>,
     build_host: Option<String>,
 }
 
@@ -127,16 +116,16 @@ impl RPMBuilder {
         }
     }
 
-    pub fn vendor<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn vendor(mut self, content: impl Into<String>) -> Self {
         self.vendor = Some(content.into());
         self
     }
-    pub fn url<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn url(mut self, content: impl Into<String>) -> Self {
         self.url = Some(content.into());
         self
     }
 
-    pub fn vcs<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn vcs(mut self, content: impl Into<String>) -> Self {
         self.vcs = Some(content.into());
         self
     }
@@ -153,8 +142,8 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
-    ///             .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
-    ///             .build()?;
+    ///     .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -163,30 +152,24 @@ impl RPMBuilder {
         self
     }
 
-    /// Overwrite the build time header of the package.
+    /// Set source date (usually the date of the latest commit in VCS) used
+    /// to clamp modification time of included files and build time of the package.
     ///
-    /// Will be converted to UTC internally.
-    ///
-    /// Commonly used for reproducible builds.
+    /// `dt` is number of seconds since the UNIX Epoch.
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some bar package")
-    ///             .build_time(chrono::Utc.timestamp_opt(0, 0).unwrap())
-    ///             .build()?;
+    /// // It's recommended to use timestamp of last commit in your VCS
+    /// let source_date = 1_600_000_000;
+    /// // Do not forget
+    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
+    ///     .source_date(source_date)
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build_time<TZ: chrono::TimeZone>(mut self, build_time: chrono::DateTime<TZ>) -> Self {
-        self.build_time = Some(date_time_as_u32(&build_time.with_timezone(&chrono::Utc)));
-        self
-    }
-
-    /// Set source date (usually the date of the latest commit in VCS) used
-    /// to clamp modification time of included files.
-    pub fn source_date<TZ: chrono::TimeZone>(mut self, source_date: chrono::DateTime<TZ>) -> Self {
-        self.source_date = Some(date_time_as_u32(&source_date.with_timezone(&chrono::Utc)));
+    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
+        self.source_date = Some(t.try_into().unwrap());
         self
     }
 
@@ -231,7 +214,7 @@ impl RPMBuilder {
     ///
     /// If this method is not called, the payload will be Gzip compressed by default. This may change
     /// in future versions of the library.
-    pub fn compression<T: Into<CompressionWithLevel>>(mut self, comp: T) -> Self {
+    pub fn compression(mut self, comp: impl Into<CompressionWithLevel>) -> Self {
         self.compression = comp.into();
         self
     }
@@ -242,15 +225,15 @@ impl RPMBuilder {
     /// a dash followed by a version number), description, and the date and time of the change.
 
     /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
+    /// # #[cfg(feature = "chrono")]
+    /// # || -> Result<(), Box<dyn std::error::Error>> {
     ///
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .add_changelog_entry(
     ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
     /// - Secondly."#,
-    ///         chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
+    ///         1_681_411_811,
     ///     )
     ///     .add_changelog_entry(
     ///         "Gambl B. Xen <gbx@example.com> - 0.1-26",
@@ -259,23 +242,17 @@ impl RPMBuilder {
     ///     )
     ///     .build()?;
     /// # Ok(())
-    /// # }
+    /// # }();
     /// ```
-    pub fn add_changelog_entry<N, E, TZ>(
+    pub fn add_changelog_entry(
         mut self,
-        name: N,
-        entry: E,
-        datetime: chrono::DateTime<TZ>,
-    ) -> Self
-    where
-        N: AsRef<str>,
-        E: AsRef<str>,
-        TZ: chrono::TimeZone,
-    {
+        name: impl AsRef<str>,
+        entry: impl AsRef<str>,
+        timestamp: impl TryInto<Timestamp, Error = impl Debug>,
+    ) -> Self {
         self.changelog_names.push(name.as_ref().to_owned());
         self.changelog_entries.push(entry.as_ref().to_owned());
-        self.changelog_times
-            .push(datetime.with_timezone(&chrono::Utc));
+        self.changelog_times.push(timestamp.try_into().unwrap());
         self
     }
 
@@ -283,7 +260,6 @@ impl RPMBuilder {
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rpm::chrono::TimeZone;
     ///
     /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .with_file(
@@ -304,11 +280,11 @@ impl RPMBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_file<T, P>(mut self, source: P, options: T) -> Result<Self, RPMError>
-    where
-        P: AsRef<Path>,
-        T: Into<RPMFileOptions>,
-    {
+    pub fn with_file(
+        mut self,
+        source: impl AsRef<Path>,
+        options: impl Into<RPMFileOptions>,
+    ) -> Result<Self, RPMError> {
         let mut input = fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -317,16 +293,16 @@ impl RPMBuilder {
             options.mode = (file_mode(&input)? as i32).into();
         }
 
-        let modified_at = input.metadata()?.modified()?;
+        let modified_at = input.metadata()?.modified()?.try_into()?;
 
-        self.add_data(content, system_time_as_u32(modified_at), options)?;
+        self.add_data(content, modified_at, options)?;
         Ok(self)
     }
 
     fn add_data(
         &mut self,
         content: Vec<u8>,
-        modified_at: u32,
+        modified_at: Timestamp,
         options: RPMFileOptions,
     ) -> Result<(), RPMError> {
         let dest = options.destination;
@@ -383,28 +359,28 @@ impl RPMBuilder {
         Ok(())
     }
 
-    pub fn pre_install_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn pre_install_script(mut self, content: impl Into<String>) -> Self {
         self.pre_inst_script = Some(content.into());
         self
     }
 
-    pub fn post_install_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn post_install_script(mut self, content: impl Into<String>) -> Self {
         self.post_inst_script = Some(content.into());
         self
     }
 
-    pub fn pre_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn pre_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.pre_uninst_script = Some(content.into());
         self
     }
 
-    pub fn post_uninstall_script<T: Into<String>>(mut self, content: T) -> Self {
+    pub fn post_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.post_uninst_script = Some(content.into());
         self
     }
 
-    pub fn release<T: ToString>(mut self, release: T) -> Self {
-        self.release = release.to_string();
+    pub fn release(mut self, release: impl Into<String>) -> Self {
+        self.release = release.into();
         self
     }
 
@@ -527,6 +503,7 @@ impl RPMBuilder {
     where
         S: signature::Signing<signature::algorithm::RSA>,
     {
+        let source_date = self.source_date;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
@@ -548,10 +525,15 @@ impl RPMBuilder {
         );
 
         let signature_header = {
-            let rsa_sig_header_only = signer.sign(header.as_slice())?;
+            let now = Timestamp::now();
+            let t = match source_date {
+                Some(sde) if sde < now => sde,
+                _ => now,
+            };
+            let rsa_sig_header_only = signer.sign(header.as_slice(), t)?;
 
             let cursor = io::Cursor::new(header).chain(io::Cursor::new(&content));
-            let rsa_sig_header_and_archive = signer.sign(cursor)?;
+            let rsa_sig_header_and_archive = signer.sign(cursor, t)?;
 
             builder
                 .add_signature(
@@ -618,7 +600,7 @@ impl RPMBuilder {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
-            file_mtimes.push(mtime);
+            file_mtimes.push(mtime.into());
             file_hashes.push(entry.sha_checksum.to_owned());
             file_linktos.push(entry.link.to_owned());
             file_flags.push(entry.flags.bits());
@@ -852,13 +834,15 @@ impl RPMBuilder {
             ),
         ];
 
-        let build_time = self
-            .build_time
-            .unwrap_or_else(|| date_time_as_u32(&chrono::Utc::now()));
+        let now = Timestamp::now();
+        let build_time = match self.source_date {
+            Some(t) if t < now => t,
+            _ => now,
+        };
         actual_records.push(IndexEntry::new(
             IndexTag::RPMTAG_BUILDTIME,
             offset,
-            IndexData::Int32(vec![build_time]),
+            IndexData::Int32(vec![build_time.into()]),
         ));
 
         if let Some(build_host) = self.build_host {
@@ -1058,9 +1042,7 @@ impl RPMBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTIME,
                 offset,
-                IndexData::Int32(Vec::from_iter(
-                    self.changelog_times.iter().map(date_time_as_u32),
-                )),
+                IndexData::Int32(self.changelog_times.into_iter().map(Into::into).collect()),
             ));
         }
 

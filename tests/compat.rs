@@ -1,4 +1,3 @@
-use chrono::TimeZone;
 use rpm::*;
 use std::fs::File;
 use std::io::prelude::*;
@@ -166,16 +165,8 @@ mod pgp {
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
-            .add_changelog_entry(
-                "me",
-                "was awesome, eh?",
-                chrono::Utc.timestamp_opt(1681411811, 0).unwrap(),
-            )
-            .add_changelog_entry(
-                "you",
-                "yeah, it was",
-                chrono::Utc.timestamp_opt(1681411991, 0).unwrap(),
-            )
+            .add_changelog_entry("me", "was awesome, eh?", 1681411811)
+            .add_changelog_entry("you", "yeah, it was", 1681411991)
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
             .url("dummy repo")
@@ -235,11 +226,7 @@ mod pgp {
             )?
             .epoch(3)
             .pre_install_script("echo preinst")
-            .add_changelog_entry(
-                "you",
-                "yada yada",
-                chrono::Utc.timestamp_opt(1681801261, 0).unwrap(),
-            )
+            .add_changelog_entry("you", "yada yada", 1681801261)
             .requires(Dependency::any("rpm-sign".to_string()))
             .build_and_sign(&signer)?;
 

@@ -1,13 +1,11 @@
-use std::fmt;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-
-use nom::bytes::complete;
-use nom::number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8};
+use nom::{
+    bytes::complete,
+    number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8},
+};
+use std::{fmt, io, marker::PhantomData, path::PathBuf};
 
 use super::*;
-use crate::constants::*;
-use crate::errors::*;
+use crate::{constants::*, errors::*, Timestamp};
 
 #[derive(Debug, PartialEq)]
 pub struct Header<T: Tag> {
@@ -20,7 +18,7 @@ impl<T> Header<T>
 where
     T: Tag,
 {
-    pub(crate) fn parse<I: std::io::BufRead>(input: &mut I) -> Result<Header<T>, RPMError> {
+    pub(crate) fn parse(input: &mut impl io::BufRead) -> Result<Header<T>, RPMError> {
         let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
         input.read_exact(&mut buf)?;
         let index_header = IndexHeader::parse(&buf)?;
@@ -102,7 +100,7 @@ where
         })
     }
 
-    pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
         self.index_header.write(out)?;
         for entry in &self.index_entries {
             entry.write_index(out)?;
@@ -347,8 +345,8 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::<Empty>::new()
     }
 
-    pub(crate) fn parse_signature<I: std::io::BufRead>(
-        input: &mut I,
+    pub(crate) fn parse_signature(
+        input: &mut impl io::BufRead,
     ) -> Result<Header<IndexSignatureTag>, RPMError> {
         let result = Self::parse(input)?;
         // this structure is aligned to 8 bytes - rest is filled up with zeros.
@@ -361,7 +359,7 @@ impl Header<IndexSignatureTag> {
         Ok(result)
     }
 
-    pub(crate) fn write_signature<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write_signature(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
         self.write(out)?;
         // align to 8 bytes
         let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
@@ -441,7 +439,7 @@ pub struct FileEntry {
     /// Defines the owning user and group.
     pub ownership: FileOwnership,
     /// Clocks the last access time.
-    pub modified_at: chrono::DateTime<chrono::Utc>,
+    pub modified_at: Timestamp,
     /// The size of this file, dirs have the inode size (which is insane)
     pub size: usize,
     /// Flags describing the file or directory into three groups.
@@ -601,7 +599,7 @@ impl<T: Tag> IndexEntry<T> {
         ))
     }
 
-    pub(crate) fn write_index<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write_index(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
         // unwrap() is safe because tags are predefined.
         let mut written = out.write(&self.tag.to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
