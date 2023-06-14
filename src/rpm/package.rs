@@ -34,7 +34,7 @@ pub struct Digests {
 
 /// A complete rpm file.
 ///
-/// Can either be created using the [`RPMPackageBuilder`](super::builder::RPMPackageBuilder)
+/// Can either be created using the [`RPMBuilder`](super::builder::RPMBuilder)
 /// or used with [`parse`](`self::RPMPackage::parse`) to obtain from a file.
 #[derive(Debug)]
 pub struct RPMPackage {
@@ -110,13 +110,14 @@ impl RPMPackage {
     /// Adds geenrated signatures to the signature header.
     ///
     /// This method is usually used for reproducible builds, otherwise you should
-    /// prefer using the [`sign`][Package::sign] method instead.
+    /// prefer using the [`sign`][RPMPackage::sign] method instead.
     ///
     /// # Examples
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
-    /// let signer = Signer::load_from_asc_bytes(&raw_secret_key)?;
+    /// let mut package = rpm::RPMPackage::open("test_assets/monkeysphere-0.37-1.el7.noarch.rpm")?;
+    /// let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+    /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
     /// let source_date = 1_600_000_000;
     /// package.sign_with_timestamp(signer, source_date)?;
