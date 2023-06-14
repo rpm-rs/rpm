@@ -11,7 +11,7 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let private_key_content = std::fs::read(common::test_private_key_path())?;
     let signer = Signer::load_from_asc_bytes(&private_key_content)?;
 
-    package.sign(&signer, Timestamp(1_600_000_000))?;
+    package.sign_with_timestamp(&signer, 1_600_000_000)?;
 
     let public_key_content = std::fs::read(common::test_public_key_path())?;
     let verifier = Verifier::load_from_asc_bytes(&public_key_content).unwrap();

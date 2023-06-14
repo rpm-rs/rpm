@@ -12,7 +12,7 @@ use crate::{constants::*, errors::*, CompressionType};
 #[cfg(feature = "signature-meta")]
 use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
-use std::io::Read;
+use std::{fmt::Debug, io::Read};
 
 use super::headers::*;
 use super::Lead;
@@ -99,13 +99,41 @@ impl RPMPackage {
 
     /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
-    pub fn sign<S>(&mut self, signer: S, t: Timestamp) -> Result<(), RPMError>
+    pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
+        self.sign_with_timestamp(signer, Timestamp::now())
+    }
+
+    /// Create package signatures using an external key and provided timestamp.
+    /// Adds geenrated signatures to the signature header.
+    ///
+    /// This method is usually used for reproducible builds, otherwise you should
+    /// prefer using the [`sign`][Package::sign] method instead.
+    ///
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut package = rpm::RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+    /// let signer = Signer::load_from_asc_bytes(&raw_secret_key)?;
+    /// // It's recommended to use timestamp of last commit in your VCS
+    /// let source_date = 1_600_000_000;
+    /// package.sign_with_timestamp(signer, source_date)?;
+    /// # Ok(()) }
+    /// ```
+    #[cfg(feature = "signature-meta")]
+    pub fn sign_with_timestamp<S>(
+        &mut self,
+        signer: S,
+        t: impl TryInto<Timestamp, Error = impl Debug>,
+    ) -> Result<(), RPMError>
+    where
+        S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
+    {
+        let t = t.try_into().unwrap();
         // create a temporary byte repr of the header
         // and re-create all hashes
-
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Added
 
 - `RPMBuilder::source_date` method for clamping modification time of files, build time of the package, and signature time. This functionality is required for reproducible generation of packages.
+- `RPMPackage::sign_with_timestamp` method.
 - Package build time is now included by default.
 
 ### Fixed
