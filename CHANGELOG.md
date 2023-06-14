@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Breaking Change
 
 - The `RPMBuilder::build_time` method is removed. Package build time is now included by default and can be clamped using the `RPMBuilder::source_date` method.
-- The `RPMPackage::sign` method now requires to pass timestamp used for signing.
 
 ## Added
 
