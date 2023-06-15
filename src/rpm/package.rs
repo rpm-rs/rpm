@@ -107,7 +107,7 @@ impl RPMPackage {
     }
 
     /// Create package signatures using an external key and provided timestamp.
-    /// Adds geenrated signatures to the signature header.
+    /// Adds generated signatures to the signature header.
     ///
     /// This method is usually used for reproducible builds, otherwise you should
     /// prefer using the [`sign`][RPMPackage::sign] method instead.
@@ -115,7 +115,7 @@ impl RPMPackage {
     /// # Examples
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::RPMPackage::open("test_assets/monkeysphere-0.37-1.el7.noarch.rpm")?;
+    /// let mut package = rpm::RPMPackage::open("test_assets/ima_signed.rpm")?;
     /// let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
     /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
