@@ -9,10 +9,10 @@ use num_traits::FromPrimitive;
 
 use crate::{constants::*, errors::*, CompressionType};
 
-#[cfg(feature = "signature-meta")]
-use crate::{signature, Timestamp};
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
+#[cfg(feature = "signature-meta")]
+use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
 use std::{fmt::Debug, io::Read};
 
@@ -178,7 +178,7 @@ impl Package {
         Ok(())
     }
 
-    /// Return the key id (issuer) of the signature
+    /// Return the key id (issuer) of the signature as a hexadecimal string
     #[cfg(feature = "signature-pgp")]
     pub fn signature_key_id(&self) -> Result<Option<String>, Error> {
         let rsa_sig = &self
@@ -263,41 +263,6 @@ impl Package {
             signature::echo_signature("signature_header(header only)", signature_header_only);
             verifier.verify(header_bytes.as_slice(), signature_header_only)?;
         }
-
-        // match verifier.algorithm() {
-        //     signature::AlgorithmType::RSA => {
-        //         if let Ok(signature_header_and_content) = rpm_v3_sig {
-        //             signature::echo_signature(
-        //                 "signature_header(header and content)",
-        //                 signature_header_and_content,
-        //             );
-        //             let header_and_content_cursor =
-        //                 io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
-        //             verifier.verify(header_and_content_cursor, signature_header_and_content)?;
-        //         }
-
-        //         if let Ok(signature_header_only) = rsa_sig {
-        //             signature::echo_signature(
-        //                 "signature_header(header only)",
-        //                 signature_header_only,
-        //             );
-        //             verifier.verify(header_bytes.as_slice(), signature_header_only)?;
-        //         } else {
-        //             return Err(RPMError::VerificationError { source: (), key_ref: () })
-        //         }
-        //     }
-        //     signature::AlgorithmType::EdDSA => {
-        //         if let Ok(signature_header_only) = eddsa_sig {
-        //             signature::echo_signature(
-        //                 "signature_header(header only)",
-        //                 signature_header_only,
-        //             );
-        //             verifier.verify(header_bytes.as_slice(), signature_header_only)?;
-        //         } else {
-        //             return Err(RPMError::VerificationError { source: (), key_ref: () })
-        //         }
-        //     }
-        //}
 
         Ok(())
     }

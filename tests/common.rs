@@ -39,15 +39,19 @@ pub fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn load_rsa_keys() -> (Vec<u8>, Vec<u8>) {
-    let signing_key_path =
+    (rsa_private_key(), rsa_public_key())
+}
+
+pub fn rsa_private_key() -> Vec<u8> {
+    let private_key =
         cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/secret_rsa4096.asc");
-    let signing_key = std::fs::read(signing_key_path).unwrap();
+    std::fs::read(private_key).unwrap()
+}
 
-    let verification_key_path =
+pub fn rsa_public_key() -> Vec<u8> {
+    let public_key =
         cargo_manifest_dir().join("test_assets/fixture_packages/signing_keys/public_rsa4096.asc");
-    let verification_key = std::fs::read(verification_key_path).unwrap();
-
-    (signing_key.to_vec(), verification_key.to_vec())
+    std::fs::read(public_key).unwrap()
 }
 
 pub fn eddsa_private_key() -> Vec<u8> {
