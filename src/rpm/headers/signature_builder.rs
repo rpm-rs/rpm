@@ -259,6 +259,7 @@ mod test {
             .is_ok());
     }
 
+    // @todo: this test is kind of duplicative, probably not necessary?
     #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {

@@ -1,7 +1,7 @@
 use rpm::*;
-use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::path::Path;
 use std::process::Stdio;
 
 mod common;
@@ -12,19 +12,31 @@ mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
 
-    #[serial_test::serial]
-    fn create_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
+    /// Verify that the RPM is installable with valid signatures on the various supported distros
+    #[track_caller]
+    fn try_installation_and_verify_signatures(
+        path: impl AsRef<Path>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dnf_cmd = format!("dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y {};", path.as_ref().display());
+        let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
+        // TODO: check signatures on all distros?
+        [
+            ("fedora:38", &rpm_sig_check),
+            ("fedora:38", &dnf_cmd),
+            ("centos:stream9", &dnf_cmd),
+            ("centos:stream8", &dnf_cmd),
+        ]
+        .iter()
+        .try_for_each(|(image, cmd)| {
+            podman_container_launcher(cmd, image, vec![])?;
+            Ok(())
+        })
+    }
 
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
-
+    fn build_full_rpm() -> Result<PackageBuilder, Box<dyn std::error::Error>> {
         let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
-        let out_file = common::cargo_out_dir().join("test.rpm");
 
-        let mut f = File::create(out_file)?;
-        let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
+        let bldr = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
@@ -71,188 +83,81 @@ mod pgp {
             .requires(Dependency::any("rpm-sign".to_string()))
             .vendor("dummy vendor")
             .url("dummy url")
-            .vcs("dummy vcs")
-            .build_and_sign(signer)?;
+            .vcs("dummy vcs");
 
-        pkg.write(&mut f)?;
-        f.flush()?;
-        let epoch = pkg.metadata.get_epoch()?;
-        assert_eq!(1, epoch);
-
-        let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
-
-        [
-            ("fedora:38", rpm_sig_check.as_str()),
-            ("fedora:38", dnf_cmd),
-            ("centos:stream9", dnf_cmd),
-            ("centos:stream8", dnf_cmd),
-        ]
-        .iter()
-        .try_for_each(|(image, cmd)| {
-            podman_container_launcher(cmd, image, vec![])?;
-            Ok(())
-        })
+        Ok(bldr)
     }
 
     #[test]
     #[serial_test::serial]
-    fn create_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
-        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
-            .build()?;
-        let out_file = common::cargo_out_dir().join("test.rpm");
-
-        let mut f = std::fs::File::create(out_file)?;
-        pkg.write(&mut f)?;
-        let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-
-        [
-            ("fedora:38", dnf_cmd),
-            ("centos:stream9", dnf_cmd),
-            ("centos:stream8", dnf_cmd),
-        ]
-        .iter()
-        .try_for_each(|(image, cmd)| {
-            podman_container_launcher(cmd, image, vec![])?;
-            Ok(())
-        })
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn create_full_rpm_with_signature_and_verify_externally(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_install_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
+        let pkg = build_full_rpm()?.build()?;
+        let out_file = common::cargo_out_dir().join("full_rpm_nosig.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
-
-        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
-        let out_file = common::cargo_out_dir().join("test.rpm");
-
-        let mut f = std::fs::File::create(out_file)?;
-        let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(CompressionType::Gzip)
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/foo.toml"),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/zazz.toml"),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100_777)
-                    .is_config(),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/bazz.toml"),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/hugo/aa.toml"),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/var/honollulu/bazz.toml"),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/Cargo.toml"),
-            )?
-            .epoch(1)
-            .pre_install_script("echo preinst")
-            .add_changelog_entry("me", "was awesome, eh?", 1681411811)
-            .add_changelog_entry("you", "yeah, it was", 1681411991)
-            .requires(Dependency::any("rpm-sign".to_string()))
-            .vendor("dummy vendor")
-            .url("dummy repo")
-            .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
-            .build_and_sign(signer)?;
-
-        pkg.write(&mut f)?;
-        let epoch = pkg.metadata.get_epoch()?;
-        assert_eq!(1, epoch);
-
-        let dnf_cmd = "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y /out/test.rpm;";
-        let rpm_sig_check = "rpm -vv --checksig /out/test.rpm 2>&1;".to_string();
-
-        [
-            ("fedora:38", rpm_sig_check.as_str()),
-            ("fedora:38", dnf_cmd),
-            ("centos:stream9", dnf_cmd),
-            ("centos:stream8", dnf_cmd),
-        ]
-        .iter()
-        .try_for_each(|(image, cmd)| {
-            podman_container_launcher(cmd, image, vec![])?;
-            Ok(())
-        })
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (signing_key, verification_key) = common::load_asc_keys();
-
-        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
-        let out_file = common::cargo_out_dir().join("roundtrip.rpm");
-
-        {
-            let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
-
-            let mut f = std::fs::File::create(&out_file)?;
-            let pkg = rpm::PackageBuilder::new(
-                "roundtrip",
-                "1.0.0",
-                "MIT",
-                "x86_64",
-                "spins round and round",
-            )
-            .compression(CompressionType::Zstd)
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(FileMode::regular(0o777))
-                    .is_config(),
-            )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/Cargo.toml"),
-            )?
-            .epoch(3)
-            .pre_install_script("echo preinst")
-            .add_changelog_entry("you", "yada yada", 1681801261)
-            .requires(Dependency::any("rpm-sign".to_string()))
-            .build_and_sign(&signer)?;
-
-            pkg.write(&mut f)?;
-            let epoch = pkg.metadata.get_epoch()?;
-            assert_eq!(3, epoch);
-        }
-
-        // verify
-        {
-            let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
-            let mut buf_reader = std::io::BufReader::new(out_file);
-            let package = rpm::Package::parse(&mut buf_reader)?;
-
-            let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
-
-            package.verify_signature(verifier)?;
-        }
+        try_installation_and_verify_signatures("/out/full_rpm_nosig.rpm")?;
 
         Ok(())
     }
 
     #[test]
     #[serial_test::serial]
-    fn create_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_install_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let pkg =
+            PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
+        let out_file = common::cargo_out_dir().join("empty_rpm_nosig.rpm");
+        pkg.write_file(&out_file)?;
+
+        try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let (signing_key, _) = common::load_asc_keys();
+
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key");
+
+        let pkg = build_full_rpm()?.build_and_sign(signer)?;
+        let out_file = common::cargo_out_dir().join("full_rpm_sig.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
+
+        try_installation_and_verify_signatures("/out/full_rpm_sig.rpm")?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let (signing_key, _) = common::load_asc_keys();
+
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key");
+
+        let pkg = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
+            .build_and_sign(&signer)?;
+        let out_file = common::cargo_out_dir().join("empty_rpm_nosig.rpm");
+        pkg.write_file(&out_file)?;
+
+        try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
+
+        Ok(())
+    }
+
+    // @todo: we don't really need to sign the RPMs as part of the test. Can use fixture.
+    #[test]
+    #[serial_test::serial]
+    fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (_, verification_key) = common::load_asc_keys();
 
@@ -292,7 +197,7 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
 
     #[test]
     #[serial_test::serial]
-    fn create_signature_with_gpg_and_verify() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_verify_raw_gpg_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (_signing_key, verification_key) = common::load_asc_keys();
 

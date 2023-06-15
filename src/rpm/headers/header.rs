@@ -584,7 +584,6 @@ impl<T: Tag> IndexEntry<T> {
     }
 
     pub(crate) fn write_index(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
-        // unwrap() is safe because tags are predefined.
         let mut written = out.write(&self.tag.to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;
         written += out.write(&self.offset.to_be_bytes())?;
