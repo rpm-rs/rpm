@@ -762,7 +762,11 @@ impl RPMBuilder {
                 offset,
                 IndexData::Int32(vec![self.epoch]),
             ),
-            // @todo: write RPMTAG_RPMVERSION?
+            IndexEntry::new(
+                IndexTag::RPMTAG_RPMVERSION,
+                offset,
+                IndexData::StringTag(format!("rpm-rs {}", env!("CARGO_PKG_VERSION"))),
+            ),
             // @todo: write RPMTAG_PLATFORM?
             IndexEntry::new(
                 IndexTag::RPMTAG_VERSION,
