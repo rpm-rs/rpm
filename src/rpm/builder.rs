@@ -748,6 +748,11 @@ impl RPMBuilder {
 
         let mut actual_records = vec![
             IndexEntry::new(
+                IndexTag::RPMTAG_SOURCERPM,
+                offset,
+                IndexData::StringTag("(none)".to_string()),
+            ),
+            IndexEntry::new(
                 IndexTag::RPMTAG_HEADERI18NTABLE,
                 offset,
                 IndexData::StringArray(vec!["C".to_string()]),

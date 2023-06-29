@@ -39,6 +39,10 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
 
     pkg.write(&mut buff)?;
 
+    // check that generated packages has source rpm tag
+    // to be more compatibly recognized as RPM binary packages
+    pkg.metadata.get_source_rpm()?;
+
     pkg.verify_digests()?;
 
     Ok(())
