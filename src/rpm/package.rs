@@ -34,43 +34,43 @@ pub struct Digests {
 
 /// A complete rpm file.
 ///
-/// Can either be created using the [`RPMBuilder`](super::builder::RPMBuilder)
-/// or used with [`parse`](`self::RPMPackage::parse`) to obtain from a file.
+/// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
+/// or used with [`parse`](`self::Package::parse`) to obtain from a file.
 #[derive(Debug)]
-pub struct RPMPackage {
+pub struct Package {
     /// Header and metadata structures.
     ///
     /// Contains the constant lead as well as the metadata store.
-    pub metadata: RPMPackageMetadata,
+    pub metadata: PackageMetadata,
     /// The compressed or uncompressed files.
     pub content: Vec<u8>,
 }
 
-impl RPMPackage {
+impl Package {
     /// Open and parse a file at the provided path as an RPM package
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
     /// Parse an RPM package from an existing buffer
-    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
-        let metadata = RPMPackageMetadata::parse(input)?;
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, Error> {
+        let metadata = PackageMetadata::parse(input)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
-        Ok(RPMPackage { metadata, content })
+        Ok(Package { metadata, content })
     }
 
     /// Write the RPM package to a buffer
-    pub fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
+    pub fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
         self.metadata.write(out)?;
         out.write_all(&self.content)?;
         Ok(())
     }
 
     /// Write the RPM package to a file
-    pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), RPMError> {
+    pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), Error> {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
@@ -78,7 +78,7 @@ impl RPMPackage {
     pub(crate) fn create_sig_header_digests(
         header: &[u8],
         payload: &[u8],
-    ) -> Result<Digests, RPMError> {
+    ) -> Result<Digests, Error> {
         let digest_md5 = {
             let mut hasher = md5::Md5::default();
             hasher.update(header);
@@ -99,7 +99,7 @@ impl RPMPackage {
 
     /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
-    pub fn sign<S>(&mut self, signer: S) -> Result<(), RPMError>
+    pub fn sign<S>(&mut self, signer: S) -> Result<(), Error>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
@@ -110,12 +110,12 @@ impl RPMPackage {
     /// Adds generated signatures to the signature header.
     ///
     /// This method is usually used for reproducible builds, otherwise you should
-    /// prefer using the [`sign`][RPMPackage::sign] method instead.
+    /// prefer using the [`sign`][Package::sign] method instead.
     ///
     /// # Examples
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::RPMPackage::open("test_assets/ima_signed.rpm")?;
+    /// let mut package = rpm::Package::open("test_assets/ima_signed.rpm")?;
     /// let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
     /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
@@ -128,7 +128,7 @@ impl RPMPackage {
         &mut self,
         signer: S,
         t: impl TryInto<Timestamp, Error = impl Debug>,
-    ) -> Result<(), RPMError>
+    ) -> Result<(), Error>
     where
         S: signature::Signing<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
@@ -173,7 +173,7 @@ impl RPMPackage {
 
     /// Verify the signature as present within the RPM package.
     #[cfg(feature = "signature-meta")]
-    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), RPMError>
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), Error>
     where
         V: signature::Verifying<signature::algorithm::RSA, Signature = Vec<u8>>,
     {
@@ -208,7 +208,7 @@ impl RPMPackage {
     }
 
     /// Verify any digests which may be present in the RPM headers
-    pub fn verify_digests(&self) -> Result<(), RPMError> {
+    pub fn verify_digests(&self) -> Result<(), Error> {
         let mut header = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
@@ -231,19 +231,19 @@ impl RPMPackage {
 
         if let Ok(md5) = md5 {
             if md5 != pkg_actual_digests.header_and_content_digest {
-                return Err(RPMError::DigestMismatchError);
+                return Err(Error::DigestMismatchError);
             }
         }
 
         if let Ok(sha1) = sha1 {
             if sha1 != pkg_actual_digests.header_digest_sha1 {
-                return Err(RPMError::DigestMismatchError);
+                return Err(Error::DigestMismatchError);
             }
         }
 
         if let Ok(sha256) = sha256 {
             if sha256 != pkg_actual_digests.header_digest_sha256 {
-                return Err(RPMError::DigestMismatchError);
+                return Err(Error::DigestMismatchError);
             }
         }
 
@@ -269,7 +269,7 @@ impl RPMPackage {
 
             let mut hasher = match payload_digest_algo {
                 DigestAlgorithm::Sha2_256 => sha2::Sha256::default(),
-                a => return Err(RPMError::UnsupportedDigestAlgorithm(a)),
+                a => return Err(Error::UnsupportedDigestAlgorithm(a)),
                 // At the present moment even rpmbuild only supports sha256
             };
             let payload_digest = {
@@ -277,7 +277,7 @@ impl RPMPackage {
                 hex::encode(hasher.finalize())
             };
             if payload_digest != payload_digest_val[0] {
-                return Err(RPMError::DigestMismatchError);
+                return Err(Error::DigestMismatchError);
             }
         }
 
@@ -286,36 +286,36 @@ impl RPMPackage {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct RPMPackageMetadata {
+pub struct PackageMetadata {
     pub lead: Lead,
     pub signature: Header<IndexSignatureTag>,
     pub header: Header<IndexTag>,
 }
 
-impl RPMPackageMetadata {
-    /// Open and parse RPMPackageMetadata from the file at the provided path
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, RPMError> {
+impl PackageMetadata {
+    /// Open and parse PackageMetadata from the file at the provided path
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let rpm_file = fs::File::open(path.as_ref())?;
         let mut buf_reader = io::BufReader::new(rpm_file);
         Self::parse(&mut buf_reader)
     }
 
-    /// Parse RPMPackageMetadata from the provided reader
-    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, RPMError> {
+    /// Parse PackageMetadata from the provided reader
+    pub fn parse(input: &mut impl io::BufRead) -> Result<Self, Error> {
         let mut lead_buffer = [0; LEAD_SIZE as usize];
         input.read_exact(&mut lead_buffer)?;
         let lead = Lead::parse(&lead_buffer)?;
         let signature_header = Header::parse_signature(input)?;
         let header = Header::parse(input)?;
 
-        Ok(RPMPackageMetadata {
+        Ok(PackageMetadata {
             lead,
             signature: signature_header,
             header,
         })
     }
 
-    pub(crate) fn write(&self, out: &mut impl io::Write) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;
@@ -332,39 +332,39 @@ impl RPMPackageMetadata {
 
     /// Get the package name
     #[inline]
-    pub fn get_name(&self) -> Result<&str, RPMError> {
+    pub fn get_name(&self) -> Result<&str, Error> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_NAME)
     }
 
     /// Get the package epoch
     #[inline]
-    pub fn get_epoch(&self) -> Result<u32, RPMError> {
+    pub fn get_epoch(&self) -> Result<u32, Error> {
         self.header.get_entry_data_as_u32(IndexTag::RPMTAG_EPOCH)
     }
 
     /// Get the package version (the upstream version string)
     #[inline]
-    pub fn get_version(&self) -> Result<&str, RPMError> {
+    pub fn get_version(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_VERSION)
     }
 
     /// Get the package release
     #[inline]
-    pub fn get_release(&self) -> Result<&str, RPMError> {
+    pub fn get_release(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_RELEASE)
     }
 
     /// Get the package architecture
     #[inline]
-    pub fn get_arch(&self) -> Result<&str, RPMError> {
+    pub fn get_arch(&self) -> Result<&str, Error> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
     }
 
     /// Get the package vendor - the organization that produced the package
     #[inline]
-    pub fn get_vendor(&self) -> Result<&str, RPMError> {
+    pub fn get_vendor(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_VENDOR)
     }
@@ -372,53 +372,53 @@ impl RPMPackageMetadata {
     /// Get the package URL. Most often this is the upstream project website for the software
     /// being packaged.
     #[inline]
-    pub fn get_url(&self) -> Result<&str, RPMError> {
+    pub fn get_url(&self) -> Result<&str, Error> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_URL)
     }
 
     /// Get the package version control URL (of the upstream project)
     #[inline]
-    pub fn get_vcs(&self) -> Result<&str, RPMError> {
+    pub fn get_vcs(&self) -> Result<&str, Error> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_VCS)
     }
 
     /// Get the package license
     #[inline]
-    pub fn get_license(&self) -> Result<&str, RPMError> {
+    pub fn get_license(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_LICENSE)
     }
 
     /// Get the package summary (very brief description of the packaged software)
     #[inline]
-    pub fn get_summary(&self) -> Result<&str, RPMError> {
+    pub fn get_summary(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_SUMMARY)
     }
 
     /// Get the package description (a full description of the packaged software)
     #[inline]
-    pub fn get_description(&self) -> Result<&str, RPMError> {
+    pub fn get_description(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_DESCRIPTION)
     }
 
     /// Get the package group (this is deprecated in most packaging guidelines)
     #[inline]
-    pub fn get_group(&self) -> Result<&str, RPMError> {
+    pub fn get_group(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_GROUP)
     }
 
     #[inline]
-    pub fn get_packager(&self) -> Result<&str, RPMError> {
+    pub fn get_packager(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_PACKAGER)
     }
 
     /// Get the timestamp when this package was built. This is commonly not present.
     #[inline]
-    pub fn get_build_time(&self) -> Result<u64, RPMError> {
+    pub fn get_build_time(&self) -> Result<u64, Error> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_BUILDTIME)
             .map(|x| x as u64)
@@ -426,7 +426,7 @@ impl RPMPackageMetadata {
 
     /// Get the build host on which this package was built. This is commonly not present.
     #[inline]
-    pub fn get_build_host(&self) -> Result<&str, RPMError> {
+    pub fn get_build_host(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_BUILDHOST)
     }
@@ -434,14 +434,14 @@ impl RPMPackageMetadata {
     /// The cookie is a value that can be used for tracking packages built together, e.g.
     /// packages built in one build operation (from a single source RPM, for example).
     #[inline]
-    pub fn get_cookie(&self) -> Result<&str, RPMError> {
+    pub fn get_cookie(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_COOKIE)
     }
 
     /// Get the filename of the source RPM package used to build this package
     #[inline]
-    pub fn get_source_rpm(&self) -> Result<&str, RPMError> {
+    pub fn get_source_rpm(&self) -> Result<&str, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
     }
@@ -451,7 +451,7 @@ impl RPMPackageMetadata {
         names_tag: IndexTag,
         flags_tag: IndexTag,
         versions_tag: IndexTag,
-    ) -> Result<Vec<Dependency>, RPMError> {
+    ) -> Result<Vec<Dependency>, Error> {
         let names = self.header.get_entry_data_as_string_array(names_tag);
         let flags = self.header.get_entry_data_as_u32_array(flags_tag);
         let versions = self.header.get_entry_data_as_string_array(versions_tag);
@@ -459,9 +459,9 @@ impl RPMPackageMetadata {
         match (names, flags, versions) {
             // Return an empty list if the tags are not present
             (
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
             (Ok(names), Ok(flags), Ok(versions)) => {
                 let v = Vec::from_iter(itertools::multizip((names, flags, versions)).map(
@@ -485,7 +485,7 @@ impl RPMPackageMetadata {
     /// Get a list of dependencies which this package "provides"
     ///
     /// These are aliases or capabilities provided by this package which other packages can reference.
-    pub fn get_provides(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_provides(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_PROVIDENAME,
             IndexTag::RPMTAG_PROVIDEFLAGS,
@@ -497,7 +497,7 @@ impl RPMPackageMetadata {
     ///
     /// These are packages or capabilities which must be present in order for the package to be
     /// installed.
-    pub fn get_requires(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_requires(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_REQUIRENAME,
             IndexTag::RPMTAG_REQUIREFLAGS,
@@ -508,7 +508,7 @@ impl RPMPackageMetadata {
     /// Get a list of dependencies which this package "conflicts" with
     ///
     /// These are packages which must not be present in order for the package to be installed.
-    pub fn get_conflicts(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_conflicts(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_CONFLICTNAME,
             IndexTag::RPMTAG_CONFLICTFLAGS,
@@ -520,7 +520,7 @@ impl RPMPackageMetadata {
     ///
     /// These are packages which are superceded by this package - if this package is installed,
     /// they will be automatically removed if they are present.
-    pub fn get_obsoletes(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_obsoletes(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_OBSOLETENAME,
             IndexTag::RPMTAG_OBSOLETEFLAGS,
@@ -533,7 +533,7 @@ impl RPMPackageMetadata {
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat them
     /// as though they were "requires".  Unlike "requires" however, if installing a package listed
     /// as a "recommends" would cause errors, it may be ignored without error.
-    pub fn get_recommends(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_recommends(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_RECOMMENDNAME,
             IndexTag::RPMTAG_RECOMMENDFLAGS,
@@ -545,7 +545,7 @@ impl RPMPackageMetadata {
     ///
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
     /// them to the user to be optionally installed.
-    pub fn get_suggests(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_suggests(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_SUGGESTNAME,
             IndexTag::RPMTAG_SUGGESTFLAGS,
@@ -558,7 +558,7 @@ impl RPMPackageMetadata {
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
     /// this package to the user to be optionally installed when a package matching the "enhances"
     /// dependency is installed.
-    pub fn get_enhances(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_enhances(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_ENHANCENAME,
             IndexTag::RPMTAG_ENHANCEFLAGS,
@@ -571,7 +571,7 @@ impl RPMPackageMetadata {
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat this
     /// package as a "requires" when the matching package is installed. Unlike a "requires" however,
     /// if installing it would cause errors, it can be ignored ignored without error.
-    pub fn get_supplements(&self) -> Result<Vec<Dependency>, RPMError> {
+    pub fn get_supplements(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_SUPPLEMENTNAME,
             IndexTag::RPMTAG_SUPPLEMENTFLAGS,
@@ -584,15 +584,15 @@ impl RPMPackageMetadata {
     /// as if it were written out on-disk.
     ///
     /// ```
-    /// # use rpm::RPMPackage;
-    /// # let package = RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm").unwrap();
+    /// # use rpm::Package;
+    /// # let package = Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm").unwrap();
     /// let offsets = package.metadata.get_package_segment_offsets();
     /// let lead = offsets.lead..offsets.signature_header;
     /// let sig_header = offsets.signature_header..offsets.header;
     /// let header = offsets.header..offsets.payload;
     /// let payload = offsets.payload..;
     /// ```
-    pub fn get_package_segment_offsets(&self) -> RPMPackageSegmentOffsets {
+    pub fn get_package_segment_offsets(&self) -> PackageSegmentOffsets {
         // Lead is 96 bytes.
 
         // Each Header starts like this (16 bytes)
@@ -621,7 +621,7 @@ impl RPMPackageMetadata {
 
         let payload_start = header_start + header_size;
 
-        RPMPackageSegmentOffsets {
+        PackageSegmentOffsets {
             lead: 0,
             signature_header: sig_header_start as u64,
             header: header_start as u64,
@@ -630,7 +630,7 @@ impl RPMPackageMetadata {
     }
 
     /// Get the sum of the sizes of all files present in the package payload
-    pub fn get_installed_size(&self) -> Result<u64, RPMError> {
+    pub fn get_installed_size(&self) -> Result<u64, Error> {
         self.header
             .get_entry_data_as_u64(IndexTag::RPMTAG_LONGSIZE)
             .or_else(|_e| {
@@ -641,12 +641,12 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
-    pub fn get_payload_compressor(&self) -> Result<CompressionType, RPMError> {
+    pub fn get_payload_compressor(&self) -> Result<CompressionType, Error> {
         self.header
             .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADCOMPRESSOR)
             .map_or_else(
                 |e| {
-                    if matches!(e, RPMError::TagNotFound(_)) {
+                    if matches!(e, Error::TagNotFound(_)) {
                         Ok(CompressionType::None)
                     } else {
                         Err(e)
@@ -657,19 +657,19 @@ impl RPMPackageMetadata {
     }
 
     #[inline]
-    pub fn get_file_checksums(&self) -> Result<&[String], RPMError> {
+    pub fn get_file_checksums(&self) -> Result<&[String], Error> {
         self.header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
     }
 
     #[inline]
-    pub fn get_file_ima_signatures(&self) -> Result<&[String], RPMError> {
+    pub fn get_file_ima_signatures(&self) -> Result<&[String], Error> {
         self.signature
             .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
     }
 
     /// Extract a the set of contained file names.
-    pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, RPMError> {
+    pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, Error> {
         // reconstruct the messy de-constructed paths
         let basenames = self
             .header
@@ -684,9 +684,9 @@ impl RPMPackageMetadata {
         // Return an empty list if the tags are not present
         match (basenames, biject, dirs) {
             (
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
             (Ok(basenames), Ok(biject), Ok(dirs)) => {
                 let n = dirs.len();
@@ -702,7 +702,7 @@ impl RPMPackageMetadata {
                                 acc.push(PathBuf::from(dir).join(basename));
                                 Ok(acc)
                             } else {
-                                Err(RPMError::InvalidTagIndex {
+                                Err(Error::InvalidTagIndex {
                                     tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
                                     index: dir_index,
                                     bound: n as u32,
@@ -725,11 +725,11 @@ impl RPMPackageMetadata {
     ///
     /// Note that this is not necessarily the same as the digest
     /// used for headers.
-    pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, RPMError> {
+    pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
             .and_then(|x| {
-                DigestAlgorithm::from_u32(x).ok_or_else(|| RPMError::InvalidTagValueEnumVariant {
+                DigestAlgorithm::from_u32(x).ok_or_else(|| Error::InvalidTagValueEnumVariant {
                     tag: IndexTag::RPMTAG_FILEDIGESTALGO.to_string(),
                     variant: x,
                 })
@@ -737,7 +737,7 @@ impl RPMPackageMetadata {
     }
 
     /// Extract a the set of contained file names including the additional metadata.
-    pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, RPMError> {
+    pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, Error> {
         // rpm does not encode it, if it is the default md5
         let algorithm = self
             .get_file_digest_algorithm()
@@ -792,7 +792,7 @@ impl RPMPackageMetadata {
                     sizes,
                     flags,
                 ))
-                .try_fold::<Vec<FileEntry>, _, Result<_, RPMError>>(
+                .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
                     |mut acc, (path, user, group, mode, digest, mtime, size, flags)| {
                         let digest = if digest.is_empty() {
@@ -818,13 +818,13 @@ impl RPMPackageMetadata {
                 Ok(v)
             }
             (
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
             (modes, users, groups, digests, mtimes, sizes, flags) => {
                 modes?;
@@ -840,7 +840,7 @@ impl RPMPackageMetadata {
     }
 
     /// Return a list of changelog entries
-    pub fn get_changelog_entries(&self) -> Result<Vec<ChangelogEntry>, RPMError> {
+    pub fn get_changelog_entries(&self) -> Result<Vec<ChangelogEntry>, Error> {
         let names = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_CHANGELOGNAME);
@@ -854,9 +854,9 @@ impl RPMPackageMetadata {
         // Return an empty list if the tags are not present
         match (names, timestamps, descriptions) {
             (
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
-                Err(RPMError::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
             (Ok(names), Ok(timestamps), Ok(descriptions)) => {
                 let v = Vec::from_iter(itertools::multizip((names, timestamps, descriptions)).map(

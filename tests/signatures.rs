@@ -6,7 +6,7 @@ mod common;
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = common::rpm_ima_signed_file_path();
-    let mut package = RPMPackage::open(rpm_file_path)?;
+    let mut package = rpm::Package::open(rpm_file_path)?;
 
     let private_key_content = std::fs::read(common::test_private_key_path())?;
     let signer = Signer::load_from_asc_bytes(&private_key_content)?;
@@ -33,7 +33,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
 
         let mut f = std::fs::File::create(&out_file)?;
-        let pkg = RPMBuilder::new(
+        let pkg = rpm::PackageBuilder::new(
             "roundtrip",
             "1.0.0",
             "MIT",
@@ -43,13 +43,13 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
         .compression(CompressionType::Gzip)
         .with_file(
             cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+            rpm::FileOptions::new("/etc/foobar/hugo/bazz.toml")
                 .mode(FileMode::regular(0o777))
                 .is_config(),
         )?
         .with_file(
             cargo_file.to_str().unwrap(),
-            RPMFileOptions::new("/etc/Cargo.toml"),
+            rpm::FileOptions::new("/etc/Cargo.toml"),
         )?
         .epoch(3)
         .pre_install_script("echo preinst")
@@ -66,7 +66,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     {
         let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(out_file);
-        let package = RPMPackage::parse(&mut buf_reader)?;
+        let package = rpm::Package::parse(&mut buf_reader)?;
 
         let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 

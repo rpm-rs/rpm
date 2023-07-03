@@ -13,18 +13,18 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
-    let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+    let pkg = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
         .compression(rpm::CompressionType::Gzip)
         .with_file(
             "Cargo.toml",
-            RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+            FileOptions::new("/etc/awesome/config.toml").is_config(),
         )?
         // file mode is inherited from source file
-        .with_file("Cargo.toml", RPMFileOptions::new("/usr/bin/awesome"))?
+        .with_file("Cargo.toml", FileOptions::new("/usr/bin/awesome"))?
         .with_file(
             "Cargo.toml",
             // you can set a custom mode and custom user too
-            RPMFileOptions::new("/etc/awesome/second.toml")
+            FileOptions::new("/etc/awesome/second.toml")
                 .mode(0o100744)
                 .user("hugo"),
         )?
@@ -51,7 +51,7 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = rpm_389_ds_file_path();
-    let package = RPMPackage::open(rpm_file_path)?;
+    let package = Package::open(rpm_file_path)?;
 
     let metadata = &package.metadata;
     assert_eq!(metadata.signature.index_entries.len(), 7);
@@ -201,7 +201,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(
         metadata.get_package_segment_offsets(),
-        RPMPackageSegmentOffsets {
+        PackageSegmentOffsets {
             lead: 0,
             signature_header: 96,
             header: 1384,
@@ -295,7 +295,7 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 
     buf = Vec::new();
     package.write(&mut buf)?;
-    let second_pkg = RPMPackage::parse(&mut buf.as_slice())?;
+    let second_pkg = Package::parse(&mut buf.as_slice())?;
     assert_eq!(package.content.len(), second_pkg.content.len());
     assert!(package.metadata == second_pkg.metadata);
 
