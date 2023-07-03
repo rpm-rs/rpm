@@ -1,5 +1,5 @@
 use super::traits;
-use crate::errors::RPMError;
+use crate::errors::Error;
 use crate::Timestamp;
 
 use std::io;
@@ -24,7 +24,7 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
     /// Despite the fact the API suggest zero copy pattern,
     /// it internally creates a copy until crate `pgp` provides
     /// a `Read` based implementation.
-    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, RPMError> {
+    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, Error> {
         use ::chrono::offset::TimeZone;
 
         let t = ::chrono::offset::Utc
@@ -50,12 +50,12 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
         let passwd_fn = String::new;
         let signature_packet = sig_cfg
             .sign(&self.secret_key, passwd_fn, data)
-            .map_err(|e| RPMError::SignError(Box::new(e)))?;
+            .map_err(|e| Error::SignError(Box::new(e)))?;
 
         let mut signature_bytes = Vec::with_capacity(1024);
         let mut cursor = io::Cursor::new(&mut signature_bytes);
         ::pgp::packet::write_packet(&mut cursor, &signature_packet)
-            .map_err(|e| RPMError::SignError(Box::new(e)))?;
+            .map_err(|e| Error::SignError(Box::new(e)))?;
 
         Ok(signature_bytes)
     }
@@ -63,18 +63,18 @@ impl traits::Signing<traits::algorithm::RSA> for Signer {
 
 impl Signer {
     /// load the private key for signing
-    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
+    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| RPMError::KeyLoadError {
+        let input = ::std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
             source: Box::new(e),
             details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
         Self::load_from_asc(input)
     }
 
-    pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
+    pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (secret_key, _) = ::pgp::composed::signed_key::SignedSecretKey::from_string(input)
-            .map_err(|e| RPMError::KeyLoadError {
+            .map_err(|e| Error::KeyLoadError {
                 source: Box::new(e),
                 details: "Failed to parse bytes as ascii armored key",
             })?;
@@ -93,7 +93,7 @@ pub struct Verifier {
 }
 
 impl Verifier {
-    fn parse_signature(signature: &[u8]) -> Result<::pgp::packet::Signature, RPMError> {
+    fn parse_signature(signature: &[u8]) -> Result<::pgp::packet::Signature, Error> {
         let mut cursor = io::Cursor::new(signature);
         let parser = ::pgp::packet::PacketParser::new(&mut cursor);
         let signature = parser
@@ -102,7 +102,7 @@ impl Verifier {
                 _ => None,
             })
             .next()
-            .ok_or(RPMError::NoSignatureFound)?;
+            .ok_or(Error::NoSignatureFound)?;
         Ok(signature)
     }
 }
@@ -112,7 +112,7 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
     /// Despite the fact the API suggest zero copy pattern,
     /// it internally creates a copy until crate `pgp` provides
     /// a `Read` based implementation.
-    fn verify(&self, mut data: impl io::Read, signature: &[u8]) -> Result<(), RPMError> {
+    fn verify(&self, mut data: impl io::Read, signature: &[u8]) -> Result<(), Error> {
         let signature = Self::parse_signature(signature)?;
 
         log::debug!("Signature issued by: {:?}", signature.issuer());
@@ -122,7 +122,7 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
 
             if self.public_key.key_id() == *key_id {
                 return signature.verify(&self.public_key, data).map_err(|e| {
-                    RPMError::VerificationError {
+                    Error::VerificationError {
                         source: Box::new(e),
                         key_ref: format!("{:?}", key_id),
                     }
@@ -152,14 +152,14 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
                     }
                 })
                 .fold(
-                    Err(RPMError::KeyNotFoundError {
+                    Err(Error::KeyNotFoundError {
                         key_ref: format!("{:?}", key_id),
                     }),
                     |previous_res, sub_key| {
                         if previous_res.is_err() {
                             log::trace!("Test next candidate subkey");
                             signature.verify(sub_key, &mut data).map_err(|e| {
-                                RPMError::VerificationError {
+                                Error::VerificationError {
                                     source: Box::new(e),
                                     key_ref: format!("{:?}", sub_key.key_id()),
                                 }
@@ -177,7 +177,7 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
             );
             signature
                 .verify(&self.public_key, data)
-                .map_err(|e| RPMError::VerificationError {
+                .map_err(|e| Error::VerificationError {
                     source: Box::new(e),
                     key_ref: format!("{:?}", self.public_key.key_id()),
                 })
@@ -186,18 +186,18 @@ impl traits::Verifying<traits::algorithm::RSA> for Verifier {
 }
 
 impl Verifier {
-    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, RPMError> {
+    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = ::std::str::from_utf8(input).map_err(|e| RPMError::KeyLoadError {
+        let input = ::std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
             source: Box::new(e),
             details: "Failed to parse bytes as utf8 for ascii armored parsing",
         })?;
         Self::load_from_asc(input)
     }
 
-    pub fn load_from_asc(input: &str) -> Result<Self, RPMError> {
+    pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (public_key, _) = ::pgp::composed::signed_key::SignedPublicKey::from_string(input)
-            .map_err(|e| RPMError::KeyLoadError {
+            .map_err(|e| Error::KeyLoadError {
                 source: Box::new(e),
                 details: "Failed to parse bytes as ascii armored key",
             })?;

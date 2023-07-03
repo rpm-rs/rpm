@@ -34,21 +34,21 @@ use rpm::signature::pgp::{Signer, Verifier};
 let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 // It's recommended to use timestamp of last commit in your VCS
 let source_date = 1_600_000_000;
-let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .compression(rpm::CompressionType::Gzip)
     .with_file(
         "./test_assets/awesome.toml",
-        rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+        rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
     )?
     // file mode is inherited from source file
     .with_file(
         "./test_assets/awesome.py",
-        rpm::RPMFileOptions::new("/usr/bin/awesome"),
+        rpm::FileOptions::new("/usr/bin/awesome"),
     )?
     .with_file(
         "./test_assets/awesome.toml",
         // you can set a custom mode and custom user too
-        rpm::RPMFileOptions::new("/etc/awesome/second.toml")
+        rpm::FileOptions::new("/etc/awesome/second.toml")
             .mode(rpm::FileMode::regular(0o644))
             .user("hugo"),
     )?
@@ -79,7 +79,7 @@ pkg.write_file("./awesome.rpm")?;
 
 // reading
 let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
-let pkg = rpm::RPMPackage::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+let pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
 
 let name = pkg.metadata.get_name()?;
 let version = pkg.metadata.get_version()?;

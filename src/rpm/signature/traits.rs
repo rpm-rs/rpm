@@ -30,7 +30,7 @@ where
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
-    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, RPMError>;
+    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, Error>;
 }
 
 impl<A, T, S> Signing<A> for &T
@@ -40,7 +40,7 @@ where
     S: AsRef<[u8]>,
 {
     type Signature = S;
-    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, RPMError> {
+    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, Error> {
         T::sign(self, data, t)
     }
 }
@@ -52,7 +52,7 @@ where
     Self::Signature: AsRef<[u8]>,
 {
     type Signature;
-    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), RPMError>;
+    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), Error>;
 }
 
 impl<A, T, S> Verifying<A> for &T
@@ -62,7 +62,7 @@ where
     S: AsRef<[u8]>,
 {
     type Signature = S;
-    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), RPMError> {
+    fn verify(&self, data: impl io::Read, signature: &[u8]) -> Result<(), Error> {
         T::verify(self, data, signature)
     }
 }
@@ -91,7 +91,7 @@ where
     A: algorithm::Algorithm,
 {
     type Signature = Vec<u8>;
-    fn sign(&self, _data: impl io::Read, _t: Timestamp) -> Result<Self::Signature, RPMError> {
+    fn sign(&self, _data: impl io::Read, _t: Timestamp) -> Result<Self::Signature, Error> {
         unreachable!("if you want to verify, you need to implement `sign` of the `Signing` trait")
     }
 }
@@ -102,7 +102,7 @@ where
     A: algorithm::Algorithm,
 {
     type Signature = Vec<u8>;
-    fn verify(&self, _data: impl io::Read, _x: &[u8]) -> Result<(), RPMError> {
+    fn verify(&self, _data: impl io::Read, _x: &[u8]) -> Result<(), Error> {
         unreachable!(
             "if you want to verify, you need to implement `verify` of the `Verifying` trait"
         )

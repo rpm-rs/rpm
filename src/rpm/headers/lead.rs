@@ -41,11 +41,11 @@ impl std::fmt::Debug for Lead {
 }
 
 impl Lead {
-    pub(crate) fn parse(input: &[u8]) -> Result<Self, RPMError> {
+    pub(crate) fn parse(input: &[u8]) -> Result<Self, Error> {
         let (rest, magic) = complete::take(4usize)(input)?;
         for i in 0..magic.len() {
             if magic[i] != RPM_MAGIC[i] {
-                return Err(RPMError::InvalidMagic {
+                return Err(Error::InvalidMagic {
                     expected: RPM_MAGIC[i],
                     actual: magic[i],
                     complete_input: input.to_vec(),
@@ -76,7 +76,7 @@ impl Lead {
         })
     }
 
-    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
         out.write_all(&self.magic)?;
         out.write_all(&self.major.to_be_bytes())?;
         out.write_all(&self.minor.to_be_bytes())?;

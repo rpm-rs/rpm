@@ -22,23 +22,23 @@ use crate::{constants::*, Timestamp};
 #[cfg(feature = "signature-meta")]
 use crate::signature;
 
-use crate::RPMPackage;
-use crate::RPMPackageMetadata;
+use crate::Package;
+use crate::PackageMetadata;
 use crate::{CompressionType, CompressionWithLevel, Digests};
 
 #[cfg(unix)]
-fn file_mode(file: &fs::File) -> Result<u32, RPMError> {
+fn file_mode(file: &fs::File) -> Result<u32, Error> {
     Ok(file.metadata()?.permissions().mode())
 }
 
 #[cfg(windows)]
-fn file_mode(_file: &fs::File) -> Result<u32, RPMError> {
+fn file_mode(_file: &fs::File) -> Result<u32, Error> {
     Ok(0)
 }
 
 /// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
-pub struct RPMBuilder {
+pub struct PackageBuilder {
     name: String,
     epoch: u32,
     version: String,
@@ -52,7 +52,7 @@ pub struct RPMBuilder {
     // File entries need to be sorted. The entries need to be in the same order as they come
     // in the cpio payload. Otherwise rpm will not be able to resolve those paths.
     // key is the directory, values are complete paths
-    files: BTreeMap<String, RPMFileEntry>,
+    files: BTreeMap<String, PackageFileEntry>,
     directories: BTreeSet<String>,
     requires: Vec<Dependency>,
     obsoletes: Vec<Dependency>,
@@ -84,7 +84,7 @@ pub struct RPMBuilder {
     build_host: Option<String>,
 }
 
-impl RPMBuilder {
+impl PackageBuilder {
     /// Create a new package, providing the required metadata.
     ///
     /// Additional metadata is added using the builder pattern. However `name`, `version`, `license`,
@@ -99,12 +99,12 @@ impl RPMBuilder {
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package").build();
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package").build();
     /// # Ok(())
     /// # }
     /// ```
     pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
-        RPMBuilder {
+        Self {
             name: name.to_string(),
             epoch: 0,
             version: version.to_string(),
@@ -141,7 +141,7 @@ impl RPMBuilder {
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
     ///     .build_host(gethostname::gethostname().to_str().ok_or("Funny hostname")?)
     ///     .build()?;
     /// # Ok(())
@@ -162,7 +162,7 @@ impl RPMBuilder {
     /// // It's recommended to use timestamp of last commit in your VCS
     /// let source_date = 1_600_000_000;
     /// // Do not forget
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
     ///     .source_date(source_date)
     ///     .build()?;
     /// # Ok(())
@@ -189,7 +189,7 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     ///
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
     ///     .compression(rpm::CompressionType::Gzip)
     ///     .build()?;
     /// # Ok(())
@@ -201,7 +201,7 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     ///
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
     ///     .compression(rpm::CompressionWithLevel::Zstd(3))
     ///     .build()?;
     /// # Ok(())
@@ -228,7 +228,7 @@ impl RPMBuilder {
     /// # #[cfg(feature = "chrono")]
     /// # || -> Result<(), Box<dyn std::error::Error>> {
     ///
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .add_changelog_entry(
     ///         "Alfred J. Quack <quack@example.com> - 0.1-27",
     ///         r#" - Obsolete `fn foo`, in favor of `fn bar`.
@@ -261,20 +261,20 @@ impl RPMBuilder {
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     ///
-    /// let pkg = rpm::RPMBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .with_file(
     ///         "./awesome-config.toml",
-    ///         rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+    ///         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
     ///     )?
     ///     // file mode is inherited from source file
     ///     .with_file(
     ///         "./awesome-bin",
-    ///         rpm::RPMFileOptions::new("/usr/bin/awesome"),
+    ///         rpm::FileOptions::new("/usr/bin/awesome"),
     ///     )?
     ///      .with_file(
     ///         "./awesome-config.toml",
     ///         // you can set a custom mode and custom user too
-    ///         rpm::RPMFileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
+    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -283,8 +283,8 @@ impl RPMBuilder {
     pub fn with_file(
         mut self,
         source: impl AsRef<Path>,
-        options: impl Into<RPMFileOptions>,
-    ) -> Result<Self, RPMError> {
+        options: impl Into<FileOptions>,
+    ) -> Result<Self, Error> {
         let mut input = fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
@@ -303,11 +303,11 @@ impl RPMBuilder {
         &mut self,
         content: Vec<u8>,
         modified_at: Timestamp,
-        options: RPMFileOptions,
-    ) -> Result<(), RPMError> {
+        options: FileOptions,
+    ) -> Result<(), Error> {
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
-            return Err(RPMError::InvalidDestinationPath {
+            return Err(Error::InvalidDestinationPath {
                 path: dest,
                 desc: "invalid start, expected / or ./",
             });
@@ -315,12 +315,10 @@ impl RPMBuilder {
 
         let pb = PathBuf::from(dest.clone());
 
-        let parent = pb
-            .parent()
-            .ok_or_else(|| RPMError::InvalidDestinationPath {
-                path: dest.clone(),
-                desc: "no parent directory found",
-            })?;
+        let parent = pb.parent().ok_or_else(|| Error::InvalidDestinationPath {
+            path: dest.clone(),
+            desc: "no parent directory found",
+        })?;
 
         let (cpio_path, dir) = if dest.starts_with('.') {
             (
@@ -339,7 +337,7 @@ impl RPMBuilder {
         hasher.update(&content);
         let hash_result = hasher.finalize();
         let sha_checksum = hex::encode(hash_result); // encode as string
-        let entry = RPMFileEntry {
+        let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             size: content.len() as u64,
@@ -461,7 +459,7 @@ impl RPMBuilder {
     /// build without a signature
     ///
     /// ignores a present key, if any
-    pub fn build(self) -> Result<RPMPackage, RPMError> {
+    pub fn build(self) -> Result<Package, Error> {
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
@@ -475,7 +473,7 @@ impl RPMBuilder {
                 header_and_content_digest: header_and_content_digest_md5,
                 header_digest_sha1,
                 header_digest_sha256,
-            } = RPMPackage::create_sig_header_digests(header.as_slice(), content.as_slice())?;
+            } = Package::create_sig_header_digests(header.as_slice(), content.as_slice())?;
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(
@@ -486,12 +484,12 @@ impl RPMBuilder {
                 .build(header_and_content_len)
         };
 
-        let metadata = RPMPackageMetadata {
+        let metadata = PackageMetadata {
             lead,
             signature: digest_header,
             header: header_idx_tag,
         };
-        let pkg = RPMPackage { metadata, content };
+        let pkg = Package { metadata, content };
         Ok(pkg)
     }
 
@@ -499,7 +497,7 @@ impl RPMBuilder {
     ///
     /// See `signature::Signing` for more details.
     #[cfg(feature = "signature-meta")]
-    pub fn build_and_sign<S>(self, signer: S) -> Result<RPMPackage, RPMError>
+    pub fn build_and_sign<S>(self, signer: S) -> Result<Package, Error>
     where
         S: signature::Signing<signature::algorithm::RSA>,
     {
@@ -516,7 +514,7 @@ impl RPMBuilder {
             header_and_content_digest: header_and_content_digest_md5,
             header_digest_sha1,
             header_digest_sha256,
-        } = RPMPackage::create_sig_header_digests(header.as_slice(), content.as_slice())?;
+        } = Package::create_sig_header_digests(header.as_slice(), content.as_slice())?;
 
         let builder = Header::<IndexSignatureTag>::builder().add_digest(
             header_digest_sha1.as_str(),
@@ -543,19 +541,19 @@ impl RPMBuilder {
                 .build(header_and_content_len)
         };
 
-        let metadata = RPMPackageMetadata {
+        let metadata = PackageMetadata {
             lead,
             signature: signature_header,
             header: header_idx_tag,
         };
-        let pkg = RPMPackage { metadata, content };
+        let pkg = Package { metadata, content };
         Ok(pkg)
     }
 
     /// prepare all rpm headers including content
     ///
     /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
-    fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), RPMError> {
+    fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), Error> {
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all together.
         // Lead is not important. just build it here

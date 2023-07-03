@@ -13,13 +13,13 @@ pub enum CompressionType {
 }
 
 impl std::str::FromStr for CompressionType {
-    type Err = RPMError;
+    type Err = Error;
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
         match raw {
             "gzip" => Ok(CompressionType::Gzip),
             "zstd" => Ok(CompressionType::Zstd),
             "xz" => Ok(CompressionType::Xz),
-            _ => Err(RPMError::UnknownCompressorType(raw.to_string())),
+            _ => Err(Error::UnknownCompressorType(raw.to_string())),
         }
     }
 }
@@ -32,7 +32,7 @@ pub enum Compressor {
 }
 
 impl TryFrom<CompressionWithLevel> for Compressor {
-    type Error = RPMError;
+    type Error = Error;
 
     fn try_from(value: CompressionWithLevel) -> Result<Self, Self::Error> {
         match value {
@@ -72,7 +72,7 @@ impl Write for Compressor {
 }
 
 impl Compressor {
-    pub(crate) fn finish_compression(self) -> Result<Vec<u8>, RPMError> {
+    pub(crate) fn finish_compression(self) -> Result<Vec<u8>, Error> {
         match self {
             Compressor::None(data) => Ok(data),
             Compressor::Gzip(encoder) => Ok(encoder.finish()?),

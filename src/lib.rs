@@ -22,21 +22,21 @@
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! // It's recommended to use timestamp of last commit in your VCS
 //! let source_date = 1_600_000_000;
-//! let pkg = rpm::RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+//! let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
 //!     .compression(rpm::CompressionType::Gzip)
 //!     .with_file(
 //!         "./test_assets/awesome.toml",
-//!         rpm::RPMFileOptions::new("/etc/awesome/config.toml").is_config(),
+//!         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
 //!     )?
 //!     // file mode is inherited from source file
 //!     .with_file(
 //!         "./test_assets/awesome.py",
-//!         rpm::RPMFileOptions::new("/usr/bin/awesome"),
+//!         rpm::FileOptions::new("/usr/bin/awesome"),
 //!     )?
 //!     .with_file(
 //!         "./test_assets/awesome.toml",
 //!         // you can set a custom mode and custom user too
-//!         rpm::RPMFileOptions::new("/etc/awesome/second.toml")
+//!         rpm::FileOptions::new("/etc/awesome/second.toml")
 //!             .mode(rpm::FileMode::regular(0o644))
 //!             .user("hugo"),
 //!     )?
@@ -67,7 +67,7 @@
 //!
 //! // reading
 //! let raw_pub_key = std::fs::read("test_assets/public_key.asc")?;
-//! let pkg = rpm::RPMPackage::open("/tmp/awesome.rpm")?;
+//! let pkg = rpm::Package::open("/tmp/awesome.rpm")?;
 //! // verifying
 //! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 //! # }

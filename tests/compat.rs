@@ -24,37 +24,37 @@ mod pgp {
         let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = File::create(out_file)?;
-        let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
+        let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/foo.toml"),
+                FileOptions::new("/etc/foobar/foo.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/zazz.toml"),
+                FileOptions::new("/etc/foobar/zazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                FileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .mode(0o100_777)
                     .is_config(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/bazz.toml"),
+                FileOptions::new("/etc/foobar/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/aa.toml"),
+                FileOptions::new("/etc/foobar/hugo/aa.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/var/honollulu/bazz.toml"),
+                FileOptions::new("/var/honollulu/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/Cargo.toml"),
+                FileOptions::new("/etc/Cargo.toml"),
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
@@ -98,7 +98,8 @@ mod pgp {
     #[test]
     #[serial_test::serial]
     fn create_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
-        let pkg = RPMBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
+        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
+            .build()?;
         let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = std::fs::File::create(out_file)?;
@@ -131,37 +132,37 @@ mod pgp {
         let out_file = common::cargo_out_dir().join("test.rpm");
 
         let mut f = std::fs::File::create(out_file)?;
-        let pkg = RPMBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
+        let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/foo.toml"),
+                FileOptions::new("/etc/foobar/foo.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/zazz.toml"),
+                FileOptions::new("/etc/foobar/zazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                FileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .mode(0o100_777)
                     .is_config(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/bazz.toml"),
+                FileOptions::new("/etc/foobar/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/aa.toml"),
+                FileOptions::new("/etc/foobar/hugo/aa.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/var/honollulu/bazz.toml"),
+                FileOptions::new("/var/honollulu/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/Cargo.toml"),
+                FileOptions::new("/etc/Cargo.toml"),
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
@@ -206,7 +207,7 @@ mod pgp {
             let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
 
             let mut f = std::fs::File::create(&out_file)?;
-            let pkg = RPMBuilder::new(
+            let pkg = rpm::PackageBuilder::new(
                 "roundtrip",
                 "1.0.0",
                 "MIT",
@@ -216,13 +217,13 @@ mod pgp {
             .compression(CompressionType::Zstd)
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/foobar/hugo/bazz.toml")
+                FileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .mode(FileMode::regular(0o777))
                     .is_config(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                RPMFileOptions::new("/etc/Cargo.toml"),
+                FileOptions::new("/etc/Cargo.toml"),
             )?
             .epoch(3)
             .pre_install_script("echo preinst")
@@ -239,7 +240,7 @@ mod pgp {
         {
             let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
             let mut buf_reader = std::io::BufReader::new(out_file);
-            let package = RPMPackage::parse(&mut buf_reader)?;
+            let package = rpm::Package::parse(&mut buf_reader)?;
 
             let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
@@ -282,7 +283,7 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
 
         let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(out_file);
-        let package = RPMPackage::parse(&mut buf_reader)?;
+        let package = rpm::Package::parse(&mut buf_reader)?;
 
         package.verify_signature(verifier)?;
 

@@ -6,7 +6,7 @@ use crate::{DigestAlgorithm, TimestampError};
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
-pub enum RPMError {
+pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
 
@@ -87,19 +87,19 @@ pub enum RPMError {
     TimestampConv(TimestampError),
 }
 
-impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for RPMError {
+impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for Error {
     fn from(error: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
         match error {
             nom::Err::Error((_, kind)) | nom::Err::Failure((_, kind)) => {
-                RPMError::Nom(kind.description().to_string())
+                Error::Nom(kind.description().to_string())
             }
-            nom::Err::Incomplete(_) => RPMError::Nom("unhandled incomplete".to_string()),
+            nom::Err::Incomplete(_) => Error::Nom("unhandled incomplete".to_string()),
         }
     }
 }
 
-impl From<TimestampError> for RPMError {
+impl From<TimestampError> for Error {
     fn from(error: TimestampError) -> Self {
-        RPMError::TimestampConv(error)
+        Error::TimestampConv(error)
     }
 }

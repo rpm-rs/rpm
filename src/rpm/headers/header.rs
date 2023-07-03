@@ -18,7 +18,7 @@ impl<T> Header<T>
 where
     T: Tag,
 {
-    pub(crate) fn parse(input: &mut impl io::BufRead) -> Result<Header<T>, RPMError> {
+    pub(crate) fn parse(input: &mut impl io::BufRead) -> Result<Header<T>, Error> {
         let mut buf: [u8; INDEX_HEADER_SIZE as usize] = [0; INDEX_HEADER_SIZE as usize];
         input.read_exact(&mut buf)?;
         let index_header = IndexHeader::parse(&buf)?;
@@ -31,7 +31,7 @@ where
     }
 
     /// Given a pre-parsed index header, parse the rest of the header
-    fn parse_header(index_header: IndexHeader, mut bytes: &[u8]) -> Result<Header<T>, RPMError> {
+    fn parse_header(index_header: IndexHeader, mut bytes: &[u8]) -> Result<Header<T>, Error> {
         // parse all entries
         let mut entries: Vec<IndexEntry<T>> = Vec::new();
         let mut buf_len = bytes.len();
@@ -100,7 +100,7 @@ where
         })
     }
 
-    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
+    pub(crate) fn write(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
         self.index_header.write(out)?;
         for entry in &self.index_entries {
             entry.write_index(out)?;
@@ -109,117 +109,117 @@ where
         Ok(())
     }
 
-    pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, RPMError> {
+    pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, Error> {
         self.index_entries
             .iter()
             .find(|entry| entry.tag == tag.to_u32())
-            .ok_or_else(|| RPMError::TagNotFound(tag.to_string()))
+            .ok_or_else(|| Error::TagNotFound(tag.to_string()))
         // @todo: this could be more efficient, if the tag is an integer, we can just pass around
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
-    pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], RPMError> {
+    pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_binary()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "binary",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, RPMError> {
+    pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_str()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "string",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, RPMError> {
+    pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_i18n_str()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "i18n string array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, RPMError> {
+    pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u16_array()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint16 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, RPMError> {
+    pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint32",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, RPMError> {
+    pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u32_array()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint32 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, RPMError> {
+    pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint64",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, RPMError> {
+    pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_u64_array()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint64 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             })
     }
 
-    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], RPMError> {
+    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], Error> {
         let entry = self.find_entry_or_err(tag)?;
         entry
             .data
             .as_string_array()
-            .ok_or_else(|| RPMError::UnexpectedTagDataType {
+            .ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "string array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
@@ -347,7 +347,7 @@ impl Header<IndexSignatureTag> {
 
     pub(crate) fn parse_signature(
         input: &mut impl io::BufRead,
-    ) -> Result<Header<IndexSignatureTag>, RPMError> {
+    ) -> Result<Header<IndexSignatureTag>, Error> {
         let result = Self::parse(input)?;
         // this structure is aligned to 8 bytes - rest is filled up with zeros.
         // if the size of our store is not a modulo of 8, we discard the padding bytes
@@ -359,7 +359,7 @@ impl Header<IndexSignatureTag> {
         Ok(result)
     }
 
-    pub(crate) fn write_signature(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
+    pub(crate) fn write_signature(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
         self.write(out)?;
         // align to 8 bytes
         let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
@@ -407,7 +407,7 @@ impl FileDigest {
     pub fn load_from_str(
         algorithm: DigestAlgorithm,
         stringly_data: impl AsRef<str>,
-    ) -> Result<Self, RPMError> {
+    ) -> Result<Self, Error> {
         let hex: Vec<u8> = hex::decode(stringly_data.as_ref())?;
         Ok(match algorithm {
             DigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
@@ -416,7 +416,7 @@ impl FileDigest {
             DigestAlgorithm::Sha2_384 if hex.len() == 48 => FileDigest::Sha2_384(hex),
             DigestAlgorithm::Sha2_512 if hex.len() == 64 => FileDigest::Sha2_512(hex),
             // @todo disambiguate mismatch of length from unsupported algorithm
-            digest_algo => return Err(RPMError::UnsupportedDigestAlgorithm(digest_algo)),
+            digest_algo => return Err(Error::UnsupportedDigestAlgorithm(digest_algo)),
         })
     }
 }
@@ -482,12 +482,12 @@ pub(crate) struct IndexHeader {
 
 impl IndexHeader {
     // 16 bytes
-    pub(crate) fn parse(input: &[u8]) -> Result<Self, RPMError> {
+    pub(crate) fn parse(input: &[u8]) -> Result<Self, Error> {
         // first three bytes are magic
         let (rest, magic) = complete::take(3usize)(input)?;
         for i in 0..2 {
             if HEADER_MAGIC[i] != magic[i] {
-                return Err(RPMError::InvalidMagic {
+                return Err(Error::InvalidMagic {
                     expected: HEADER_MAGIC[i],
                     actual: magic[i],
                     complete_input: input.to_vec(),
@@ -498,7 +498,7 @@ impl IndexHeader {
         let (rest, version) = be_u8(rest)?;
 
         if version != 1 {
-            return Err(RPMError::UnsupportedHeaderVersion(version));
+            return Err(Error::UnsupportedHeaderVersion(version));
         }
         // then 4 bytes reserved
         let (rest, _) = complete::take(4usize)(rest)?;
@@ -515,7 +515,7 @@ impl IndexHeader {
         })
     }
 
-    pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), RPMError> {
+    pub(crate) fn write<W: std::io::Write>(&self, out: &mut W) -> Result<(), Error> {
         out.write_all(&self.magic)?;
         out.write_all(&self.version.to_be_bytes())?;
         out.write_all(&[0; 4])?;
@@ -568,7 +568,7 @@ impl<T: Tag> std::fmt::Debug for IndexEntry<T> {
 
 impl<T: Tag> IndexEntry<T> {
     // 16 bytes
-    pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), RPMError> {
+    pub(crate) fn parse(input: &[u8]) -> Result<(&[u8], Self), Error> {
         // first 4 bytes are the tag.
         let (input, tag) = be_u32(input)?;
         // next 4 bytes is the tag type
@@ -576,7 +576,7 @@ impl<T: Tag> IndexEntry<T> {
 
         // initialize the datatype. Parsing of the data happens later since the store comes after the index section.
         let data =
-            IndexData::from_type_as_u32(tag_type).ok_or_else(|| RPMError::InvalidTagDataType {
+            IndexData::from_type_as_u32(tag_type).ok_or_else(|| Error::InvalidTagDataType {
                 raw_data_type: tag_type,
                 store_type: T::tag_type_name(),
             })?;
@@ -599,7 +599,7 @@ impl<T: Tag> IndexEntry<T> {
         ))
     }
 
-    pub(crate) fn write_index(&self, out: &mut impl std::io::Write) -> Result<(), RPMError> {
+    pub(crate) fn write_index(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
         // unwrap() is safe because tags are predefined.
         let mut written = out.write(&self.tag.to_be_bytes())?;
         written += out.write(&self.data.type_as_u32().to_be_bytes())?;

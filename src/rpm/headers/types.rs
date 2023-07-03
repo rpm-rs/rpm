@@ -4,9 +4,9 @@ use digest::Digest;
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
 ///
-/// See: `RPMPackage::get_package_component_offsets()`
+/// See: `Package::get_package_segment_offsets`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct RPMPackageSegmentOffsets {
+pub struct PackageSegmentOffsets {
     pub lead: u64,
     pub signature_header: u64,
     pub header: u64,
@@ -14,7 +14,7 @@ pub struct RPMPackageSegmentOffsets {
 }
 
 /// Describes a file present in the rpm file.
-pub struct RPMFileEntry {
+pub struct PackageFileEntry {
     pub size: u64,
     pub mode: FileMode,
     pub modified_at: Timestamp,
@@ -105,17 +105,17 @@ impl FileMode {
 
     /// Usually this should be done with TryFrom, but since we already have a `From` implementation,
     /// we run into this issue: <https://github.com/rust-lang/rust/issues/50133>
-    pub fn try_from_raw(raw: i32) -> Result<Self, errors::RPMError> {
+    pub fn try_from_raw(raw: i32) -> Result<Self, errors::Error> {
         let mode: FileMode = raw.into();
         mode.to_result()
     }
 
     /// Turns this FileMode into a result. If the mode is Invalid, it will be converted into
-    /// RPMError::InvalidFileMode. Otherwise it is Ok(self).
-    pub fn to_result(self) -> Result<Self, errors::RPMError> {
+    /// Error::InvalidFileMode. Otherwise it is Ok(self).
+    pub fn to_result(self) -> Result<Self, errors::Error> {
         match self {
             Self::Invalid { raw_mode, reason } => {
-                Err(errors::RPMError::InvalidFileMode { raw_mode, reason })
+                Err(errors::Error::InvalidFileMode { raw_mode, reason })
             }
             _ => Ok(self),
         }
@@ -171,7 +171,7 @@ impl From<FileMode> for u16 {
 /// Description of file modes.
 ///
 /// A subset
-pub struct RPMFileOptions {
+pub struct FileOptions {
     pub(crate) destination: String,
     pub(crate) user: String,
     pub(crate) group: String,
@@ -181,11 +181,11 @@ pub struct RPMFileOptions {
     pub(crate) inherit_permissions: bool,
 }
 
-impl RPMFileOptions {
+impl FileOptions {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(dest: impl Into<String>) -> RPMFileOptionsBuilder {
-        RPMFileOptionsBuilder {
-            inner: RPMFileOptions {
+    pub fn new(dest: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
                 destination: dest.into(),
                 user: "root".to_string(),
                 group: "root".to_string(),
@@ -198,11 +198,11 @@ impl RPMFileOptions {
     }
 }
 
-pub struct RPMFileOptionsBuilder {
-    inner: RPMFileOptions,
+pub struct FileOptionsBuilder {
+    inner: FileOptions,
 }
 
-impl RPMFileOptionsBuilder {
+impl FileOptionsBuilder {
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.inner.user = user.into();
         self
@@ -250,8 +250,8 @@ impl RPMFileOptionsBuilder {
     }
 }
 
-impl From<RPMFileOptionsBuilder> for RPMFileOptions {
-    fn from(builder: RPMFileOptionsBuilder) -> Self {
+impl From<FileOptionsBuilder> for FileOptions {
+    fn from(builder: FileOptionsBuilder) -> Self {
         builder.inner
     }
 }
@@ -366,14 +366,14 @@ mod test {
             (0o10_1664, Ok(FileMode::regular(0o1664))),
             (
                 0o664,
-                Err(errors::RPMError::InvalidFileMode {
+                Err(errors::Error::InvalidFileMode {
                     raw_mode: 0o664,
                     reason: "unknown file type",
                 }),
             ),
             (
                 0o27_1664,
-                Err(errors::RPMError::InvalidFileMode {
+                Err(errors::Error::InvalidFileMode {
                     raw_mode: 0o27_1664,
                     reason: "provided integer is out of 16bit bounds",
                 }),
@@ -388,12 +388,12 @@ mod test {
                     assert_eq!(expected, actual);
                 }
                 (Err(expected), Err(actual)) => {
-                    if let errors::RPMError::InvalidFileMode {
+                    if let errors::Error::InvalidFileMode {
                         raw_mode: actual_raw_mode,
                         reason: actual_reason,
                     } = actual
                     {
-                        if let errors::RPMError::InvalidFileMode {
+                        if let errors::Error::InvalidFileMode {
                             raw_mode: expected_raw_mode,
                             reason: expected_reason,
                         } = expected
