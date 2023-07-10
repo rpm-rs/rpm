@@ -7,19 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## Breaking Change
+### Breaking Change
 
 - Removed `RPM` prefix from type names, e.g. `RPMPackage` is renamed to `Package`.
 - `RPMBuilder` is renamed to `PackageBuilder`.
 - The `PackageBuilder::build_time` method is removed. Package build time is now
   included by default and can be clamped using the `PackageBuilder::source_date` method.
+- Several of the signer and verifier trait APIs were changed
 
-## Added
+### Added
 
 - `PackageBuilder::source_date` method for clamping modification time of files,
   build time of the package, and signature timestamp. This functionality is required for
   reproducible generation of packages.
-- `Package::sign_with_timestamp` method.s
+- `Package::sign_with_timestamp` method for signing a package while using a specific
+  timestamp. This is needed to reproducibly sign packages.
+- `PackageMetadata::signature_key_id` method for getting the signing key ID (superset
+  of the fingerprint) of the key used to sign a package as a hex-encoded string.
+  Key fingerprints can be easily extracted from this value.
 - The "rpmversion" tag is now populated so that packages know which library (and version)
   they were built with.
 - Support for signing and verification with EdDSA signatures
@@ -28,10 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Build time metadata is now included in the built package by default
 - The algorithm type is no longer baked into the Signing and Verifying APIs as it is unnecessary.
-
-### Breaking Changes
-
-- Several of the signer and verifier trait APIs were changed
 
 ### Fixed
 

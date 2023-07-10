@@ -517,8 +517,8 @@ impl PackageBuilder {
         } = Package::create_sig_header_digests(header.as_slice(), content.as_slice())?;
 
         let now = Timestamp::now();
-        let t = match source_date {
-            Some(sde) if sde < now => sde,
+        let signature_timestamp = match source_date {
+            Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
             _ => now,
         };
 
@@ -528,17 +528,18 @@ impl PackageBuilder {
             header_and_content_digest_md5.as_slice(),
         );
 
-        let sig_header_only = signer.sign(header.as_slice(), t)?;
+        let sig_header_only = signer.sign(header.as_slice(), signature_timestamp)?;
 
         let builder = match signer.algorithm() {
-            crate::signature::AlgorithmType::RSA => {
+            signature::AlgorithmType::RSA => {
                 let mut header_and_content_cursor =
                     io::Cursor::new(header.as_slice()).chain(io::Cursor::new(content.as_slice()));
 
-                let sig_header_and_archive = signer.sign(&mut header_and_content_cursor, t)?;
+                let sig_header_and_archive =
+                    signer.sign(&mut header_and_content_cursor, signature_timestamp)?;
                 builder.add_rsa_signature(sig_header_only.as_ref(), sig_header_and_archive.as_ref())
             }
-            crate::signature::AlgorithmType::EdDSA => {
+            signature::AlgorithmType::EdDSA => {
                 builder.add_eddsa_signature(sig_header_only.as_ref())
             }
         };
