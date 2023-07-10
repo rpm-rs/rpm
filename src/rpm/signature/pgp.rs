@@ -103,7 +103,7 @@ impl Signer {
                 secret_key,
                 algorithm: AlgorithmType::EdDSA,
             }),
-            a => Err(Error::UnsupportedPGPKeyType(a)),
+            algorithm => Err(Error::UnsupportedPGPKeyType(algorithm)),
         }
     }
 }
