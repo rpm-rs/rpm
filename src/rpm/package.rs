@@ -468,6 +468,7 @@ impl PackageMetadata {
             .get_entry_data_as_i18n_string(IndexTag::RPMTAG_GROUP)
     }
 
+    /// Get the packager, the name of the person that produced this package
     #[inline]
     pub fn get_packager(&self) -> Result<&str, Error> {
         self.header
@@ -504,13 +505,13 @@ impl PackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
     }
 
-    /// Get the %prein scriptlet for this package
+    /// Get the %pre scriptlet for this package
     #[inline]
     pub fn get_pre_install_script(&self) -> Result<Scriptlet, Error> {
         self.get_scriptlet(PREIN_TAGS)
     }
 
-    /// Get the %postin scriptlet for this package
+    /// Get the %post scriptlet for this package
     #[inline]
     pub fn get_post_install_script(&self) -> Result<Scriptlet, Error> {
         self.get_scriptlet(POSTIN_TAGS)

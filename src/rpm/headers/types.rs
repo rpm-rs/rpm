@@ -184,10 +184,6 @@ impl From<FileMode> for u16 {
     }
 }
 
-/// Description of file modes.
-///
-/// A subset
-
 #[derive(Debug)]
 pub struct FileOptions {
     pub(crate) destination: String,
@@ -201,6 +197,10 @@ pub struct FileOptions {
 }
 
 impl FileOptions {
+    /// Create a new FileOptions for a file which will be placed at the provided path.
+    ///
+    /// By default, files will be owned by the "root" user and group, and inherit their permissions
+    /// from the on-disk file.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(dest: impl Into<String>) -> FileOptionsBuilder {
         FileOptionsBuilder {
@@ -224,27 +224,46 @@ pub struct FileOptionsBuilder {
 }
 
 impl FileOptionsBuilder {
+    /// Indicates that the file should be owned by the specified username.
+    ///
+    /// Specifying a non-root user here will direct RPM to create the user via sysusers.d at
+    /// installation time.
+    ///
+    /// See: %attr from specfile syntax
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.inner.user = user.into();
         self
     }
 
+    /// Indicates that the file should be part of the specified group.
+    ///
+    /// Specifying a non-root group here will direct RPM to create the group via sysusers.d at
+    /// installation time.
+    ///
+    /// See: %attr from specfile syntax
     pub fn group(mut self, group: impl Into<String>) -> Self {
         self.inner.group = group.into();
         self
     }
 
+    /// Indicates that a file is a symlink pointing to the location provided
     pub fn symlink(mut self, symlink: impl Into<String>) -> Self {
         self.inner.symlink = symlink.into();
         self
     }
 
+    /// Set the FileMode - type of file (or directory, or symlink) and permissions.
+    ///
+    /// See: %attr from specfile syntax
     pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
         self.inner.inherit_permissions = false;
         self
     }
 
+    /// Indicates that a file should have the provided POSIX file capabilities.
+    ///
+    /// See: %caps from specfile syntax
     pub fn caps(mut self, caps: impl Into<String>) -> Result<Self, errors::Error> {
         // verify capabilities
         self.inner.caps = match FileCaps::from_str(&caps.into()) {
@@ -258,31 +277,60 @@ impl FileOptionsBuilder {
         Ok(self)
     }
 
+    /// Indicates that a file is documentation.
+    ///
+    /// See: %doc from specfile syntax
     pub fn is_doc(mut self) -> Self {
         self.inner.flag.insert(FileFlags::DOC);
         self
     }
 
+    /// Indicates that a file is a configuration file. When a package is updated, files marked as
+    /// configuration files will be checked for modifications compared to their default state,
+    /// and if any are present then the old configuration file will be saved with a .rpmsave extension.
+    ///
+    /// User intervention may be required to reconcile the changes between the new and old configs.
+    ///
+    /// See: %config from specfile syntax
     pub fn is_config(mut self) -> Self {
         self.inner.flag.insert(FileFlags::CONFIG);
         self
     }
 
+    /// Indicates that a (configuration) file should not be replaced if it has been modified.
+    /// When a package is updated, configuration files will be checked for modifications compared
+    /// to their default state, and if any are present then the new configuration file will
+    /// be installed with a .rpmnew extension.
+    ///
+    /// User intervention may be required to reconcile the changes between the new and old configs.
+    ///
+    /// See: %config(noreplace) from specfile syntax
     pub fn is_no_replace(mut self) -> Self {
         self.inner.flag.insert(FileFlags::NOREPLACE);
         self
     }
 
+    /// Indicates that a file ought not to actually be included in the package, but that it should
+    /// still be considered owned by a package (e.g. a log file).  Its attributes are still tracked.
+    ///
+    /// See: %ghost from specfile syntax
     pub fn is_ghost(mut self) -> Self {
         self.inner.flag.insert(FileFlags::GHOST);
         self
     }
 
+    /// Indicates that a file is a software license. License files are always included - they are
+    /// never filtered out during installation.
+    ///
+    /// See: %license from specfile syntax
     pub fn is_license(mut self) -> Self {
         self.inner.flag.insert(FileFlags::LICENSE);
         self
     }
 
+    /// Deprecated (use `is_doc()`` instead). Marks a file as a README.
+    ///
+    /// See: %readme from specfile syntax
     pub fn is_readme(mut self) -> Self {
         self.inner.flag.insert(FileFlags::README);
         self
@@ -304,10 +352,22 @@ pub struct Dependency {
 }
 
 impl Dependency {
+    /// Create a dependency on any version of some package or file (or string in general).
+    pub fn any(dep_name: impl Into<String>) -> Self {
+        Self::new(dep_name.into(), DependencyFlags::ANY, "".to_string())
+    }
+
+    /// Create a dependency on an exact version of some package.
+    pub fn eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self::new(dep_name.into(), DependencyFlags::EQUAL, version.into())
+    }
+
+    /// Create a dependency on a version of some package less than the provided one.
     pub fn less(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::LESS, version.into())
     }
 
+    /// Create a dependency on a version of some package less than or equal to the provided one.
     pub fn less_eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
@@ -316,14 +376,12 @@ impl Dependency {
         )
     }
 
-    pub fn eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
-        Self::new(dep_name.into(), DependencyFlags::EQUAL, version.into())
-    }
-
+    /// Create a dependency on a version of some package greater than the provided one.
     pub fn greater(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(dep_name.into(), DependencyFlags::GREATER, version.into())
     }
 
+    /// Create a dependency on a version of some package greater than or equal to the provided one.
     pub fn greater_eq(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
@@ -332,10 +390,7 @@ impl Dependency {
         )
     }
 
-    pub fn any(dep_name: impl Into<String>) -> Self {
-        Self::new(dep_name.into(), DependencyFlags::ANY, "".to_string())
-    }
-
+    /// Create a dependency on an rpm feature, required to install this package
     pub fn rpmlib(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
             dep_name.into(),
@@ -387,22 +442,18 @@ impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
 ///
 pub(crate) type ScriptletIndexTags = (IndexTag, IndexTag, IndexTag);
 
-/// Description of a scriptlet as present in a RPM header record,
+/// Description of a scriptlet as present in a RPM header record
 pub struct Scriptlet {
-    /// Content of the scriptlet,
-    ///
+    /// Content of the scriptlet
     pub script: String,
-    /// Optional scriptlet flags,
-    ///
+    /// Optional scriptlet flags
     pub flags: Option<ScriptletFlags>,
-    /// Optional scriptlet interpreter/arguments,
-    ///
+    /// Optional scriptlet interpreter/arguments
     pub program: Option<Vec<String>>,
 }
 
 impl Scriptlet {
-    /// Returns a new scriplet,
-    ///
+    /// Returns a new scriplet
     #[inline]
     pub fn new(script: impl Into<String>) -> Scriptlet {
         Scriptlet {
@@ -412,26 +463,23 @@ impl Scriptlet {
         }
     }
 
-    /// Sets the scriptlet flags,
+    /// Sets the scriptlet flags
     ///
     /// **Note** These flags can be used to configure macro expansions etc.
-    ///
     #[inline]
     pub fn flags(mut self, flags: ScriptletFlags) -> Self {
         self.flags = Some(flags);
         self
     }
 
-    /// Sets the scriptlet interpreter/arguments,
-    ///
+    /// Sets the scriptlet interpreter/arguments
     #[inline]
     pub fn prog(mut self, mut prog: Vec<impl Into<String>>) -> Self {
         self.program = Some(prog.drain(..).map(|p| p.into()).collect_vec());
         self
     }
 
-    /// Consumes the receiver and applies all index entries for the scriptlet based on builder state,
-    ///
+    /// Consumes the receiver and applies all index entries for the scriptlet based on builder state
     pub(crate) fn apply(
         self,
         records: &mut Vec<IndexEntry<IndexTag>>,
