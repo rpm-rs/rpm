@@ -121,28 +121,64 @@ impl PackageBuilder {
         }
     }
 
-    pub fn vendor(mut self, content: impl Into<String>) -> Self {
-        self.vendor = Some(content.into());
-        self
-    }
-    pub fn url(mut self, content: impl Into<String>) -> Self {
-        self.url = Some(content.into());
-        self
-    }
-
-    pub fn vcs(mut self, content: impl Into<String>) -> Self {
-        self.vcs = Some(content.into());
-        self
-    }
-
+    /// Set the package epoch.
+    ///
+    /// The main scenario in which this is used is if the version numbering scheme of the packaged
+    /// software changes in such a way that "new" versions are seen as older than packages under
+    /// the old versioning scheme. Packages with bigger epochs are always treated as newer than
+    /// packages with smaller epochs, so it can be used as an override, forcing the new packages to
+    /// be seen as newer.
+    ///
+    /// However, because of this, the epoch of a package must never decrease, and shouldn't be set
+    /// unless required.
     pub fn epoch(mut self, epoch: u32) -> Self {
         self.epoch = epoch;
         self
     }
 
-    /// Define a detailed, multiline, description of what the packaged software does.
+    /// Set the package release. Exactly what this value represents depends on the
+    /// distribution's packaging protocols, but often the components are:
+    ///
+    /// * an integer representing the number of builds that have been performed with this version
+    /// * a short-form representation of the distribution name and version
+    /// * whether this is a pre-release version
+    /// * source control information
+    ///
+    /// The distribution's packaging protocols should be followed when constructing this value.
+    ///
+    /// Examples:
+    ///
+    /// * 1.el8
+    /// * 3.fc38
+    /// * 5.el9_2.alma
+    /// * 0.20230715gitabcdef
+    pub fn release(mut self, release: impl Into<String>) -> Self {
+        self.release = release.into();
+        self
+    }
+
+    /// Set the URL for the package. Most often this is the website of the upstream project being
+    /// packaged
+    pub fn url(mut self, content: impl Into<String>) -> Self {
+        self.url = Some(content.into());
+        self
+    }
+
+    /// Set the version control URL of the upstream project
+    pub fn vcs(mut self, content: impl Into<String>) -> Self {
+        self.vcs = Some(content.into());
+        self
+    }
+
+    /// Define a detailed, multiline, description of what the packaged software does
     pub fn description(mut self, desc: impl Into<String>) -> Self {
         self.desc = Some(desc.into());
+        self
+    }
+
+    /// Set the package vendor - the name of the organization that is producing the package.
+    pub fn vendor(mut self, content: impl Into<String>) -> Self {
+        self.vendor = Some(content.into());
         self
     }
 
@@ -184,7 +220,8 @@ impl PackageBuilder {
         self
     }
 
-    /// Define a value that can be used for associating several package builds as being part of one operation
+    /// Define a value that can be used for associating several package builds as being part of
+    /// one operation
     ///
     /// You can use any value, but the standard format is "${build_host} ${build_time}"
     pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
@@ -223,8 +260,8 @@ impl PackageBuilder {
     /// For Xz compression, the expected range is 0 to 9, with a default value of 9.
     /// For Zstd compression, the expected range is 1 to 22, with a default value of 19.
     ///
-    /// If this method is not called, the payload will be Gzip compressed by default. This may change
-    /// in future versions of the library.
+    /// If this method is not called, the payload will be Gzip compressed by default. This may
+    /// change in future versions of the library.
     pub fn compression(mut self, comp: impl Into<CompressionWithLevel>) -> Self {
         self.compression = comp.into();
         self
@@ -372,88 +409,81 @@ impl PackageBuilder {
         Ok(())
     }
 
-    /// Sets the scriptlet content for `%prein` during package install and upgrade,
+    /// Set a script to be executed just before the package is installed or upgraded.
     ///
-    /// **Note** `%prein` script is executed right before the package is installed
-    ///
+    /// See: %pre from specfile syntax
     #[inline]
     pub fn pre_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.pre_inst_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%postin` during package install and upgrade,
+    /// Set a script to be executed just after the package is installed or upgraded.
     ///
-    /// **Note** `%postin` script is executed right after the package got installed
-    ///
+    /// See: %post from specfile syntax
     #[inline]
     pub fn post_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.post_inst_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%preun` during package uninstall and upgrade,
+    /// Set a script to be executed just before package removal during uninstallation or upgrade.
     ///
-    /// **Note** `%preun` script is executed right before the package gets removed
-    ///
+    /// See: %preun from specfile syntax
     #[inline]
     pub fn pre_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.pre_uninst_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%postun` during package uninstall and upgrade,
+    /// Set a script to be executed just after package removal during uninstallation or upgrade.
     ///
-    /// **Note** `%postun` script is executed right after the package was removed
-    ///
+    /// See: %postun from specfile syntax
     #[inline]
     pub fn post_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.post_uninst_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%pretrans` during package install and upgrade,
+    /// Set a script to be executed before a transaction in which the package is installed or
+    /// upgraded. This happens before any packages have been installed / upgraded / removed.
     ///
-    /// **Note** `%pretrans` scripts are executed for to be installed packages before any packages are installed/removed
-    ///
+    /// See: %pretrans from specfile syntax
     #[inline]
     pub fn pre_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.pre_trans_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%posttrans` during package install and upgrade,
+    /// Set a script to be executed after a transaction in which the package has been installed
+    /// or upgraded. This happens after all packages in the transaction have been installed /
+    /// upgraded / removed.
     ///
-    /// **Note** `%posttrans` scripts are all executed at the end of the transaction that installed their packages
-    ///
+    /// See: %posttrans from specfile syntax
     #[inline]
     pub fn post_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.post_trans_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%preuntrans` during package uninstall and upgrade,
+    /// Set a script to be executed before a transaction in which the package is being removed or
+    /// upgraded. This happens before any packages have been installed / upgraded / removed.
     ///
-    /// **Note** `%preuntrans` scripts are executed for to be removed packages before any packages are installed/removed
-    ///
+    /// See: %preuntrans from specfile syntax
     #[inline]
     pub fn pre_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.pre_untrans_script = Some(content.into());
         self
     }
 
-    /// Sets the scriptlet content for `%postuntrans` during package uninstall and upgrade,
+    /// Set a script to be executed after a transaction in which the package is being removed or
+    /// upgraded. This happens after all packages in the transaction have been installed /
+    /// upgraded / removed.
     ///
-    /// **Note** `%postuntrans` scripts are all executed at the end of the transaction that removes their packages
-    ///
+    /// See: %posttrans from specfile syntax
     #[inline]
     pub fn post_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.post_untrans_script = Some(content.into());
-        self
-    }
-
-    pub fn release(mut self, release: impl Into<String>) -> Self {
-        self.release = release.into();
         self
     }
 
@@ -531,9 +561,7 @@ impl PackageBuilder {
         self
     }
 
-    /// build without a signature
-    ///
-    /// ignores a present key, if any
+    /// Build the package
     pub fn build(self) -> Result<Package, Error> {
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
@@ -568,7 +596,7 @@ impl PackageBuilder {
         Ok(pkg)
     }
 
-    /// use an external signer to sing and build
+    /// Build the package and sign it with the provided signer
     ///
     /// See `signature::Signing` for more details.
     #[cfg(feature = "signature-meta")]
@@ -666,6 +694,10 @@ impl PackageBuilder {
 
         let mut combined_file_sizes: u64 = 0;
 
+        // @todo: sort entries by path?
+        // @todo: normalize path?
+        // @todo: remove duplicates?
+        // if we remove duplicates, remember anything already pre-computed
         for (cpio_path, entry) in self.files.iter() {
             combined_file_sizes += entry.size;
             file_sizes.push(entry.size);

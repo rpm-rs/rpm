@@ -516,23 +516,13 @@ bitflags! {
 
 bitflags! {
     /// Flags to configure scriptlet execution,
-    ///
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
     pub struct ScriptletFlags: u32 {
-        /// Macro expansion,
-        ///
-        /// Corresponds to RPMSCRIPT_FLAG_EXPAND
-        ///
+        /// Macro expansion
         const EXPAND = 1;
-        /// Header queryformat expansion,
-        ///
-        /// Corresponds to RPMSCRIPT_FLAG_QFORMAT
-        ///
+        /// Header queryformat expansion
         const QFORMAT = 1 << 1;
-        /// Critical for success/failure,
-        ///
-        /// Corresponds to RPMSCRIPT_FLAG_CRITICAL
-        ///
+        /// Critical for success/failure
         const CRITICAL = 1 << 2;
     }
 }
@@ -593,7 +583,6 @@ pub enum DigestAlgorithm {
 }
 
 /// Index tag values for the %prein scriptlet,
-///
 pub(crate) const PREIN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREIN,
     IndexTag::RPMTAG_PREINFLAGS,
@@ -601,7 +590,6 @@ pub(crate) const PREIN_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %postin scriptlet,
-///
 pub(crate) const POSTIN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTIN,
     IndexTag::RPMTAG_POSTINFLAGS,
@@ -609,7 +597,6 @@ pub(crate) const POSTIN_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %preun scriptlet,
-///
 pub(crate) const PREUN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREUN,
     IndexTag::RPMTAG_PREUNFLAGS,
@@ -617,7 +604,6 @@ pub(crate) const PREUN_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %postun scriptlet,
-///
 pub(crate) const POSTUN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTUN,
     IndexTag::RPMTAG_POSTUNFLAGS,
@@ -625,7 +611,6 @@ pub(crate) const POSTUN_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %pretrans scriptlet,
-///
 pub(crate) const PRETRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PRETRANS,
     IndexTag::RPMTAG_PRETRANSFLAGS,
@@ -633,7 +618,6 @@ pub(crate) const PRETRANS_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %posttrans scriptlet,
-///
 pub(crate) const POSTTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTTRANS,
     IndexTag::RPMTAG_POSTTRANSFLAGS,
@@ -641,7 +625,6 @@ pub(crate) const POSTTRANS_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %preuntrans scriptlet,
-///
 pub(crate) const PREUNTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREUNTRANS,
     IndexTag::RPMTAG_PREUNTRANSFLAGS,
@@ -649,7 +632,6 @@ pub(crate) const PREUNTRANS_TAGS: ScriptletIndexTags = (
 );
 
 /// Index tag values for the %postuntrans scriptlet,
-///
 pub(crate) const POSTUNTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTUNTRANS,
     IndexTag::RPMTAG_POSTUNTRANSFLAGS,
