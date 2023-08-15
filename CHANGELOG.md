@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `PackageMetadata::get_file_entries` method can gets capability headers for each file.
+
 ## 0.12.0
 
 ### Breaking Changes
