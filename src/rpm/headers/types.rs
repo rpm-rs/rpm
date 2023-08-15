@@ -25,6 +25,7 @@ pub struct PackageFileEntry {
     pub group: String,
     pub base_name: String,
     pub dir: String,
+    pub caps: String,
     pub(crate) content: Vec<u8>,
 }
 
@@ -179,6 +180,7 @@ pub struct FileOptions {
     pub(crate) mode: FileMode,
     pub(crate) flag: FileFlags,
     pub(crate) inherit_permissions: bool,
+    pub(crate) caps: String,
 }
 
 impl FileOptions {
@@ -193,6 +195,7 @@ impl FileOptions {
                 mode: FileMode::regular(0o664),
                 flag: FileFlags::empty(),
                 inherit_permissions: true,
+                caps: "".to_string(),
             },
         }
     }
@@ -221,6 +224,11 @@ impl FileOptionsBuilder {
     pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
         self.inner.inherit_permissions = false;
+        self
+    }
+
+    pub fn caps(mut self, caps: impl Into<String>) -> Self {
+        self.inner.caps = caps.into();
         self
     }
 

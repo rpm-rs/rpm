@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Support for setting file capabilities via the RPMTAGS_FILECAPS header.
+
 ## 0.12.0
 
 ### Breaking Changes

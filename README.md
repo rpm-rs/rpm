@@ -50,6 +50,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
         // you can set a custom mode and custom user too
         rpm::FileOptions::new("/etc/awesome/second.toml")
             .mode(rpm::FileMode::regular(0o644))
+            .caps("cap_sys_admin,cap_net_admin=pe")
             .user("hugo"),
     )?
     .pre_install_script("echo preinst")

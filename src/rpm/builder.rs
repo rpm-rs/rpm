@@ -273,8 +273,8 @@ impl PackageBuilder {
     ///     )?
     ///      .with_file(
     ///         "./awesome-config.toml",
-    ///         // you can set a custom mode and custom user too
-    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).user("hugo"),
+    ///         // you can set a custom mode, capabilities and custom user too
+    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe").user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -349,6 +349,7 @@ impl PackageBuilder {
             link: options.symlink,
             modified_at,
             dir: dir.clone(),
+            caps: options.caps,
             sha_checksum,
         };
 
@@ -574,6 +575,7 @@ impl PackageBuilder {
         let files_len = self.files.len();
         let mut file_sizes = Vec::with_capacity(files_len);
         let mut file_modes = Vec::with_capacity(files_len);
+        let mut file_caps = Vec::with_capacity(files_len);
         let mut file_rdevs = Vec::with_capacity(files_len);
         let mut file_mtimes = Vec::with_capacity(files_len);
         let mut file_hashes = Vec::with_capacity(files_len);
@@ -594,6 +596,7 @@ impl PackageBuilder {
             combined_file_sizes += entry.size;
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
+            file_caps.push(entry.caps.to_owned());
             // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
             // Who knows, who cares.
             file_rdevs.push(0);
@@ -893,6 +896,11 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_FILEMODES,
                     offset,
                     IndexData::Int16(file_modes),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_FILECAPS,
+                    offset,
+                    IndexData::StringArray(file_caps),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILERDEVS,
