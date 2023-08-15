@@ -46,6 +46,21 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
 
     pkg.verify_digests()?;
 
+    // check various metadata on the files
+    pkg.metadata.get_file_entries()?.iter().for_each(|f| {
+        if f.path.as_os_str() == "/etc/awesome/second.toml" {
+            assert_eq!(
+                f.clone().caps.unwrap(),
+                "cap_sys_admin,cap_sys_ptrace=pe".to_string()
+            );
+            assert_eq!(f.ownership.user, "hugo".to_string());
+        } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
+            assert_eq!(f.caps, Some("".to_string()));
+        } else if f.path.as_os_str() == "/usr/bin/awesome" {
+            assert_eq!(f.mode, FileMode::from(0o100644));
+        }
+    });
+
     Ok(())
 }
 
@@ -299,6 +314,11 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let second_pkg = Package::parse(&mut buf.as_slice())?;
     assert_eq!(package.content.len(), second_pkg.content.len());
     assert!(package.metadata == second_pkg.metadata);
+
+    // Verify that if there are no capabilities set then the caps field is None
+    package.metadata.get_file_entries()?.iter().for_each(|f| {
+        assert_eq!(f.clone().caps, None);
+    });
 
     package.verify_digests()?;
 

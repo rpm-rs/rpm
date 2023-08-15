@@ -832,11 +832,29 @@ impl PackageMetadata {
         let flags = self
             .header
             .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS);
-        // @todo
-        let caps = self.header.get_entry_data_as_string_array(IndexTag::RPMTAG_FILECAPS);
+
+        // Look for the file capabilities tag
+        // but it's not required so don't error out if it's not
+        let caps = match self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILECAPS)
+        {
+            Ok(caps) => Ok(Some(caps)),
+            Err(Error::TagNotFound(_)) => Ok(None),
+            Err(e) => return Err(e),
+        };
 
         match (modes, users, groups, digests, mtimes, sizes, flags, caps) {
-            (Ok(modes), Ok(users), Ok(groups), Ok(digests), Ok(mtimes), Ok(sizes), Ok(flags), Ok(caps)) => {
+            (
+                Ok(modes),
+                Ok(users),
+                Ok(groups),
+                Ok(digests),
+                Ok(mtimes),
+                Ok(sizes),
+                Ok(flags),
+                Ok(caps),
+            ) => {
                 let paths = self.get_file_paths()?;
                 let n = paths.len();
 
@@ -853,11 +871,15 @@ impl PackageMetadata {
                 ))
                 .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
-                    |mut acc, (path, user, group, mode, digest, mtime, size, flags, cap)| {
+                    |mut acc, (path, user, group, mode, digest, mtime, size, flags, _cap)| {
                         let digest = if digest.is_empty() {
                             None
                         } else {
                             Some(FileDigest::load_from_str(algorithm, digest)?)
+                        };
+                        let cap = match caps {
+                            Some(ref caps) => caps.get(acc.len()).map(|x| x.to_owned()),
+                            None => None
                         };
                         acc.push(FileEntry {
                             path,
@@ -870,7 +892,7 @@ impl PackageMetadata {
                             digest,
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,
-                            caps: cap.to_owned(),
+                            caps: cap,
                         });
                         Ok(acc)
                     },
