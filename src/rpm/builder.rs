@@ -898,11 +898,6 @@ impl PackageBuilder {
                     IndexData::Int16(file_modes),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_FILECAPS,
-                    offset,
-                    IndexData::StringArray(file_caps),
-                ),
-                IndexEntry::new(
                     IndexTag::RPMTAG_FILERDEVS,
                     offset,
                     IndexData::Int16(file_rdevs),
@@ -978,6 +973,13 @@ impl PackageBuilder {
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
             ]);
+            if file_caps.iter().any(|caps| !caps.is_empty()) {
+                actual_records.extend([IndexEntry::new(
+                    IndexTag::RPMTAG_FILECAPS,
+                    offset,
+                    IndexData::StringArray(file_caps),
+                )])
+            }
         }
 
         actual_records.extend([
