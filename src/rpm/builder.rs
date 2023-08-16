@@ -274,7 +274,7 @@ impl PackageBuilder {
     ///      .with_file(
     ///         "./awesome-config.toml",
     ///         // you can set a custom mode, capabilities and custom user too
-    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe").user("hugo"),
+    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe")?.user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -983,7 +983,7 @@ impl PackageBuilder {
                     IndexData::StringArray(
                         file_caps
                             .iter()
-                            .map(|f| f.unwrap().to_string())
+                            .map(|f| f.unwrap_or(capctl::FileCaps::empty()).to_string())
                             .collect::<Vec<String>>(),
                     ),
                 )])

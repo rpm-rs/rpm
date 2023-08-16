@@ -51,11 +51,13 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
         if f.path.as_os_str() == "/etc/awesome/second.toml" {
             assert_eq!(
                 f.clone().caps.unwrap(),
-                "cap_sys_admin,cap_sys_ptrace=pe".to_string()
+                "cap_sys_ptrace,cap_sys_admin=ep".to_string()
             );
             assert_eq!(f.ownership.user, "hugo".to_string());
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
-            assert_eq!(f.caps, Some("".to_string()));
+            // The "=" capability is equivalent to an empty capability set
+            // https://www.man7.org/linux/man-pages/man3/cap_from_text.3.html
+            assert_eq!(f.caps, Some("=".to_string()));
         } else if f.path.as_os_str() == "/usr/bin/awesome" {
             assert_eq!(f.mode, FileMode::from(0o100644));
         }
