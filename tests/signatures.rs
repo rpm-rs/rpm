@@ -53,7 +53,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
 /// Test an attempt to verify the signature of a package that is not signed
 #[test]
 fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg = rpm::Package::open(&common::rpm_empty_path())?;
+    let pkg = rpm::Package::open(common::rpm_empty_path())?;
 
     // test RSA
     let verification_key = common::rsa_public_key();
@@ -161,7 +161,7 @@ fn build_parse_sign_and_verify(
     assert_eq!(3, pkg.metadata.get_epoch()?);
 
     // sign
-    let signer: Signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
+    let signer: Signer = Signer::load_from_asc_bytes(signing_key)?;
     pkg.sign(signer)?;
 
     let out_file = common::cargo_out_dir().join(pkg_out_path.as_ref());
@@ -169,7 +169,7 @@ fn build_parse_sign_and_verify(
 
     // verify
     let package = rpm::Package::open(&out_file)?;
-    let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+    let verifier = Verifier::load_from_asc_bytes(verification_key)?;
     package.verify_signature(verifier)?;
 
     Ok(())

@@ -430,6 +430,8 @@ pub struct FileEntry {
     pub flags: FileFlags,
     // @todo SELinux context? how is that done?
     pub digest: Option<FileDigest>,
+    /// Defines any capabilities on the file.
+    pub caps: Option<String>,
 }
 
 fn parse_entry_data_number<'a, T, E, F>(

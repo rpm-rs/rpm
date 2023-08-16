@@ -50,6 +50,9 @@ pub enum Error {
     #[error("invalid destination path {path} - {desc}")]
     InvalidDestinationPath { path: String, desc: &'static str },
 
+    #[error("invalid capabilities specified {caps}")]
+    InvalidCapabilities { caps: String },
+
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
 
