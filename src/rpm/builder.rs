@@ -980,7 +980,12 @@ impl PackageBuilder {
                 actual_records.extend([IndexEntry::new(
                     IndexTag::RPMTAG_FILECAPS,
                     offset,
-                    IndexData::StringArray(file_caps.iter().map(|f| f.unwrap().to_string()).collect::<Vec<String>>()),
+                    IndexData::StringArray(
+                        file_caps
+                            .iter()
+                            .map(|f| f.unwrap().to_string())
+                            .collect::<Vec<String>>(),
+                    ),
                 )])
             }
         }

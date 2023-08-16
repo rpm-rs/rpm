@@ -188,8 +188,6 @@ pub struct FileOptions {
     pub(crate) caps: Option<FileCaps>,
 }
 
-
-
 impl FileOptions {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(dest: impl Into<String>) -> FileOptionsBuilder {
@@ -239,7 +237,11 @@ impl FileOptionsBuilder {
         // verify capabilities
         self.inner.caps = match FileCaps::from_str(&caps.into()) {
             Ok(caps) => Some(caps),
-            Err(e) => return Err(errors::Error::InvalidCapabilities { caps: e.to_string() }),
+            Err(e) => {
+                return Err(errors::Error::InvalidCapabilities {
+                    caps: e.to_string(),
+                })
+            }
         };
         Ok(self)
     }

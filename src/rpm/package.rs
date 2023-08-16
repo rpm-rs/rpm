@@ -878,7 +878,7 @@ impl PackageMetadata {
                             Some(FileDigest::load_from_str(algorithm, digest)?)
                         };
                         let cap = match caps {
-                            Some(ref caps) => caps.get(idx).map(|x| x.to_owned()),
+                            Some(caps) => caps.get(idx).map(|x| x.to_owned()),
                             None => None,
                         };
                         acc.push(FileEntry {

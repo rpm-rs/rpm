@@ -197,8 +197,8 @@ mod test {
 
         let sig_header_only = [0u8; 32];
 
-        let digest_header_sha1 = hex::encode(&[0u8; 64]);
-        let digest_header_sha256: String = hex::encode(&[0u8; 64]);
+        let digest_header_sha1 = hex::encode([0u8; 64]);
+        let digest_header_sha256: String = hex::encode([0u8; 64]);
 
         let digest_header_and_archive = [0u8; 64];
 
