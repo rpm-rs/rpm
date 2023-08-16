@@ -983,7 +983,10 @@ impl PackageBuilder {
                     IndexData::StringArray(
                         file_caps
                             .iter()
-                            .map(|f| f.unwrap_or(capctl::FileCaps::empty()).to_string())
+                            .map(|f| match f {
+                                Some(caps) => caps.to_string(),
+                                None => "".to_string(),
+                            })
                             .collect::<Vec<String>>(),
                     ),
                 )])
