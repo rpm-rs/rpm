@@ -867,19 +867,19 @@ impl PackageMetadata {
                     mtimes,
                     sizes,
                     flags,
-                    caps,
                 ))
+                .enumerate()
                 .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
-                    |mut acc, (path, user, group, mode, digest, mtime, size, flags, _cap)| {
+                    |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags))| {
                         let digest = if digest.is_empty() {
                             None
                         } else {
                             Some(FileDigest::load_from_str(algorithm, digest)?)
                         };
                         let cap = match caps {
-                            Some(ref caps) => caps.get(acc.len()).map(|x| x.to_owned()),
-                            None => None
+                            Some(ref caps) => caps.get(idx).map(|x| x.to_owned()),
+                            None => None,
                         };
                         acc.push(FileEntry {
                             path,

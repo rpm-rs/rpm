@@ -26,7 +26,7 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
             // you can set a custom mode and custom user too
             FileOptions::new("/etc/awesome/second.toml")
                 .mode(0o100744)
-                .caps("cap_sys_admin,cap_sys_ptrace=pe")
+                .caps("cap_sys_admin,cap_sys_ptrace=pe")?
                 .user("hugo"),
         )?
         .pre_install_script("echo preinst")

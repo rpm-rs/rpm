@@ -349,6 +349,9 @@ impl PackageBuilder {
             link: options.symlink,
             modified_at,
             dir: dir.clone(),
+            // Convert the caps to a string, so that we can store it in the header.
+            // We do this so that it's possible to verify that caps are correct when provided
+            // and then later check if any were set
             caps: options.caps,
             sha_checksum,
         };
@@ -973,11 +976,11 @@ impl PackageBuilder {
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
             ]);
-            if file_caps.iter().any(|caps| !caps.is_empty()) {
+            if file_caps.iter().any(|caps| caps.is_some()) {
                 actual_records.extend([IndexEntry::new(
                     IndexTag::RPMTAG_FILECAPS,
                     offset,
-                    IndexData::StringArray(file_caps),
+                    IndexData::StringArray(file_caps.iter().map(|f| f.unwrap().to_string()).collect::<Vec<String>>()),
                 )])
             }
         }

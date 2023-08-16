@@ -1,5 +1,8 @@
 //! A collection of types used in various header records.
+use std::str::FromStr;
+
 use crate::{constants::*, errors, Timestamp};
+use capctl::FileCaps;
 use digest::Digest;
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
@@ -25,7 +28,7 @@ pub struct PackageFileEntry {
     pub group: String,
     pub base_name: String,
     pub dir: String,
-    pub caps: String,
+    pub caps: Option<FileCaps>,
     pub(crate) content: Vec<u8>,
 }
 
@@ -172,6 +175,8 @@ impl From<FileMode> for u16 {
 /// Description of file modes.
 ///
 /// A subset
+
+#[derive(Debug)]
 pub struct FileOptions {
     pub(crate) destination: String,
     pub(crate) user: String,
@@ -180,8 +185,10 @@ pub struct FileOptions {
     pub(crate) mode: FileMode,
     pub(crate) flag: FileFlags,
     pub(crate) inherit_permissions: bool,
-    pub(crate) caps: String,
+    pub(crate) caps: Option<FileCaps>,
 }
+
+
 
 impl FileOptions {
     #[allow(clippy::new_ret_no_self)]
@@ -195,12 +202,13 @@ impl FileOptions {
                 mode: FileMode::regular(0o664),
                 flag: FileFlags::empty(),
                 inherit_permissions: true,
-                caps: "".to_string(),
+                caps: None,
             },
         }
     }
 }
 
+#[derive(Debug)]
 pub struct FileOptionsBuilder {
     inner: FileOptions,
 }
@@ -227,9 +235,13 @@ impl FileOptionsBuilder {
         self
     }
 
-    pub fn caps(mut self, caps: impl Into<String>) -> Self {
-        self.inner.caps = caps.into();
-        self
+    pub fn caps(mut self, caps: impl Into<String>) -> Result<Self, errors::Error> {
+        // verify capabilities
+        self.inner.caps = match FileCaps::from_str(&caps.into()) {
+            Ok(caps) => Some(caps),
+            Err(e) => return Err(errors::Error::InvalidCapabilities { caps: e.to_string() }),
+        };
+        Ok(self)
     }
 
     pub fn is_doc(mut self) -> Self {
@@ -353,7 +365,6 @@ impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
 }
 
 mod test {
-
     #[test]
     fn test_file_mode() -> Result<(), Box<dyn std::error::Error>> {
         use super::*;
@@ -447,6 +458,19 @@ mod test {
             assert_eq!(raw_mode as u16, mode.raw_mode());
             assert_eq!(expected_type, mode.file_type());
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_verify_capabilities_valid() {
+        let blank_file = crate::FileOptions::new("/usr/bin/awesome");
+        blank_file.caps("cap_net_admin,cap_net_raw+p").unwrap();
+    }
+
+    #[test]
+    fn test_verify_capabilities_invalid() -> Result<(), crate::errors::Error> {
+        let blank_file = crate::FileOptions::new("/usr/bin/awesome");
+        blank_file.caps("cap_net_an,cap_net_raw+p").unwrap_err();
         Ok(())
     }
 }
