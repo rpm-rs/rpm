@@ -39,17 +39,19 @@ pub enum FileMode {
     // is the bit representation which is the same for both.
     Dir { permissions: u16 },
     Regular { permissions: u16 },
+    SymbolicLink { permissions: u16 },
     // For "Invalid" we use a larger integer since it is possible to create an invalid
     // FileMode by providing an overflowing integer.
     Invalid { raw_mode: i32, reason: &'static str },
 }
 
-// there are more file types but in the context of RPM, only regular and directory should be relevant.
+// there are more file types but in the context of RPM, only regular and directory and symbolic file should be relevant.
 // See <https://man7.org/linux/man-pages/man7/inode.7.html> section "The file type and mode"
 const FILE_TYPE_BIT_MASK: u16 = 0o170000; // bit representation = "1111000000000000"
 const PERMISSIONS_BIT_MASK: u16 = 0o7777; // bit representation = "0000111111111111"
-const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
-const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
+pub const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
+pub const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
+pub const SYMBOLIC_LINK_FILE_TYPE: u16 = 0o120000; // bit representation = "1010000000000000"
 
 // @todo: <https://github.com/rpm-rs/rpm/issues/52>
 impl From<u16> for FileMode {
@@ -69,6 +71,7 @@ impl From<u16> for FileMode {
         match file_type {
             DIR_FILE_TYPE => FileMode::Dir { permissions },
             REGULAR_FILE_TYPE => FileMode::Regular { permissions },
+            SYMBOLIC_LINK_FILE_TYPE => FileMode::SymbolicLink { permissions },
             _ => FileMode::Invalid {
                 raw_mode: raw_mode as i32,
                 reason: "unknown file type",
@@ -107,6 +110,13 @@ impl FileMode {
         }
     }
 
+    /// Create a new Symbolic link instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
+    pub fn symbolic_link(permissions: u16) -> Self {
+        FileMode::SymbolicLink {
+            permissions: permissions & PERMISSIONS_BIT_MASK,
+        }
+    }
+
     /// Usually this should be done with TryFrom, but since we already have a `From` implementation,
     /// we run into this issue: <https://github.com/rust-lang/rust/issues/50133>
     pub fn try_from_raw(raw: i32) -> Result<Self, errors::Error> {
@@ -128,7 +138,7 @@ impl FileMode {
     /// Returns the complete file mode (type and permissions)
     pub fn raw_mode(&self) -> u16 {
         match self {
-            Self::Dir { permissions } | Self::Regular { permissions } => {
+            Self::Dir { permissions } | Self::Regular { permissions } | Self::SymbolicLink { permissions } => {
                 *permissions | self.file_type()
             }
             Self::Invalid {
@@ -142,6 +152,7 @@ impl FileMode {
         match self {
             Self::Dir { permissions: _ } => DIR_FILE_TYPE,
             Self::Regular { permissions: _ } => REGULAR_FILE_TYPE,
+            Self::SymbolicLink { permissions: _ } => SYMBOLIC_LINK_FILE_TYPE,
             Self::Invalid {
                 raw_mode,
                 reason: _,
@@ -151,7 +162,7 @@ impl FileMode {
 
     pub fn permissions(&self) -> u16 {
         match self {
-            Self::Dir { permissions } | Self::Regular { permissions } => *permissions,
+            Self::Dir { permissions } | Self::Regular { permissions } | Self::SymbolicLink { permissions } => *permissions,
             Self::Invalid {
                 raw_mode,
                 reason: _,
@@ -378,6 +389,8 @@ mod test {
             assert_eq!(expected, result.permissions());
             let result = FileMode::regular(permissions);
             assert_eq!(expected, result.permissions());
+            let result = FileMode::symbolic_link(permissions);
+            assert_eq!(expected, result.permissions());
         }
 
         let test_table = vec![
@@ -385,6 +398,8 @@ mod test {
             (0o04_0665, Ok(FileMode::dir(0o665))),
             // test sticky bit
             (0o10_1664, Ok(FileMode::regular(0o1664))),
+            (0o12_0664, Ok(FileMode::symbolic_link(0o0664))),
+            (0o12_1664, Ok(FileMode::symbolic_link(0o1664))),
             (
                 0o664,
                 Err(errors::Error::InvalidFileMode {
@@ -437,6 +452,8 @@ mod test {
             (0o10_0755, FileMode::regular(0o0755), REGULAR_FILE_TYPE),
             (0o10_1755, FileMode::regular(0o1755), REGULAR_FILE_TYPE),
             (0o04_0755, FileMode::dir(0o0755), DIR_FILE_TYPE),
+            (0o12_0755, FileMode::symbolic_link(0o0755), SYMBOLIC_LINK_FILE_TYPE),
+            (0o12_1755, FileMode::symbolic_link(0o1755), SYMBOLIC_LINK_FILE_TYPE),
             (
                 0o20_0755,
                 FileMode::Invalid {
