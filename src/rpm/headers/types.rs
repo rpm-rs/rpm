@@ -138,9 +138,9 @@ impl FileMode {
     /// Returns the complete file mode (type and permissions)
     pub fn raw_mode(&self) -> u16 {
         match self {
-            Self::Dir { permissions } | Self::Regular { permissions } | Self::SymbolicLink { permissions } => {
-                *permissions | self.file_type()
-            }
+            Self::Dir { permissions }
+            | Self::Regular { permissions }
+            | Self::SymbolicLink { permissions } => *permissions | self.file_type(),
             Self::Invalid {
                 raw_mode,
                 reason: _,
@@ -162,7 +162,9 @@ impl FileMode {
 
     pub fn permissions(&self) -> u16 {
         match self {
-            Self::Dir { permissions } | Self::Regular { permissions } | Self::SymbolicLink { permissions } => *permissions,
+            Self::Dir { permissions }
+            | Self::Regular { permissions }
+            | Self::SymbolicLink { permissions } => *permissions,
             Self::Invalid {
                 raw_mode,
                 reason: _,
@@ -452,8 +454,16 @@ mod test {
             (0o10_0755, FileMode::regular(0o0755), REGULAR_FILE_TYPE),
             (0o10_1755, FileMode::regular(0o1755), REGULAR_FILE_TYPE),
             (0o04_0755, FileMode::dir(0o0755), DIR_FILE_TYPE),
-            (0o12_0755, FileMode::symbolic_link(0o0755), SYMBOLIC_LINK_FILE_TYPE),
-            (0o12_1755, FileMode::symbolic_link(0o1755), SYMBOLIC_LINK_FILE_TYPE),
+            (
+                0o12_0755,
+                FileMode::symbolic_link(0o0755),
+                SYMBOLIC_LINK_FILE_TYPE,
+            ),
+            (
+                0o12_1755,
+                FileMode::symbolic_link(0o1755),
+                SYMBOLIC_LINK_FILE_TYPE,
+            ),
             (
                 0o20_0755,
                 FileMode::Invalid {
