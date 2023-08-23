@@ -34,9 +34,9 @@
 
 use std::io::{self, Read, Write};
 
-const HEADER_LEN: usize = 110;  // 104?
+const HEADER_LEN: usize = 110;  // 104 bytes for metadata + 6 byte magic
 
-const STRIPPED_CPIO_HEADER_LEN: usize = 8;  // +6 for magic?
+const STRIPPED_CPIO_HEADER_LEN: usize = 14;  // 8 bytes metadata + 6 bytes magic
 
 const MAGIC_NUMBER: &[u8] = b"070701";
 
@@ -155,18 +155,34 @@ impl Entry {
         self.file_size
     }
 
+    // Returns the major component of the device ID, describing the device on which this file resides.
+    //
+    // Device IDs are comprised of a major and minor component. The major component identifies
+    // the class of device, while the minor component identifies a specific device of that class.
     pub fn dev_major(&self) -> u32 {
         self.dev_major
     }
 
+    // Returns the minor component of the device ID, describing the device on which this file resides.
+    //
+    // Device IDs are comprised of a major and minor component. The major component identifies
+    // the class of device, while the minor component identifies a specific device of that class.
     pub fn dev_minor(&self) -> u32 {
         self.dev_minor
     }
 
+    // Returns the major component of the rdev ID, describes the device that this file (inode) represents.
+    //
+    // Device IDs are comprised of a major and minor component. The major component identifies
+    // the class of device, while the minor component identifies a specific device of that class.
     pub fn rdev_major(&self) -> u32 {
         self.rdev_major
     }
 
+    // Returns the minor component of the rdev ID, field describes the device that this file (inode) represents.
+    //
+    // Device IDs are comprised of a major and minor component. The major component identifies
+    // the class of device, while the minor component identifies a specific device of that class.
     pub fn rdev_minor(&self) -> u32 {
         self.rdev_minor
     }
@@ -219,6 +235,12 @@ impl<R: Read> Reader<R> {
 
         // NUL-terminated name with length `name_len` (including NUL byte).
         let mut name_bytes = vec![0u8; name_len];
+        if name_bytes.len() < 0 || name_bytes.len() > 4096 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Entry name is too long",
+            ));
+        }
         inner.read_exact(&mut name_bytes)?;
         if name_bytes.last() != Some(&0) {
             return Err(io::Error::new(
@@ -390,7 +412,7 @@ impl Builder {
     }
 
     fn into_header(self, file_size: u32) -> Vec<u8> {
-        let mut header = Vec::with_capacity(STRIPPED_CPIO_HEADER_LEN);
+        let mut header = Vec::with_capacity(HEADER_LEN);
 
         // char    c_magic[6];
         header.extend(MAGIC_NUMBER);
