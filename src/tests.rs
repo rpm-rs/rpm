@@ -29,6 +29,12 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
                 .caps("cap_sys_admin,cap_sys_ptrace=pe")?
                 .user("hugo"),
         )?
+        .with_file(
+            "./test_assets/empty_file_for_symlink_create",
+            FileOptions::new("/usr/bin/awesome_link")
+                .mode(0o120644)
+                .symlink("/usr/bin/awesome"),
+        )?
         .pre_install_script("echo preinst")
         .add_changelog_entry("me", "was awesome, eh?", 1_681_411_811)
         .add_changelog_entry("you", "yeah, it was", 850_984_797)
@@ -57,7 +63,9 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
             assert_eq!(f.caps, Some("".to_string()));
         } else if f.path.as_os_str() == "/usr/bin/awesome" {
-            assert_eq!(f.mode, FileMode::from(0o100644));
+            assert_eq!(f.mode, FileMode::from(0o100777));
+        } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
+            assert_eq!(f.mode, FileMode::from(0o120644));
         }
     });
 
