@@ -68,6 +68,12 @@ mod pgp {
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/Cargo.toml"),
             )?
+            .with_file(
+                "./test_assets/empty_file_for_symlink_create",
+                FileOptions::new("/usr/bin/awesome_link")
+                    .mode(0o120644)
+                    .symlink("/usr/bin/awesome"),
+            )?
             .epoch(1)
             .pre_install_script("echo preinst")
             .add_changelog_entry(
