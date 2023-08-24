@@ -63,7 +63,7 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
             assert_eq!(f.caps, Some("".to_string()));
         } else if f.path.as_os_str() == "/usr/bin/awesome" {
-            assert_eq!(f.mode, FileMode::from(0o100777));
+            assert_eq!(f.mode, FileMode::from(0o100644));
         } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
             assert_eq!(f.mode, FileMode::from(0o120644));
         }
