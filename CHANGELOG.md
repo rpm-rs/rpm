@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support for symbolic link in file mode.
-- Make file type const `REGULAR_FILE_TYPE` `DIR_FILE_TYPE` `SYMBOLIC_LINK_FILE_TYPE` public, because `FileMode::file_type` is public, sometimes we need this const to determin file type.
 
 ## 0.12.1
 

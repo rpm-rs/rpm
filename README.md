@@ -53,6 +53,11 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
             .caps("cap_sys_admin,cap_net_admin=pe")?
             .user("hugo"),
     )?
+    .with_file(
+        "./test_assets/empty_file_for_symlink_create",
+        rpm::FileOptions::new("/usr/bin/awesome_link")
+            .mode(0o120644)
+            .symlink("/usr/bin/awesome"),
     .pre_install_script("echo preinst")
     // If you don't need reproducible builds,
     // you can remove the following line
