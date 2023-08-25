@@ -887,7 +887,7 @@ impl PackageMetadata {
                                 user: user.to_owned(),
                                 group: group.to_owned(),
                             },
-                            mode: mode.into(),
+                            mode: mode.try_into()?,
                             modified_at: crate::Timestamp(mtime),
                             digest,
                             flags: FileFlags::from_bits_retain(flags),

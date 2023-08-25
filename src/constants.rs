@@ -548,7 +548,7 @@ bitflags! {
         // const SPECFILE = 1 << 5;  // first file in SRPM?
         const GHOST = 1 << 6;  // %%ghost
         const LICENSE = 1 << 7;  // %%license
-        const README = 1 << 8;  // %%readme
+        const README = 1 << 8;  // %%readme  // obsolete?
         // bits 9-10 unused
         const PUBKEY = 1 << 11;	// %%pubkey
         const ARTIFACT	= 1 << 12;	// %%artifact

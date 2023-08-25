@@ -40,39 +40,38 @@ mod pgp {
             .compression(CompressionType::Gzip)
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/foo.toml"),
+                FileOptions::regular("/etc/foobar/foo.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/zazz.toml"),
+                FileOptions::regular("/etc/foobar/zazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100_777)
+                FileOptions::regular("/etc/foobar/hugo/bazz.toml")
+                    .permissions(0o777)
                     .is_config(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/bazz.toml"),
+                FileOptions::regular("/etc/foobar/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/foobar/hugo/aa.toml"),
+                FileOptions::regular("/etc/foobar/hugo/aa.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/var/honollulu/bazz.toml"),
+                FileOptions::regular("/var/honollulu/bazz.toml"),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
-                FileOptions::new("/etc/Cargo.toml"),
+                FileOptions::regular("/etc/Cargo.toml"),
             )?
             .with_file(
                 "./test_assets/empty_file_for_symlink_create",
-                FileOptions::new("/usr/bin/awesome_link")
-                    .mode(0o120644)
-                    .symlink("/usr/bin/awesome"),
+                FileOptions::symbolic_link("/usr/bin/awesome_link", "/usr/bin/awesome")
+                    .permissions(0o644),
             )?
             .epoch(1)
             .pre_install_script("echo preinst")
