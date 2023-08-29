@@ -349,6 +349,7 @@ impl PackageBuilder {
             link: options.symlink,
             modified_at,
             dir: dir.clone(),
+            #[cfg(unix)]
             // Convert the caps to a string, so that we can store it in the header.
             // We do this so that it's possible to verify that caps are correct when provided
             // and then later check if any were set
@@ -578,6 +579,7 @@ impl PackageBuilder {
         let files_len = self.files.len();
         let mut file_sizes = Vec::with_capacity(files_len);
         let mut file_modes = Vec::with_capacity(files_len);
+        #[cfg(unix)]
         let mut file_caps = Vec::with_capacity(files_len);
         let mut file_rdevs = Vec::with_capacity(files_len);
         let mut file_mtimes = Vec::with_capacity(files_len);
@@ -599,6 +601,7 @@ impl PackageBuilder {
             combined_file_sizes += entry.size;
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
+            #[cfg(unix)]
             file_caps.push(entry.caps.to_owned());
             // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
             // Who knows, who cares.
@@ -976,6 +979,7 @@ impl PackageBuilder {
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
             ]);
+            #[cfg(unix)]
             if file_caps.iter().any(|caps| caps.is_some()) {
                 actual_records.extend([IndexEntry::new(
                     IndexTag::RPMTAG_FILECAPS,
