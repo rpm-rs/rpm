@@ -26,18 +26,18 @@
 //!     .compression(rpm::CompressionType::Gzip)
 //!     .with_file(
 //!         "./test_assets/awesome.toml",
-//!         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+//!         rpm::FileOptions::regular("/etc/awesome/config.toml").is_config(),
 //!     )?
 //!     // file mode is inherited from source file
 //!     .with_file(
 //!         "./test_assets/awesome.py",
-//!         rpm::FileOptions::new("/usr/bin/awesome"),
+//!         rpm::FileOptions::regular("/usr/bin/awesome"),
 //!     )?
 //!     .with_file(
 //!         "./test_assets/awesome.toml",
 //!         // you can set a custom mode and custom user too
-//!         rpm::FileOptions::new("/etc/awesome/second.toml")
-//!             .mode(rpm::FileMode::regular(0o644))
+//!         rpm::FileOptions::regular("/etc/awesome/second.toml")
+//!             .permissions(0o644)
 //!             .user("hugo"),
 //!     )?
 //!     .pre_install_script("echo preinst")

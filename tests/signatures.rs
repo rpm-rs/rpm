@@ -144,13 +144,13 @@ fn build_parse_sign_and_verify(
     .compression(rpm::CompressionType::Gzip)
     .with_file(
         cargo_file.to_str().unwrap(),
-        rpm::FileOptions::new("/etc/foobar/hugo/bazz.toml")
-            .mode(rpm::FileMode::regular(0o777))
+        rpm::FileOptions::regular("/etc/foobar/hugo/bazz.toml")
+            .permissions(0o777)
             .is_config(),
     )?
     .with_file(
         cargo_file.to_str().unwrap(),
-        rpm::FileOptions::new("/etc/Cargo.toml"),
+        rpm::FileOptions::regular("/etc/Cargo.toml"),
     )?
     .epoch(3)
     .pre_install_script("echo preinst")

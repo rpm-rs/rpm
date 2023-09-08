@@ -7,17 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Breaking Changes
 
-- Support for symbolic link in file mode.
-- Make file type const `REGULAR_FILE_TYPE` `DIR_FILE_TYPE` `SYMBOLIC_LINK_FILE_TYPE` public, because `FileMode::file_type` is public, sometimes we need this const to determin file type.
+- Refactored the `FileOptions` functions. Instead of using `FileOptions::new(path)` to
+  construct a file to be added during a package build, instead you use `FileOptions::regular()`,
+  `FileOptions::dir()`, or `FileOptions::symlink()` for a regular file, directory, or symbolic
+  link, respectively.
+
+## Added
+
+- Support for symbolic links when adding files to a `Package`.
 
 ## 0.12.1
 
 ### Added
 
 - Support for setting file capabilities via the RPMTAGS_FILECAPS header.
-- `PackageMetadata::get_file_entries` method can get capability headers for each file.
+- When parsing packages, the `PackageMetadata::get_file_entries` method provides
+  access to the capabilities for each file.
 
 ## 0.12.0
 
@@ -29,10 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `PackageBuilder::build_time` method is removed. Package build time is now
   included by default and can be clamped using the `PackageBuilder::source_date` method.
 - Several of the signer and verifier trait APIs were changed
-
-Note: The pace of breaking changes ought to slow down significantly from this point forwards.
-Most of the substantial changes which needed to be made have now been made. Thank you for your
-patience.
 
 ### Added
 

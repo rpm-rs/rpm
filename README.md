@@ -32,27 +32,31 @@ This library does not build software like rpmbuild. It is meant for finished art
 use rpm::signature::pgp::{Signer, Verifier};
 
 let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
-// It's recommended to use timestamp of last commit in your VCS
+// It's recommended to use timestamp of last commit in your VCS rather than a constant
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .compression(rpm::CompressionType::Gzip)
     .with_file(
         "./test_assets/awesome.toml",
-        rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+        rpm::FileOptions::regular("/etc/awesome/config.toml").is_config(),
     )?
     // file mode is inherited from source file
     .with_file(
         "./test_assets/awesome.py",
-        rpm::FileOptions::new("/usr/bin/awesome"),
+        rpm::FileOptions::regular("/usr/bin/awesome"),
     )?
     .with_file(
         "./test_assets/awesome.toml",
         // you can set a custom mode and custom user too
-        rpm::FileOptions::new("/etc/awesome/second.toml")
-            .mode(rpm::FileMode::regular(0o644))
+        rpm::FileOptions::regular("/etc/awesome/second.toml")
+            .permissions(0o644)
             .caps("cap_sys_admin,cap_net_admin=pe")?
             .user("hugo"),
     )?
+    .with_file(
+        "./test_assets/empty_file_for_symlink_create",
+        rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome")
+            .permissions(0o644)
     .pre_install_script("echo preinst")
     // If you don't need reproducible builds,
     // you can remove the following line

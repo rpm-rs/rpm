@@ -264,17 +264,17 @@ impl PackageBuilder {
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .with_file(
     ///         "./awesome-config.toml",
-    ///         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+    ///         rpm::FileOptions::regular("/etc/awesome/config.toml").is_config(),
     ///     )?
     ///     // file mode is inherited from source file
     ///     .with_file(
     ///         "./awesome-bin",
-    ///         rpm::FileOptions::new("/usr/bin/awesome"),
+    ///         rpm::FileOptions::regular("/usr/bin/awesome"),
     ///     )?
     ///      .with_file(
     ///         "./awesome-config.toml",
     ///         // you can set a custom mode, capabilities and custom user too
-    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe")?.user("hugo"),
+    ///         rpm::FileOptions::regular("/etc/awesome/second.toml").permissions(0o744).caps("cap_sys_admin=pe")?.user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -290,7 +290,7 @@ impl PackageBuilder {
         input.read_to_end(&mut content)?;
         let mut options = options.into();
         if options.inherit_permissions {
-            options.mode = (file_mode(&input)? as i32).into();
+            options.mode = (file_mode(&input)? as i32).try_into()?;
         }
 
         let modified_at = input.metadata()?.modified()?.try_into()?;

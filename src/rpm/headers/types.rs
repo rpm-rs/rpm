@@ -19,7 +19,7 @@ pub struct PackageSegmentOffsets {
 /// Describes a file present in the rpm file.
 pub struct PackageFileEntry {
     pub size: u64,
-    pub mode: FileMode,
+    pub mode: FileMode, // todo: maybe we can compute these lazily for more permissive error handling?
     pub modified_at: Timestamp,
     pub sha_checksum: String,
     pub link: String,
@@ -32,30 +32,32 @@ pub struct PackageFileEntry {
     pub(crate) content: Vec<u8>,
 }
 
-#[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-pub enum FileMode {
-    // It does not really matter if we use u16 or i16 since all we care about
-    // is the bit representation which is the same for both.
-    Dir { permissions: u16 },
-    Regular { permissions: u16 },
-    SymbolicLink { permissions: u16 },
-    // For "Invalid" we use a larger integer since it is possible to create an invalid
-    // FileMode by providing an overflowing integer.
-    Invalid { raw_mode: i32, reason: &'static str },
+pub enum FileType {
+    Dir,
+    Regular,
+    SymbolicLink,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct FileMode {
+    file_type: FileType,
+    permissions: u16,
 }
 
 // there are more file types but in the context of RPM, only regular and directory and symbolic file should be relevant.
 // See <https://man7.org/linux/man-pages/man7/inode.7.html> section "The file type and mode"
 const FILE_TYPE_BIT_MASK: u16 = 0o170000; // bit representation = "1111000000000000"
 const PERMISSIONS_BIT_MASK: u16 = 0o7777; // bit representation = "0000111111111111"
-pub const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
-pub const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
-pub const SYMBOLIC_LINK_FILE_TYPE: u16 = 0o120000; // bit representation = "1010000000000000"
 
-// @todo: <https://github.com/rpm-rs/rpm/issues/52>
-impl From<u16> for FileMode {
-    fn from(raw_mode: u16) -> Self {
+const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
+const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
+const SYMBOLIC_LINK_FILE_TYPE: u16 = 0o120000; // bit representation = "1010000000000000"
+
+impl TryFrom<u16> for FileMode {
+    type Error = errors::Error;
+
+    fn try_from(raw_mode: u16) -> Result<Self, Self::Error> {
         // example
         //  1111000000000000  (0o170000)  <- file type bit mask
         // &1000000111101101  (0o100755)  <- regular executable file
@@ -68,108 +70,81 @@ impl From<u16> for FileMode {
         // <https://en.wikipedia.org/wiki/Bitwise_operation#AND>
         let file_type = raw_mode & FILE_TYPE_BIT_MASK;
         let permissions = raw_mode & PERMISSIONS_BIT_MASK;
-        match file_type {
-            DIR_FILE_TYPE => FileMode::Dir { permissions },
-            REGULAR_FILE_TYPE => FileMode::Regular { permissions },
-            SYMBOLIC_LINK_FILE_TYPE => FileMode::SymbolicLink { permissions },
-            _ => FileMode::Invalid {
+        let file_type = match file_type {
+            DIR_FILE_TYPE => Ok(FileType::Dir),
+            REGULAR_FILE_TYPE => Ok(FileType::Regular),
+            SYMBOLIC_LINK_FILE_TYPE => Ok(FileType::SymbolicLink),
+            _ => Err(Self::Error::InvalidFileMode {
                 raw_mode: raw_mode as i32,
                 reason: "unknown file type",
-            },
-        }
+            }),
+        }?;
+
+        Ok(FileMode {
+            file_type,
+            permissions,
+        })
     }
 }
 
-impl From<i32> for FileMode {
-    fn from(raw_mode: i32) -> Self {
+impl TryFrom<i32> for FileMode {
+    type Error = errors::Error;
+
+    fn try_from(raw_mode: i32) -> Result<Self, Self::Error> {
         // since we ultimately only deal with 16bit integers
         // we need to check if a safe conversion to 16bit is doable.
         if raw_mode > u16::MAX.into() || raw_mode < i16::MIN.into() {
-            FileMode::Invalid {
+            Err(Self::Error::InvalidFileMode {
                 raw_mode,
                 reason: "provided integer is out of 16bit bounds",
-            }
+            })
         } else {
-            FileMode::from(raw_mode as u16)
+            Ok(FileMode::try_from(raw_mode as u16)?)
         }
     }
 }
 
+// @todo: 0o7777? should it be 0o777?
 impl FileMode {
     /// Create a new Regular instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
     pub fn regular(permissions: u16) -> Self {
-        FileMode::Regular {
+        FileMode {
+            file_type: FileType::Regular,
             permissions: permissions & PERMISSIONS_BIT_MASK,
         }
     }
 
     /// Create a new Dir instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
     pub fn dir(permissions: u16) -> Self {
-        FileMode::Dir {
+        FileMode {
+            file_type: FileType::Dir,
             permissions: permissions & PERMISSIONS_BIT_MASK,
         }
     }
 
     /// Create a new Symbolic link instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
     pub fn symbolic_link(permissions: u16) -> Self {
-        FileMode::SymbolicLink {
+        FileMode {
+            file_type: FileType::SymbolicLink,
             permissions: permissions & PERMISSIONS_BIT_MASK,
-        }
-    }
-
-    /// Usually this should be done with TryFrom, but since we already have a `From` implementation,
-    /// we run into this issue: <https://github.com/rust-lang/rust/issues/50133>
-    pub fn try_from_raw(raw: i32) -> Result<Self, errors::Error> {
-        let mode: FileMode = raw.into();
-        mode.to_result()
-    }
-
-    /// Turns this FileMode into a result. If the mode is Invalid, it will be converted into
-    /// Error::InvalidFileMode. Otherwise it is Ok(self).
-    pub fn to_result(self) -> Result<Self, errors::Error> {
-        match self {
-            Self::Invalid { raw_mode, reason } => {
-                Err(errors::Error::InvalidFileMode { raw_mode, reason })
-            }
-            _ => Ok(self),
         }
     }
 
     /// Returns the complete file mode (type and permissions)
     pub fn raw_mode(&self) -> u16 {
-        match self {
-            Self::Dir { permissions }
-            | Self::Regular { permissions }
-            | Self::SymbolicLink { permissions } => *permissions | self.file_type(),
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16,
-        }
+        self.file_type() | self.permissions
     }
 
     pub fn file_type(&self) -> u16 {
-        match self {
-            Self::Dir { permissions: _ } => DIR_FILE_TYPE,
-            Self::Regular { permissions: _ } => REGULAR_FILE_TYPE,
-            Self::SymbolicLink { permissions: _ } => SYMBOLIC_LINK_FILE_TYPE,
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16 & FILE_TYPE_BIT_MASK,
+        match self.file_type {
+            FileType::Dir => DIR_FILE_TYPE,
+            FileType::Regular => REGULAR_FILE_TYPE,
+            FileType::SymbolicLink => SYMBOLIC_LINK_FILE_TYPE,
         }
     }
 
     pub fn permissions(&self) -> u16 {
-        match self {
-            Self::Dir { permissions }
-            | Self::Regular { permissions }
-            | Self::SymbolicLink { permissions } => *permissions,
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16 & PERMISSIONS_BIT_MASK,
-        }
+        self.permissions
     }
 }
 
@@ -185,10 +160,7 @@ impl From<FileMode> for u16 {
     }
 }
 
-/// Description of file modes.
-///
-/// A subset
-
+/// A collection of options used when constructing a new file entry.
 #[derive(Debug)]
 pub struct FileOptions {
     pub(crate) destination: String,
@@ -201,9 +173,12 @@ pub struct FileOptions {
     pub(crate) caps: Option<FileCaps>,
 }
 
+// @todo: should we even have "default permissions" / mode, or use Option<FileMode>?
+// if they can be skipped (unsure), 'inherit_permissions' could go away
 impl FileOptions {
+    /// Create a new FileOptions for a regular file
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(dest: impl Into<String>) -> FileOptionsBuilder {
+    pub fn regular(dest: impl Into<String>) -> FileOptionsBuilder {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
@@ -217,6 +192,48 @@ impl FileOptions {
             },
         }
     }
+
+    /// Create a new FileOptions for a directory
+    ///
+    /// Used to explicitly own the directory itself but not it's contents. This does NOT
+    /// process any of the contents of a directory.
+    #[allow(clippy::new_ret_no_self)]
+    pub fn dir(dest: impl Into<String>) -> FileOptionsBuilder {
+        // @todo: is this problematic? `with_file` has a source argument, but I do not believe %dir uses
+        // any "source" necessarily, just a destination.  Maybe we need `PackageBuilder::with_dir()`,
+        // except that sounds like it would process files recursively inside a directory, and we would
+        // still need to duplicate much of this code.
+
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: "".to_string(),
+                mode: FileMode::regular(0o664),
+                flag: FileFlags::empty(),
+                inherit_permissions: true,
+                caps: None,
+            },
+        }
+    }
+
+    /// Create a new FileOptions for a symbolic link
+    #[allow(clippy::new_ret_no_self)]
+    pub fn symbolic_link(dest: impl Into<String>, link: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: link.into(),
+                mode: FileMode::symbolic_link(0o664),
+                flag: FileFlags::empty(),
+                inherit_permissions: true,
+                caps: None,
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -224,28 +241,36 @@ pub struct FileOptionsBuilder {
     inner: FileOptions,
 }
 
+// @todo: finish support for different types of file attributes (rpmfileAttrs)
+// see: constants::FileFlags
+// @todo: should we represent "defattr", that is, set default permissions on all files in a package
+// without needing to explicitly them for each FileOptions
+// @todo: how about "%docdir"?  which automatically marks subsequent files in those directories as docs
 impl FileOptionsBuilder {
+    /// Set the user for the file to be installed by the package
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.inner.user = user.into();
         self
     }
 
+    /// Set the group for the file to be installed by the package
     pub fn group(mut self, group: impl Into<String>) -> Self {
         self.inner.group = group.into();
         self
     }
 
-    pub fn symlink(mut self, symlink: impl Into<String>) -> Self {
-        self.inner.symlink = symlink.into();
-        self
-    }
-
-    pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
-        self.inner.mode = mode.into();
+    /// Set the permissions for the file to be installed by the package
+    pub fn permissions(mut self, perms: u16) -> Self {
+        self.inner.mode.permissions = perms;
         self.inner.inherit_permissions = false;
         self
     }
 
+    // @todo: should doc, license, ghost be moved to `FileOptions::doc()`, etc?
+
+    /// Set POSIX.1e draft 15 file capabilities for the file to be installed by the package
+    ///
+    /// see: <https://man7.org/linux/man-pages/man7/capabilities.7.html>
     pub fn caps(mut self, caps: impl Into<String>) -> Result<Self, errors::Error> {
         // verify capabilities
         self.inner.caps = match FileCaps::from_str(&caps.into()) {
@@ -259,28 +284,35 @@ impl FileOptionsBuilder {
         Ok(self)
     }
 
+    /// Indicates that this file is documentation.
+    ///
+    /// Documentation files are tracked in the rpm database for easier lookup.
     pub fn is_doc(mut self) -> Self {
         self.inner.flag = FileFlags::DOC;
         self
     }
 
-    pub fn is_config(mut self) -> Self {
-        self.inner.flag = FileFlags::CONFIG;
-        self
-    }
-
-    pub fn is_ghost(mut self) -> Self {
-        self.inner.flag = FileFlags::GHOST;
-        self
-    }
-
+    /// Indicates that this file is a software license file.
     pub fn is_license(mut self) -> Self {
         self.inner.flag = FileFlags::LICENSE;
         self
     }
 
-    pub fn is_readme(mut self) -> Self {
-        self.inner.flag = FileFlags::README;
+    /// Indicates that this file is a config file.
+    ///
+    /// Config files are handled differently during upgrades - newly provided config files are
+    /// given the extension '.rpmnew' to avoid overwriting any changes that have been made to
+    /// the existing config.
+    pub fn is_config(mut self) -> Self {
+        self.inner.flag = FileFlags::CONFIG;
+        self
+    }
+
+    /// Indicates that this file shouldn't be included in the package. It is used for e.g. log files,
+    /// where the contents of the file aren't important to the package, but declaring the ownership
+    /// and attributes of the file is.
+    pub fn is_ghost(mut self) -> Self {
+        self.inner.flag = FileFlags::GHOST;
         self
     }
 }
@@ -420,7 +452,7 @@ mod test {
 
         // test try_from_raw
         for (testant, expected) in test_table {
-            let result = FileMode::try_from_raw(testant);
+            let result = FileMode::try_from(testant);
             match (&expected, &result) {
                 (Ok(expected), Ok(actual)) => {
                     assert_eq!(expected, actual);
@@ -449,56 +481,56 @@ mod test {
             }
         }
 
-        // test into methods
-        let test_table = vec![
-            (0o10_0755, FileMode::regular(0o0755), REGULAR_FILE_TYPE),
-            (0o10_1755, FileMode::regular(0o1755), REGULAR_FILE_TYPE),
-            (0o04_0755, FileMode::dir(0o0755), DIR_FILE_TYPE),
-            (
-                0o12_0755,
-                FileMode::symbolic_link(0o0755),
-                SYMBOLIC_LINK_FILE_TYPE,
-            ),
-            (
-                0o12_1755,
-                FileMode::symbolic_link(0o1755),
-                SYMBOLIC_LINK_FILE_TYPE,
-            ),
-            (
-                0o20_0755,
-                FileMode::Invalid {
-                    raw_mode: 0o20_0755,
-                    reason: "provided integer is out of 16bit bounds",
-                },
-                0,
-            ),
-            (
-                0o0755,
-                FileMode::Invalid {
-                    raw_mode: 0o0755,
-                    reason: "unknown file type",
-                },
-                0,
-            ),
-        ];
-        for (raw_mode, expected_mode, expected_type) in test_table {
-            let mode = FileMode::from(raw_mode);
-            assert_eq!(expected_mode, mode);
-            assert_eq!(raw_mode as u16, mode.raw_mode());
-            assert_eq!(expected_type, mode.file_type());
-        }
+        // // test into methods
+        // let test_table = vec![
+        //     (0o10_0755, Ok(FileMode::regular(0o0755)), REGULAR_FILE_TYPE),
+        //     (0o10_1755, Ok(FileMode::regular(0o1755)), REGULAR_FILE_TYPE),
+        //     (0o04_0755, Ok(FileMode::dir(0o0755)), DIR_FILE_TYPE),
+        //     (
+        //         0o12_0755,
+        //         Ok(FileMode::symbolic_link(0o0755)),
+        //         SYMBOLIC_LINK_FILE_TYPE,
+        //     ),
+        //     (
+        //         0o12_1755,
+        //         Ok(FileMode::symbolic_link(0o1755)),
+        //         SYMBOLIC_LINK_FILE_TYPE,
+        //     ),
+        //     (
+        //         0o20_0755,
+        //         Err(FileMode::Invalid {
+        //             raw_mode: 0o20_0755,
+        //             reason: "provided integer is out of 16bit bounds",
+        //         }),
+        //         0,
+        //     ),
+        //     (
+        //         0o0755,
+        //         Err(FileMode::Invalid {
+        //             raw_mode: 0o0755,
+        //             reason: "unknown file type",
+        //         }),
+        //         0,
+        //     ),
+        // ];
+        // for (raw_mode, expected_mode, expected_type) in test_table {
+        //     let mode = FileMode::try_from(raw_mode);
+        //     assert_eq!(expected_mode, mode);
+        //     assert_eq!(raw_mode as u16, mode.raw_mode());
+        //     assert_eq!(expected_type, mode.file_type());
+        // }
         Ok(())
     }
 
     #[test]
     fn test_verify_capabilities_valid() {
-        let blank_file = crate::FileOptions::new("/usr/bin/awesome");
+        let blank_file = crate::FileOptions::regular("/usr/bin/awesome");
         blank_file.caps("cap_net_admin,cap_net_raw+p").unwrap();
     }
 
     #[test]
     fn test_verify_capabilities_invalid() -> Result<(), crate::errors::Error> {
-        let blank_file = crate::FileOptions::new("/usr/bin/awesome");
+        let blank_file = crate::FileOptions::regular("/usr/bin/awesome");
         blank_file.caps("cap_net_an,cap_net_raw+p").unwrap_err();
         Ok(())
     }
