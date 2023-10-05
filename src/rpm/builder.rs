@@ -46,7 +46,8 @@ pub struct PackageBuilder {
     arch: String,
     uid: Option<u32>, // @todo: nothing is actually setting these or allowing setting them, they fall back to default
     gid: Option<u32>,
-    desc: String,
+    summary: String,
+    desc: Option<String>,
     release: String,
 
     // File entries need to be sorted. The entries need to be in the same order as they come
@@ -88,14 +89,14 @@ impl PackageBuilder {
     /// Create a new package, providing the required metadata.
     ///
     /// Additional metadata is added using the builder pattern. However `name`, `version`, `license`,
-    /// `arch`, and `description` are mandatory and must be provided.
+    /// `arch`, and `summary` are mandatory and must be provided.
     ///
     /// `name` - The name of the software being packaged. It should not contain any whitespace.
     /// `version` - The version of the software being packaged. It should be as close as possible to
     ///     the format of the original software's version.
     /// `license` - The license terms applicable to the software being packaged (preferably using SPDX)
     /// `arch` - The architecture that the package was built for, or "noarch" if not architecture specific
-    /// `description` - A detailed description of what the packaged software does.
+    /// `summary` - A short and concise description of the package.
     ///
     /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -103,14 +104,14 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(name: &str, version: &str, license: &str, arch: &str, desc: &str) -> Self {
+    pub fn new(name: &str, version: &str, license: &str, arch: &str, summary: &str) -> Self {
         Self {
             name: name.to_string(),
             epoch: 0,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
-            desc: desc.to_string(),
+            summary: summary.to_string(),
             release: "1".to_string(),
             ..Default::default()
         }
@@ -132,6 +133,12 @@ impl PackageBuilder {
 
     pub fn epoch(mut self, epoch: u32) -> Self {
         self.epoch = epoch;
+        self
+    }
+
+    /// Define a detailed, multiline, description of what the packaged software does.
+    pub fn description(mut self, desc: impl Into<String>) -> Self {
+        self.desc = Some(desc.into());
         self
     }
 
@@ -794,12 +801,12 @@ impl PackageBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_DESCRIPTION,
                 offset,
-                IndexData::I18NString(vec![self.desc.clone()]),
+                IndexData::I18NString(vec![self.desc.unwrap_or_else(|| self.summary.clone())]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_SUMMARY,
                 offset,
-                IndexData::I18NString(vec![self.desc]),
+                IndexData::I18NString(vec![self.summary]),
             ),
             if small_package {
                 let combined_file_sizes = combined_file_sizes

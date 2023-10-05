@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for symbolic link in file mode.
 - Make file type const `REGULAR_FILE_TYPE` `DIR_FILE_TYPE` `SYMBOLIC_LINK_FILE_TYPE` public, because `FileMode::file_type` is public, sometimes we need this const to determin file type.
+- Method `PackageBuilder::new` now takes a `summary` as last parameter, instead
+  of a `description`. A new method `PackageBuilder::description` can be used to
+  set a detailed description for a package; if not set, the description defaults
+  to the `summary`.
 
 ## 0.12.1
 

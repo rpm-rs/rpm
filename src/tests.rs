@@ -14,6 +14,11 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
     let pkg = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+        .description(
+            "This is an awesome package.
+
+However, it does nothing.",
+        )
         .compression(rpm::CompressionType::Gzip)
         .with_file(
             "Cargo.toml",
