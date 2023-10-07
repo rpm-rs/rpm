@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for setting file capabilities via the RPMTAGS_FILECAPS header.
 - `PackageMetadata::get_file_entries` method can get capability headers for each file.
+- Support check existence of package payload separated digest via `PackageMetadata::is_payload_separate_digest_present`
 
 ## 0.12.0
 

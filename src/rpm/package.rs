@@ -726,6 +726,15 @@ impl PackageMetadata {
             .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
     }
 
+    /// Whether payload separate digest present, or not
+    #[inline]
+    pub fn is_payload_separate_digest_present(&self) -> bool {
+        self.header.entry_is_present(IndexTag::RPMTAG_PAYLOADDIGEST)
+            || self
+                .header
+                .entry_is_present(IndexTag::RPMTAG_PAYLOADDIGESTALT)
+    }
+
     /// Extract a the set of contained file names.
     pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, Error> {
         // reconstruct the messy de-constructed paths
