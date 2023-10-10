@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a `description`. A new method `PackageBuilder::description` can be used to
   set a detailed description for a package; if not set, the description defaults
   to the `summary`.
+- Fix compile error on Windows which introduced by file capabilities support feature.
 
 ## 0.12.1
 

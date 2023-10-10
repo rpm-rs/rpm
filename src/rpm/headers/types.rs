@@ -1,7 +1,9 @@
 //! A collection of types used in various header records.
+#[cfg(unix)]
 use std::str::FromStr;
 
 use crate::{constants::*, errors, Timestamp};
+#[cfg(unix)]
 use capctl::FileCaps;
 use digest::Digest;
 
@@ -28,6 +30,7 @@ pub struct PackageFileEntry {
     pub group: String,
     pub base_name: String,
     pub dir: String,
+    #[cfg(unix)]
     pub caps: Option<FileCaps>,
     pub(crate) content: Vec<u8>,
 }
@@ -198,6 +201,7 @@ pub struct FileOptions {
     pub(crate) mode: FileMode,
     pub(crate) flag: FileFlags,
     pub(crate) inherit_permissions: bool,
+    #[cfg(unix)]
     pub(crate) caps: Option<FileCaps>,
 }
 
@@ -213,6 +217,7 @@ impl FileOptions {
                 mode: FileMode::regular(0o664),
                 flag: FileFlags::empty(),
                 inherit_permissions: true,
+                #[cfg(unix)]
                 caps: None,
             },
         }
@@ -246,6 +251,7 @@ impl FileOptionsBuilder {
         self
     }
 
+    #[cfg(unix)]
     pub fn caps(mut self, caps: impl Into<String>) -> Result<Self, errors::Error> {
         // verify capabilities
         self.inner.caps = match FileCaps::from_str(&caps.into()) {
@@ -490,12 +496,14 @@ mod test {
         Ok(())
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_verify_capabilities_valid() {
         let blank_file = crate::FileOptions::new("/usr/bin/awesome");
         blank_file.caps("cap_net_admin,cap_net_raw+p").unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_verify_capabilities_invalid() -> Result<(), crate::errors::Error> {
         let blank_file = crate::FileOptions::new("/usr/bin/awesome");

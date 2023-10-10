@@ -13,7 +13,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
-    let pkg = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
+    let builder = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
         .description(
             "This is an awesome package.
 
@@ -27,14 +27,6 @@ However, it does nothing.",
         // file mode is inherited from source file
         .with_file("Cargo.toml", FileOptions::new("/usr/bin/awesome"))?
         .with_file(
-            "Cargo.toml",
-            // you can set a custom mode and custom user too
-            FileOptions::new("/etc/awesome/second.toml")
-                .mode(0o100744)
-                .caps("cap_sys_admin,cap_sys_ptrace=pe")?
-                .user("hugo"),
-        )?
-        .with_file(
             "./test_assets/empty_file_for_symlink_create",
             FileOptions::new("/usr/bin/awesome_link")
                 .mode(0o120644)
@@ -46,9 +38,17 @@ However, it does nothing.",
         .requires(Dependency::any("wget"))
         .vendor("dummy vendor")
         .url("dummy url")
-        .vcs("dummy vcs")
-        .build()?;
-
+        .vcs("dummy vcs");
+    #[cfg(unix)]
+    let builder = builder.with_file(
+        "Cargo.toml",
+        // you can set a custom mode and custom user too
+        FileOptions::new("/etc/awesome/second.toml")
+            .mode(0o100744)
+            .caps("cap_sys_admin,cap_sys_ptrace=pe")?
+            .user("hugo"),
+    )?;
+    let pkg = builder.build()?;
     pkg.write(&mut buff)?;
 
     // check that generated packages has source rpm tag
@@ -60,14 +60,17 @@ However, it does nothing.",
     // check various metadata on the files
     pkg.metadata.get_file_entries()?.iter().for_each(|f| {
         if f.path.as_os_str() == "/etc/awesome/second.toml" {
+            #[cfg(unix)]
             assert_eq!(
                 f.clone().caps.unwrap(),
                 "cap_sys_ptrace,cap_sys_admin=ep".to_string()
             );
             assert_eq!(f.ownership.user, "hugo".to_string());
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
+            #[cfg(unix)]
             assert_eq!(f.caps, Some("".to_string()));
         } else if f.path.as_os_str() == "/usr/bin/awesome" {
+            #[cfg(unix)]
             assert_eq!(f.mode, FileMode::from(0o100644));
         } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
             assert_eq!(f.mode, FileMode::from(0o120644));
