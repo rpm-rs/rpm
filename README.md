@@ -1,6 +1,6 @@
 [![crates.io](https://img.shields.io/crates/v/rpm.svg)](https://crates.io/crates/rpm)
 [![docs.rs](https://docs.rs/rpm/badge.svg)](https://docs.rs/rpm)
-[![MSRV](https://img.shields.io/badge/rustc-1.65.0+-ab6000.svg)](https://blog.rust-lang.org/2022/11/03/Rust-1.65.0.html)
+[![MSRV](https://img.shields.io/badge/rustc-1.67.0+-ab6000.svg)](https://blog.rust-lang.org/2023/01/26/Rust-1.67.0.html)
 
 ## RPM-RS
 
