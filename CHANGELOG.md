@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a `description`. A new method `PackageBuilder::description` can be used to
   set a detailed description for a package; if not set, the description defaults
   to the `summary`.
+- Add method `with_key_passphrase` to `signature::pgp::Signer`, to provide the
+  passphrase when the PGP secret key is passphrase-protected.
 
 ## 0.12.1
 

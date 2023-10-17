@@ -19,6 +19,17 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
+        None,
+        &verification_key,
+        "rsa_resigned_pkg.rpm",
+    )?;
+
+    // test RSA - with secret key protected by a passphrase
+    let (signing_key, verification_key) = common::load_protected_rsa_keys();
+    resign_and_verify_with_keys(
+        pkg_path.as_ref(),
+        &signing_key,
+        Some(common::test_protected_private_key_passphrase()),
         &verification_key,
         "rsa_resigned_pkg.rpm",
     )?;
@@ -28,6 +39,7 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
+        None,
         &verification_key,
         "eddsa_resigned_pkg.rpm",
     )
@@ -106,11 +118,15 @@ fn test_verify_package_with_wrong_key_type() -> Result<(), Box<dyn std::error::E
 fn resign_and_verify_with_keys(
     pkg_path: &Path,
     signing_key: &[u8],
+    signing_key_passphrase: Option<String>,
     verification_key: &[u8],
     pkg_out_path: impl AsRef<Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut package = rpm::Package::open(pkg_path)?;
-    let signer = Signer::load_from_asc_bytes(signing_key)?;
+    let mut signer = Signer::load_from_asc_bytes(signing_key)?;
+    if let Some(passphrase) = signing_key_passphrase {
+        signer = signer.with_key_passphrase(passphrase);
+    }
     package.sign_with_timestamp(&signer, 1_600_000_000)?;
 
     let out_file = common::cargo_out_dir().join(pkg_out_path.as_ref());
