@@ -143,6 +143,26 @@ mod pgp {
 
     #[test]
     #[serial_test::serial]
+    fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let (signing_key, _) = common::load_protected_rsa_keys();
+
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key")
+            .with_key_passphrase(common::test_protected_private_key_passphrase());
+
+        let pkg = build_full_rpm()?.build_and_sign(signer)?;
+        let out_file = common::cargo_out_dir().join("full_rpm_sig_protected.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
+
+        try_installation_and_verify_signatures("/out/full_rpm_sig_protected.rpm")?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let (signing_key, _) = common::load_asc_keys();
@@ -420,6 +440,8 @@ yum install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign
 echo "\### import pub key"
 
 rpm -vv --import "${PK}" 2>&1
+
+rpm -vv --import "/assets/fixture_packages/signing_keys/public_rsa4096_protected.asc" 2>&1
 
 set -x
 

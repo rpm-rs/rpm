@@ -19,6 +19,7 @@ use pgp::{SignedPublicKey, SignedSecretKey};
 pub struct Signer {
     secret_key: SignedSecretKey,
     algorithm: traits::AlgorithmType,
+    key_passphrase: Option<String>,
 }
 
 impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorithm {
@@ -59,7 +60,7 @@ impl traits::Signing for Signer {
             ],
         };
 
-        let passwd_fn = String::new;
+        let passwd_fn = || self.key_passphrase.clone().unwrap_or_default();
         let signature_packet = sig_cfg
             .sign(&self.secret_key, passwd_fn, data)
             .map_err(|e| Error::SignError(Box::new(e)))?;
@@ -98,12 +99,22 @@ impl Signer {
             PublicKeyAlgorithm::RSA => Ok(Self {
                 secret_key,
                 algorithm: AlgorithmType::RSA,
+                key_passphrase: None,
             }),
             PublicKeyAlgorithm::EdDSA => Ok(Self {
                 secret_key,
                 algorithm: AlgorithmType::EdDSA,
+                key_passphrase: None,
             }),
             algorithm => Err(Error::UnsupportedPGPKeyType(algorithm)),
+        }
+    }
+
+    /// Configues the [Signer] with the provided PGP key passphrase.
+    pub fn with_key_passphrase(self, key_passphrase: impl Into<String>) -> Self {
+        Self {
+            key_passphrase: Some(key_passphrase.into()),
+            ..self
         }
     }
 }
