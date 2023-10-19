@@ -260,27 +260,32 @@ impl FileOptionsBuilder {
     }
 
     pub fn is_doc(mut self) -> Self {
-        self.inner.flag = FileFlags::DOC;
+        self.inner.flag.insert(FileFlags::DOC);
         self
     }
 
     pub fn is_config(mut self) -> Self {
-        self.inner.flag = FileFlags::CONFIG;
+        self.inner.flag.insert(FileFlags::CONFIG);
+        self
+    }
+
+    pub fn is_no_replace(mut self) -> Self {
+        self.inner.flag.insert(FileFlags::NOREPLACE);
         self
     }
 
     pub fn is_ghost(mut self) -> Self {
-        self.inner.flag = FileFlags::GHOST;
+        self.inner.flag.insert(FileFlags::GHOST);
         self
     }
 
     pub fn is_license(mut self) -> Self {
-        self.inner.flag = FileFlags::LICENSE;
+        self.inner.flag.insert(FileFlags::LICENSE);
         self
     }
 
     pub fn is_readme(mut self) -> Self {
-        self.inner.flag = FileFlags::README;
+        self.inner.flag.insert(FileFlags::README);
         self
     }
 }

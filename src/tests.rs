@@ -22,7 +22,9 @@ However, it does nothing.",
         .compression(rpm::CompressionType::Gzip)
         .with_file(
             "Cargo.toml",
-            FileOptions::new("/etc/awesome/config.toml").is_config(),
+            FileOptions::new("/etc/awesome/config.toml")
+                .is_config()
+                .is_no_replace(),
         )?
         // file mode is inherited from source file
         .with_file("Cargo.toml", FileOptions::new("/usr/bin/awesome"))?
@@ -67,6 +69,7 @@ However, it does nothing.",
             assert_eq!(f.ownership.user, "hugo".to_string());
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
             assert_eq!(f.caps, Some("".to_string()));
+            assert_eq!(f.flags, FileFlags::CONFIG | FileFlags::NOREPLACE);
         } else if f.path.as_os_str() == "/usr/bin/awesome" {
             assert_eq!(f.mode, FileMode::from(0o100644));
         } else if f.path.as_os_str() == "/usr/bin/awesome_link" {

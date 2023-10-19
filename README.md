@@ -38,7 +38,9 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .compression(rpm::CompressionType::Gzip)
     .with_file(
         "./test_assets/awesome.toml",
-        rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+        rpm::FileOptions::new("/etc/awesome/config.toml")
+            .is_config()
+            .is_no_replace(),
     )?
     // file mode is inherited from source file
     .with_file(

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the `summary`.
 - Add method `with_key_passphrase` to `signature::pgp::Signer`, to provide the
   passphrase when the PGP secret key is passphrase-protected.
+- Add method `is_no_replace` to `FileOptionsBuilder`, used to set the
+  `%config(noreplace)` flag on a file.
 
 ## 0.12.1
 
