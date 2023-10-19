@@ -50,7 +50,8 @@ mod pgp {
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .mode(0o100_777)
-                    .is_config(),
+                    .is_config()
+                    .is_no_replace(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),
