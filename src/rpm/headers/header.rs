@@ -432,6 +432,8 @@ pub struct FileEntry {
     pub digest: Option<FileDigest>,
     /// Defines any capabilities on the file.
     pub caps: Option<String>,
+    /// Defines a target of a symlink (if the file is a symbolic link).
+    pub linkto: String,
 }
 
 fn parse_entry_data_number<'a, T, E, F>(

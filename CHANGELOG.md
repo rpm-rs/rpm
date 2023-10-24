@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   passphrase when the PGP secret key is passphrase-protected.
 - Add method `is_no_replace` to `FileOptionsBuilder`, used to set the
   `%config(noreplace)` flag on a file.
+- Added the `FileEntry.linkto` field that is a target of a symbolic link.
 
 ## 0.12.1
 
