@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add method `is_no_replace` to `FileOptionsBuilder`, used to set the
   `%config(noreplace)` flag on a file.
 - Added the `FileEntry.linkto` field that is a target of a symbolic link.
+- Removed `get_file_checksums`, `get_file_ima_signatures` and `get_file_digest_algorithm`
+  function and the information is accessible via `FileEntry` struct
+  (`FileEntry::digest_string` and `FileEntry::ima_signature`).
+- Function `get_file_entries` returned empty vector for an RPM file without any file.
 
 ## 0.12.1
 

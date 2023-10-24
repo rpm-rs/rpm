@@ -9,6 +9,10 @@ fn rpm_freesrp_file_path() -> std::path::PathBuf {
     cargo_manifest_dir().join("test_assets/freesrp-udev-0.3.0-1.25.x86_64.rpm")
 }
 
+fn rpm_empty_rpm_file_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.x86_64.rpm")
+}
+
 fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -292,8 +296,15 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
         "2c639c8768e323f2ad4ea96f1667989cb97d49947e9bcebcd449163d9c9bb85c",
     ];
 
-    let checksums = metadata.get_file_checksums()?;
-
+    let expected_file_checksums: Vec<_> = expected_file_checksums
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+    let checksums: Vec<_> = metadata
+        .get_file_entries()?
+        .iter()
+        .map(|e| e.digest_string.clone())
+        .collect();
     assert_eq!(expected_file_checksums, checksums);
 
     let mut buf = Vec::new();
@@ -365,6 +376,17 @@ fn test_rpm_no_symlinks() -> Result<(), Box<dyn std::error::Error>> {
     let package = Package::open(rpm_file_path)?;
 
     assert_eq!(1, package.metadata.get_file_entries()?.len());
+
+    Ok(())
+}
+
+#[test]
+fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = rpm_empty_rpm_file_path();
+    let package = Package::open(rpm_file_path)?;
+
+    assert_eq!(true, package.metadata.get_file_paths()?.is_empty());
+    assert_eq!(true, package.metadata.get_file_entries()?.is_empty());
 
     Ok(())
 }

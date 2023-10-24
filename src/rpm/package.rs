@@ -714,18 +714,6 @@ impl PackageMetadata {
             )
     }
 
-    #[inline]
-    pub fn get_file_checksums(&self) -> Result<&[String], Error> {
-        self.header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)
-    }
-
-    #[inline]
-    pub fn get_file_ima_signatures(&self) -> Result<&[String], Error> {
-        self.signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
-    }
-
     /// Extract a the set of contained file names.
     pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, Error> {
         // reconstruct the messy de-constructed paths
@@ -783,7 +771,7 @@ impl PackageMetadata {
     ///
     /// Note that this is not necessarily the same as the digest
     /// used for headers.
-    pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
+    fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
             .and_then(|x| {
@@ -804,6 +792,10 @@ impl PackageMetadata {
         let modes = self
             .header
             .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES);
+        if let Err(Error::TagNotFound(_)) = modes {
+            return Ok(Vec::new());
+        }
+
         let users = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME);
@@ -846,9 +838,29 @@ impl PackageMetadata {
         let links = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS);
+        let ima_signatures = match self
+            .signature
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
+        {
+            Ok(ima_signatures) => Ok(Some(ima_signatures)),
+            Err(Error::TagNotFound(_)) => Ok(None),
+            Err(e) => {
+                println!("{e:?}");
+                return Err(e);
+            }
+        };
 
         match (
-            modes, users, groups, digests, mtimes, sizes, flags, caps, links,
+            modes,
+            users,
+            groups,
+            digests,
+            mtimes,
+            sizes,
+            flags,
+            caps,
+            links,
+            ima_signatures,
         ) {
             (
                 Ok(modes),
@@ -860,6 +872,7 @@ impl PackageMetadata {
                 Ok(flags),
                 Ok(caps),
                 Ok(links),
+                Ok(ima_signatures),
             ) => {
                 let paths = self.get_file_paths()?;
                 let n = paths.len();
@@ -879,6 +892,7 @@ impl PackageMetadata {
                 .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
                     |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags, linkto))| {
+                        let digest_string = digest.to_owned();
                         let digest = if digest.is_empty() {
                             None
                         } else {
@@ -886,6 +900,10 @@ impl PackageMetadata {
                         };
                         let cap = match caps {
                             Some(caps) => caps.get(idx).map(|x| x.to_owned()),
+                            None => None,
+                        };
+                        let ima_signature: Option<String> = match ima_signatures {
+                            Some(ima_signatures) => ima_signatures.get(idx).map(|x| x.to_owned()),
                             None => None,
                         };
                         acc.push(FileEntry {
@@ -897,10 +915,12 @@ impl PackageMetadata {
                             mode: mode.into(),
                             modified_at: crate::Timestamp(mtime),
                             digest,
+                            digest_string,
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,
                             caps: cap,
-                            linkto: linkto.to_string(),
+                            linkto: linkto.to_owned(),
+                            ima_signature,
                         });
                         Ok(acc)
                     },
@@ -917,8 +937,9 @@ impl PackageMetadata {
                 Err(Error::TagNotFound(_)),
                 Err(Error::TagNotFound(_)),
                 Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
-            (modes, users, groups, digests, mtimes, sizes, flags, caps, links) => {
+            (modes, users, groups, digests, mtimes, sizes, flags, caps, links, ima_signatures) => {
                 modes?;
                 users?;
                 groups?;
@@ -928,6 +949,7 @@ impl PackageMetadata {
                 flags?;
                 caps?;
                 links?;
+                ima_signatures?;
                 unreachable!()
             }
         }

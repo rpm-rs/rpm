@@ -430,10 +430,13 @@ pub struct FileEntry {
     pub flags: FileFlags,
     // @todo SELinux context? how is that done?
     pub digest: Option<FileDigest>,
+    pub digest_string: String,
     /// Defines any capabilities on the file.
     pub caps: Option<String>,
     /// Defines a target of a symlink (if the file is a symbolic link).
     pub linkto: String,
+    /// Integrity Measurement Architecture (IMA) signature.
+    pub ima_signature: Option<String>,
 }
 
 fn parse_entry_data_number<'a, T, E, F>(
