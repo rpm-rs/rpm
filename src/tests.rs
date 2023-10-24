@@ -333,6 +333,18 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify that if there are no capabilities set then the caps field is None
     package.metadata.get_file_entries()?.iter().for_each(|f| {
+        match f.mode {
+            FileMode::SymbolicLink { permissions: _ } => match f.path.to_str().unwrap() {
+                "/usr/lib64/dirsrv/libldaputil.so" => assert_eq!("libldaputil.so.0.0.0", f.linkto),
+                "/usr/lib64/dirsrv/libslapd.so" => assert_eq!("libslapd.so.0.1.0", f.linkto),
+                _ => {}
+            },
+            _ => match f.path.to_str().unwrap() {
+                "/usr/share/man/man3/sds_ht_slot.3.gz" => assert_eq!("", f.linkto),
+                _ => {}
+            },
+        }
+
         assert_eq!(f.clone().caps, None);
     });
 

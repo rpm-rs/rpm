@@ -843,8 +843,13 @@ impl PackageMetadata {
             Err(Error::TagNotFound(_)) => Ok(None),
             Err(e) => return Err(e),
         };
+        let links = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS);
 
-        match (modes, users, groups, digests, mtimes, sizes, flags, caps) {
+        match (
+            modes, users, groups, digests, mtimes, sizes, flags, caps, links,
+        ) {
             (
                 Ok(modes),
                 Ok(users),
@@ -854,6 +859,7 @@ impl PackageMetadata {
                 Ok(sizes),
                 Ok(flags),
                 Ok(caps),
+                Ok(links),
             ) => {
                 let paths = self.get_file_paths()?;
                 let n = paths.len();
@@ -867,11 +873,12 @@ impl PackageMetadata {
                     mtimes,
                     sizes,
                     flags,
+                    links,
                 ))
                 .enumerate()
                 .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
-                    |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags))| {
+                    |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags, linkto))| {
                         let digest = if digest.is_empty() {
                             None
                         } else {
@@ -893,6 +900,7 @@ impl PackageMetadata {
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,
                             caps: cap,
+                            linkto: linkto.to_string(),
                         });
                         Ok(acc)
                     },
@@ -908,8 +916,9 @@ impl PackageMetadata {
                 Err(Error::TagNotFound(_)),
                 Err(Error::TagNotFound(_)),
                 Err(Error::TagNotFound(_)),
+                Err(Error::TagNotFound(_)),
             ) => Ok(vec![]),
-            (modes, users, groups, digests, mtimes, sizes, flags, caps) => {
+            (modes, users, groups, digests, mtimes, sizes, flags, caps, links) => {
                 modes?;
                 users?;
                 groups?;
@@ -918,6 +927,7 @@ impl PackageMetadata {
                 sizes?;
                 flags?;
                 caps?;
+                links?;
                 unreachable!()
             }
         }
