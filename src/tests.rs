@@ -5,6 +5,10 @@ fn rpm_389_ds_file_path() -> std::path::PathBuf {
     cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
 }
 
+fn rpm_freesrp_file_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("test_assets/freesrp-udev-0.3.0-1.25.x86_64.rpm")
+}
+
 fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -334,21 +338,33 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     // Verify that if there are no capabilities set then the caps field is None
     package.metadata.get_file_entries()?.iter().for_each(|f| {
         match f.mode {
-            FileMode::SymbolicLink { permissions: _ } => match f.path.to_str().unwrap() {
-                "/usr/lib64/dirsrv/libldaputil.so" => assert_eq!("libldaputil.so.0.0.0", f.linkto),
-                "/usr/lib64/dirsrv/libslapd.so" => assert_eq!("libslapd.so.0.1.0", f.linkto),
-                _ => {}
-            },
-            _ => match f.path.to_str().unwrap() {
-                "/usr/share/man/man3/sds_ht_slot.3.gz" => assert_eq!("", f.linkto),
-                _ => {}
-            },
+            FileMode::SymbolicLink { permissions: _ } => {
+                assert_ne!("", f.linkto);
+                match f.path.to_str().unwrap() {
+                    "/usr/lib64/dirsrv/libldaputil.so" => {
+                        assert_eq!("libldaputil.so.0.0.0", f.linkto)
+                    }
+                    "/usr/lib64/dirsrv/libslapd.so" => assert_eq!("libslapd.so.0.1.0", f.linkto),
+                    _ => {}
+                }
+            }
+            _ => assert_eq!("", f.linkto),
         }
 
         assert_eq!(f.clone().caps, None);
     });
 
     package.verify_digests()?;
+
+    Ok(())
+}
+
+#[test]
+fn test_rpm_no_symlinks() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = rpm_freesrp_file_path();
+    let package = Package::open(rpm_file_path)?;
+
+    assert_eq!(1, package.metadata.get_file_entries()?.len());
 
     Ok(())
 }
