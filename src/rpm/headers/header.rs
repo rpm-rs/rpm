@@ -2,7 +2,12 @@ use nom::{
     bytes::complete,
     number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8},
 };
-use std::{fmt, io, marker::PhantomData, path::PathBuf};
+use std::{
+    fmt::{self, Display},
+    io,
+    marker::PhantomData,
+    path::PathBuf,
+};
 
 use super::*;
 use crate::{constants::*, errors::*, Timestamp};
@@ -380,10 +385,10 @@ pub struct FileOwnership {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum FileDigest {
     Md5(Vec<u8>),
+    Sha2_224(Vec<u8>),
     Sha2_256(Vec<u8>),
     Sha2_384(Vec<u8>),
     Sha2_512(Vec<u8>),
-    Sha2_224(Vec<u8>),
     // @todo unsupported other types for now
 }
 
@@ -402,6 +407,32 @@ impl FileDigest {
             // @todo disambiguate mismatch of length from unsupported algorithm
             digest_algo => return Err(Error::UnsupportedDigestAlgorithm(digest_algo)),
         })
+    }
+
+    pub fn algorithm(&self) -> DigestAlgorithm {
+        match self {
+            Self::Md5(_) => DigestAlgorithm::Md5,
+            Self::Sha2_224(_) => DigestAlgorithm::Sha2_224,
+            Self::Sha2_256(_) => DigestAlgorithm::Sha2_256,
+            Self::Sha2_384(_) => DigestAlgorithm::Sha2_384,
+            Self::Sha2_512(_) => DigestAlgorithm::Sha2_512,
+        }
+    }
+
+    pub fn as_hex(&self) -> String {
+        match self {
+            Self::Md5(d) => hex::encode(d),
+            Self::Sha2_224(d) => hex::encode(d),
+            Self::Sha2_256(d) => hex::encode(d),
+            Self::Sha2_384(d) => hex::encode(d),
+            Self::Sha2_512(d) => hex::encode(d),
+        }
+    }
+}
+
+impl Display for FileDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.as_hex())
     }
 }
 
@@ -430,7 +461,6 @@ pub struct FileEntry {
     pub flags: FileFlags,
     // @todo SELinux context? how is that done?
     pub digest: Option<FileDigest>,
-    pub digest_string: String,
     /// Defines any capabilities on the file.
     pub caps: Option<String>,
     /// Defines a target of a symlink (if the file is a symbolic link).
