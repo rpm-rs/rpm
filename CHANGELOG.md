@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bumped MSRV to 1.67
 
+### Removed
+
+- Removed `Package::get_file_checksums` and `Package::get_file_ima_signatures` functions, the same information is now retrievable using `Package::get_file_entries`.
+
 ### Added
 
 - Support for symbolic link in file mode.
-- Make file type const `REGULAR_FILE_TYPE` `DIR_FILE_TYPE` `SYMBOLIC_LINK_FILE_TYPE` public, because `FileMode::file_type` is public, sometimes we need this const to determin file type.
+- Make file type const `REGULAR_FILE_TYPE` `DIR_FILE_TYPE` `SYMBOLIC_LINK_FILE_TYPE` public, because `FileMode::file_type` is public, sometimes we need this const to determine file type.
 - Method `PackageBuilder::new` now takes a `summary` as last parameter, instead
   of a `description`. A new method `PackageBuilder::description` can be used to
   set a detailed description for a package; if not set, the description defaults
@@ -24,10 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add method `is_no_replace` to `FileOptionsBuilder`, used to set the
   `%config(noreplace)` flag on a file.
 - Added the `FileEntry.linkto` field that is a target of a symbolic link.
-- Removed `get_file_checksums`, `get_file_ima_signatures` and `get_file_digest_algorithm`
-  function and the information is accessible via `FileEntry` struct
-  (`FileEntry::digest_string` and `FileEntry::ima_signature`).
-- Function `get_file_entries` returned empty vector for an RPM file without any file.
+- Function `Package::get_file_entries` returns an empty vector for an RPM package without any files.
+- `FileEntry` structs returned by (`Package::get_file_entries`) now include IMA signature information as well as digests for file entries.
 
 ## 0.12.1
 

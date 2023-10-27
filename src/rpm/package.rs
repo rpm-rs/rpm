@@ -771,7 +771,7 @@ impl PackageMetadata {
     ///
     /// Note that this is not necessarily the same as the digest
     /// used for headers.
-    fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
+    pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
             .and_then(|x| {
@@ -892,7 +892,6 @@ impl PackageMetadata {
                 .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
                     Vec::with_capacity(n),
                     |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags, linkto))| {
-                        let digest_string = digest.to_owned();
                         let digest = if digest.is_empty() {
                             None
                         } else {
@@ -915,7 +914,6 @@ impl PackageMetadata {
                             mode: mode.into(),
                             modified_at: crate::Timestamp(mtime),
                             digest,
-                            digest_string,
                             flags: FileFlags::from_bits_retain(flags),
                             size: size as usize,
                             caps: cap,
