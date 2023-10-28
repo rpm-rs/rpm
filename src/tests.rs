@@ -303,8 +303,12 @@ fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
     let checksums: Vec<_> = metadata
         .get_file_entries()?
         .iter()
-        .map(|e| e.digest.as_ref().map(|d| d.to_string()))
-        .map(|d| d.unwrap_or("".to_owned()))
+        .map(|e| {
+            e.digest
+                .as_ref()
+                .map(|d| d.to_string())
+                .unwrap_or("".to_owned())
+        })
         .collect();
     assert_eq!(expected_file_checksums, checksums);
 

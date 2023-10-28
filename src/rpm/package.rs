@@ -895,7 +895,7 @@ impl PackageMetadata {
                         let digest = if digest.is_empty() {
                             None
                         } else {
-                            Some(FileDigest::load_from_str(algorithm, digest)?)
+                            Some(FileDigest::new(algorithm, digest)?)
                         };
                         let cap = match caps {
                             Some(caps) => caps.get(idx).map(|x| x.to_owned()),
