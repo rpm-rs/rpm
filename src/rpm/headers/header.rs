@@ -383,56 +383,47 @@ pub struct FileOwnership {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum FileDigest {
-    Md5(Vec<u8>),
-    Sha2_224(Vec<u8>),
-    Sha2_256(Vec<u8>),
-    Sha2_384(Vec<u8>),
-    Sha2_512(Vec<u8>),
-    // @todo unsupported other types for now
+pub struct FileDigest {
+    digest: String,
+    algo: DigestAlgorithm,
 }
 
 impl FileDigest {
-    pub fn load_from_str(
+    pub(crate) fn new(
         algorithm: DigestAlgorithm,
-        stringly_data: impl AsRef<str>,
+        hex_digest: impl Into<String>,
     ) -> Result<Self, Error> {
-        let hex: Vec<u8> = hex::decode(stringly_data.as_ref())?;
+        let hex = hex_digest.into();
+        let digest = FileDigest {
+            digest: hex,
+            algo: algorithm,
+        };
+
         Ok(match algorithm {
-            DigestAlgorithm::Md5 if hex.len() == 16 => FileDigest::Md5(hex),
-            DigestAlgorithm::Sha2_256 if hex.len() == 32 => FileDigest::Sha2_256(hex),
-            DigestAlgorithm::Sha2_224 if hex.len() == 30 => FileDigest::Sha2_224(hex),
-            DigestAlgorithm::Sha2_384 if hex.len() == 48 => FileDigest::Sha2_384(hex),
-            DigestAlgorithm::Sha2_512 if hex.len() == 64 => FileDigest::Sha2_512(hex),
+            DigestAlgorithm::Md5 if digest.digest.len() == 32 => digest,
+            DigestAlgorithm::Sha2_256 if digest.digest.len() == 64 => digest,
+            DigestAlgorithm::Sha2_224 if digest.digest.len() == 60 => digest,
+            DigestAlgorithm::Sha2_384 if digest.digest.len() == 96 => digest,
+            DigestAlgorithm::Sha2_512 if digest.digest.len() == 128 => digest,
             // @todo disambiguate mismatch of length from unsupported algorithm
             digest_algo => return Err(Error::UnsupportedDigestAlgorithm(digest_algo)),
         })
     }
 
+    /// Return the algorithm that was used for this digest.
     pub fn algorithm(&self) -> DigestAlgorithm {
-        match self {
-            Self::Md5(_) => DigestAlgorithm::Md5,
-            Self::Sha2_224(_) => DigestAlgorithm::Sha2_224,
-            Self::Sha2_256(_) => DigestAlgorithm::Sha2_256,
-            Self::Sha2_384(_) => DigestAlgorithm::Sha2_384,
-            Self::Sha2_512(_) => DigestAlgorithm::Sha2_512,
-        }
+        self.algo
     }
 
-    pub fn as_hex(&self) -> String {
-        match self {
-            Self::Md5(d) => hex::encode(d),
-            Self::Sha2_224(d) => hex::encode(d),
-            Self::Sha2_256(d) => hex::encode(d),
-            Self::Sha2_384(d) => hex::encode(d),
-            Self::Sha2_512(d) => hex::encode(d),
-        }
+    /// Return the digest
+    pub fn as_hex(&self) -> &str {
+        self.digest.as_str()
     }
 }
 
 impl Display for FileDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.as_hex())
+        f.write_str(self.as_hex())
     }
 }
 

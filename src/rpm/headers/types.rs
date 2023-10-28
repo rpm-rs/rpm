@@ -1,9 +1,8 @@
 //! A collection of types used in various header records.
-use std::str::FromStr;
-
 use crate::{constants::*, errors, Timestamp};
 use capctl::FileCaps;
 use digest::Digest;
+use std::str::FromStr;
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
 ///

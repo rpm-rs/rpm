@@ -558,7 +558,7 @@ bitflags! {
 // should be equivalent the value mapping used by `pgp::crypto::hash::HashAlgorithm`
 // but we have to copy it as not everyone uses the `signature` feature
 #[repr(u32)]
-#[derive(Debug, Clone, Copy, enum_primitive_derive::Primitive)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, enum_primitive_derive::Primitive)]
 pub enum DigestAlgorithm {
     Md5 = 1,
     Sha2_256 = 8,
