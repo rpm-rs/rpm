@@ -4,6 +4,8 @@ use thiserror::Error;
 
 use crate::{DigestAlgorithm, TimestampError};
 
+type BoxedError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
@@ -57,19 +59,16 @@ pub enum Error {
     NoSignatureFound,
 
     #[error("error creating signature: {0}")]
-    SignError(Box<dyn std::error::Error>),
+    SignError(BoxedError),
 
     #[error("error parsing key - {details}. underlying error was: {source}")]
     KeyLoadError {
-        source: Box<dyn std::error::Error>,
+        source: BoxedError,
         details: &'static str,
     },
 
     #[error("error verifying signature with key {key_ref}: {source}")]
-    VerificationError {
-        source: Box<dyn std::error::Error>,
-        key_ref: String,
-    },
+    VerificationError { source: BoxedError, key_ref: String },
 
     #[error("digests from content did not match those in the header")]
     DigestMismatchError,
@@ -108,5 +107,21 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for Error {
 impl From<TimestampError> for Error {
     fn from(error: TimestampError) -> Self {
         Error::TimestampConv(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Context;
+
+    use crate::errors::Error;
+
+    fn send_error() -> anyhow::Result<()> {
+        Err(Error::TagNotFound("test".to_string())).context("Failed")
+    }
+
+    #[test]
+    fn test_send() {
+        let _x = send_error();
     }
 }
