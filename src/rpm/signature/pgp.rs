@@ -63,12 +63,11 @@ impl traits::Signing for Signer {
         let passwd_fn = || self.key_passphrase.clone().unwrap_or_default();
         let signature_packet = sig_cfg
             .sign(&self.secret_key, passwd_fn, data)
-            .map_err(|e| Error::SignError(Box::new(e)))?;
+            .map_err(Error::SignError)?;
 
         let mut signature_bytes = Vec::with_capacity(1024);
         let mut cursor = io::Cursor::new(&mut signature_bytes);
-        pgp::packet::write_packet(&mut cursor, &signature_packet)
-            .map_err(|e| Error::SignError(Box::new(e)))?;
+        pgp::packet::write_packet(&mut cursor, &signature_packet).map_err(Error::SignError)?;
 
         Ok(signature_bytes)
     }
@@ -82,19 +81,13 @@ impl Signer {
     /// load the private key for signing
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
-            source: Box::new(e),
-            details: "Failed to parse bytes as utf8 for ascii armored parsing",
-        })?;
+        let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
         Self::load_from_asc(input)
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (secret_key, _) =
-            SignedSecretKey::from_string(input).map_err(|e| Error::KeyLoadError {
-                source: Box::new(e),
-                details: "Failed to parse bytes as ascii armored key",
-            })?;
+            SignedSecretKey::from_string(input).map_err(Error::KeyLoadSecretKeyError)?;
         match secret_key.algorithm() {
             PublicKeyAlgorithm::RSA => Ok(Self {
                 secret_key,
@@ -159,9 +152,9 @@ impl traits::Verifying for Verifier {
             log::trace!("Signature has issuer ref: {:?}", key_id);
 
             if self.public_key.key_id() == *key_id {
-                return signature.verify(&self.public_key, data).map_err(|e| {
+                return signature.verify(&self.public_key, data).map_err(|source| {
                     Error::VerificationError {
-                        source: Box::new(e),
+                        source,
                         key_ref: format!("{:?}", key_id),
                     }
                 });
@@ -193,10 +186,10 @@ impl traits::Verifying for Verifier {
                             );
                             return Ok(());
                         }
-                        Err(e) => {
+                        Err(source) => {
                             log::trace!("Subkey verification failed");
                             result = Err(Error::VerificationError {
-                                source: Box::new(e),
+                                source,
                                 key_ref: format!("{:?}", sub_key.key_id()),
                             })
                         }
@@ -216,8 +209,8 @@ impl traits::Verifying for Verifier {
             );
             signature
                 .verify(&self.public_key, data)
-                .map_err(|e| Error::VerificationError {
-                    source: Box::new(e),
+                .map_err(|source| Error::VerificationError {
+                    source,
                     key_ref: format!("{:?}", self.public_key.key_id()),
                 })
         }
@@ -231,19 +224,13 @@ impl traits::Verifying for Verifier {
 impl Verifier {
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         // only asc loading is supported right now
-        let input = std::str::from_utf8(input).map_err(|e| Error::KeyLoadError {
-            source: Box::new(e),
-            details: "Failed to parse bytes as utf8 for ascii armored parsing",
-        })?;
+        let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
         Self::load_from_asc(input)
     }
 
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (public_key, _) =
-            SignedPublicKey::from_string(input).map_err(|e| Error::KeyLoadError {
-                source: Box::new(e),
-                details: "Failed to parse bytes as ascii armored key",
-            })?;
+            SignedPublicKey::from_string(input).map_err(Error::KeyLoadSecretKeyError)?;
 
         match public_key.algorithm() {
             PublicKeyAlgorithm::RSA => Ok(Self {
