@@ -56,6 +56,7 @@ pub enum Error {
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
 
+    #[cfg(feature = "signature-pgp")]
     #[error("error creating signature: {0}")]
     SignError(#[source] pgp::errors::Error),
 
@@ -66,6 +67,7 @@ pub enum Error {
         Utf8Error,
     ),
 
+    #[cfg(feature = "signature-pgp")]
     #[error("errors parsing keys, failed to parse bytes as ascii armored key")]
     KeyLoadSecretKeyError(
         #[from]
@@ -73,6 +75,7 @@ pub enum Error {
         pgp::errors::Error,
     ),
 
+    #[cfg(feature = "signature-pgp")]
     #[error("error verifying signature with key {key_ref}: {source}")]
     VerificationError {
         #[source]
