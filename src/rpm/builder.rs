@@ -64,10 +64,12 @@ pub struct PackageBuilder {
     enhances: Vec<Dependency>,
     supplements: Vec<Dependency>,
 
+    pre_trans_script: Option<String>,
     pre_inst_script: Option<String>,
     post_inst_script: Option<String>,
     pre_uninst_script: Option<String>,
     post_uninst_script: Option<String>,
+    post_trans_script: Option<String>,
 
     /// The author name with email followed by a dash with the version
     /// `Max Mustermann <max@example.com> - 0.1-1`
@@ -368,6 +370,11 @@ impl PackageBuilder {
         Ok(())
     }
 
+    pub fn pre_trans_script(mut self, content: impl Into<String>) -> Self {
+        self.pre_trans_script = Some(content.into());
+        self
+    }
+
     pub fn pre_install_script(mut self, content: impl Into<String>) -> Self {
         self.pre_inst_script = Some(content.into());
         self
@@ -385,6 +392,11 @@ impl PackageBuilder {
 
     pub fn post_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.post_uninst_script = Some(content.into());
+        self
+    }
+
+    pub fn post_trans_script(mut self, content: impl Into<String>) -> Self {
+        self.post_trans_script = Some(content.into());
         self
     }
 
@@ -1211,6 +1223,14 @@ impl PackageBuilder {
             ));
         }
 
+        if let Some(pre_trans_script) = self.pre_trans_script {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PRETRANS,
+                offset,
+                IndexData::StringTag(pre_trans_script),
+            ));
+        }
+
         if let Some(pre_inst_script) = self.pre_inst_script {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PREIN,
@@ -1240,6 +1260,14 @@ impl PackageBuilder {
                 IndexTag::RPMTAG_POSTUN,
                 offset,
                 IndexData::StringTag(post_uninst_script),
+            ));
+        }
+
+        if let Some(post_trans_script) = self.post_trans_script {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_POSTTRANS,
+                offset,
+                IndexData::StringTag(post_trans_script),
             ));
         }
 
