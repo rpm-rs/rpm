@@ -53,7 +53,6 @@ itertools = "0.12"
 hex = { version = "0.4", features = ["std"] }
 zstd = "0.13"
 xz2 = "0.1"
-capctl = "0.2.3"
 
 [dev-dependencies]
 env_logger = "0.10.0"

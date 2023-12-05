@@ -92,6 +92,9 @@ pub enum Error {
 
     #[error("timestamp conversion error: {0:?}")]
     TimestampConv(TimestampError),
+
+    #[error("{0}")]
+    InvalidFileCaps(String),
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for Error {

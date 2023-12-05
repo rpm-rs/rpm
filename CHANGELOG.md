@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the `FileEntry.linkto` field that is a target of a symbolic link.
 - Function `Package::get_file_entries` returns an empty vector for an RPM package without any files.
 - `FileEntry` structs returned by (`Package::get_file_entries`) now include IMA signature information as well as digests for file entries.
+- Add mod `rpm::filecaps` instead of capctl crate
 
 ## 0.12.1
 
