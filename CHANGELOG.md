@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Function `Package::get_file_entries` returns an empty vector for an RPM package without any files.
 - `FileEntry` structs returned by (`Package::get_file_entries`) now include IMA signature information as well as digests for file entries.
 - Add mod `rpm::filecaps` instead of capctl crate
+- Added `pre_trans_script`, `post_trans_script`, `pre_untrans_script`, and `post_untrans_script` methods to `PackageBuilder`. This corresponds with the `%pretrans`, `%postrans`, `%preuntrans`, and `%postuntrans` scriptlets.
+- Added `*_flags` and `*_prog` support to all scriptlet types.
 
 ## 0.12.1
 

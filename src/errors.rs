@@ -53,6 +53,9 @@ pub enum Error {
     #[error("invalid capabilities specified {caps}")]
     InvalidCapabilities { caps: String },
 
+    #[error("{option} is set without setting {scriptlet}")]
+    ScriptletOptionSetWithoutScript { option: &'static str, scriptlet: &'static str },
+
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
 

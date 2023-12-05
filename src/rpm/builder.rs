@@ -36,6 +36,48 @@ fn file_mode(_file: &fs::File) -> Result<u32, Error> {
     Ok(0)
 }
 
+/// This macro is for configuring scriptlet content w/ the additional `flags` and `prog tags,
+/// 
+/// **Error** If the scriptlet option is passed without passing the script content an error will be returned. 
+/// 
+macro_rules! prepare_scriptlet {
+    ($rcv:ident, $records:ident, $offset:ident, $(([$script:ident, $script_tag:path], [$flags:ident, $flags_tag:path], [$prog:ident, $prog_tag:path])),*) => {
+        $(
+            if let Some(script) = $rcv.$script {
+                $records.push(IndexEntry::new(
+                    $script_tag,
+                    $offset,
+                    IndexData::StringTag(script),
+                ));
+    
+                if let Some(flags) = $rcv.$flags {
+                    $records.push(IndexEntry::new(
+                        $flags_tag,
+                        $offset,
+                        IndexData::Int32(vec![flags]),
+                    ))
+                }
+    
+                if let Some(prog) = $rcv.$prog {
+                    $records.push(IndexEntry::new(
+                        $prog_tag,
+                        $offset,
+                        IndexData::StringArray(prog),
+                    ))
+                }
+            } else {
+                if $rcv.$flags.is_some() {
+                    return Err(Error::ScriptletOptionSetWithoutScript { option: stringify!($flags), scriptlet: stringify!($script) } );
+                }
+
+                if $rcv.$prog.is_some() {
+                    return Err(Error::ScriptletOptionSetWithoutScript { option: stringify!($prog), scriptlet: stringify!($script) } );
+                }
+            }
+        )*
+    };
+}
+
 /// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
 pub struct PackageBuilder {
@@ -64,12 +106,37 @@ pub struct PackageBuilder {
     enhances: Vec<Dependency>,
     supplements: Vec<Dependency>,
 
-    pre_trans_script: Option<String>,
     pre_inst_script: Option<String>,
+    pre_inst_flags: Option<u32>,
+    pre_inst_prog: Option<Vec<String>>,
+
     post_inst_script: Option<String>,
+    post_inst_flags: Option<u32>,
+    post_inst_prog: Option<Vec<String>>,
+
     pre_uninst_script: Option<String>,
+    pre_uninst_flags: Option<u32>,
+    pre_uninst_prog: Option<Vec<String>>,
+
     post_uninst_script: Option<String>,
+    post_uninst_flags: Option<u32>,
+    post_uninst_prog: Option<Vec<String>>,
+
+    pre_trans_script: Option<String>,
+    pre_trans_flags: Option<u32>,
+    pre_trans_prog: Option<Vec<String>>,
+
     post_trans_script: Option<String>,
+    post_trans_flags: Option<u32>,
+    post_trans_prog: Option<Vec<String>>,
+
+    pre_untrans_script: Option<String>,
+    pre_untrans_flags: Option<u32>,
+    pre_untrans_prog: Option<Vec<String>>,
+
+    post_untrans_script: Option<String>,
+    post_untrans_flags: Option<u32>,
+    post_untrans_prog: Option<Vec<String>>,
 
     /// The author name with email followed by a dash with the version
     /// `Max Mustermann <max@example.com> - 0.1-1`
@@ -370,33 +437,249 @@ impl PackageBuilder {
         Ok(())
     }
 
-    pub fn pre_trans_script(mut self, content: impl Into<String>) -> Self {
-        self.pre_trans_script = Some(content.into());
-        self
-    }
-
+    /// Sets the scriptlet content for `%prein` during package install and upgrade,
+    ///
+    /// **Note** `%prein` script is executed right before the package is installed
+    ///
     pub fn pre_install_script(mut self, content: impl Into<String>) -> Self {
         self.pre_inst_script = Some(content.into());
         self
     }
 
+    /// Sets the scriptlet flags for `%prein` during package install and upgrade,
+    ///
+    /// **Note** If pre_install_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%prein` script is executed right before the package is installed
+    ///
+    pub fn pre_install_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.pre_inst_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%prein` during package install and upgrade,
+    ///
+    /// **Note** If pre_install_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%prein` script is executed right before the package is installed
+    ///
+    pub fn pre_install_prog(mut self, prog: Vec<String>) -> Self {
+        self.pre_inst_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%postin` during package install and upgrade,
+    ///
+    /// **Note** `%postin` script is executed right after the package got installed
+    ///
     pub fn post_install_script(mut self, content: impl Into<String>) -> Self {
         self.post_inst_script = Some(content.into());
         self
     }
 
+    /// Sets the scriptlet flags for `%postin` during package install and upgrade,
+    ///
+    /// **Note** If post_install_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postin` script is executed right after the package got installed
+    ///
+    pub fn post_install_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.post_inst_flags = Some(flags.into());
+        self
+    }
+    /// Sets the scriptlet interpreter/arguments for `%postin` during package install and upgrade,
+    ///
+    /// **Note** If post_install_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postin` script is executed right after the package got installed
+    ///
+    pub fn post_install_prog(mut self, prog: Vec<String>) -> Self {
+        self.post_inst_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%preun` during package uninstall and upgrade,
+    ///
+    /// **Note** `%preun` script is executed right before the package gets removed
+    ///
     pub fn pre_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.pre_uninst_script = Some(content.into());
         self
     }
 
+    /// Sets the scriptlet flags for `%preun` during package uninstall and upgrade,
+    ///
+    /// **Note** If pre_uninstall_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%preun` script is executed right before the package gets removed
+    ///
+    pub fn pre_uninstall_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.pre_uninst_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%preun` during package uninstall and upgrade,
+    ///
+    /// **Note** If pre_uninstall_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%preun` script is executed right before the package gets removed
+    ///
+    pub fn pre_uninstall_prog(mut self, prog: Vec<String>) -> Self {
+        self.pre_uninst_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%postun` during package uninstall and upgrade,
+    ///
+    /// **Note** `%postun` script is executed right after the package was removed
+    ///
     pub fn post_uninstall_script(mut self, content: impl Into<String>) -> Self {
         self.post_uninst_script = Some(content.into());
         self
     }
 
+    /// Sets the scriptlet flags for `%postun` during package uninstall and upgrade,
+    ///
+    /// **Note** If post_uninstall_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postun` script is executed right after the package was removed
+    ///
+    pub fn post_uninstall_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.post_uninst_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%postun` during package uninstall and upgrade,
+    ///
+    /// **Note** If post_uninstall_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postun` script is executed right after the package was removed
+    ///
+    pub fn post_uninstall_prog(mut self, prog: Vec<String>) -> Self {
+        self.post_uninst_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%pretrans` during package install and upgrade,
+    ///
+    /// **Note** `%pretrans` scripts are executed for to be installed packages before any packages are installed/removed
+    ///
+    pub fn pre_trans_script(mut self, content: impl Into<String>) -> Self {
+        self.pre_trans_script = Some(content.into());
+        self
+    }
+
+    /// Sets the scriptlet flags for `%pretrans` during package install and upgrade,
+    ///
+    /// **Note** If pre_trans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%pretrans` scripts are executed for to be installed packages before any packages are installed/removed
+    ///
+    pub fn pre_trans_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.pre_trans_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%pretrans` during package install and upgrade,
+    ///
+    /// **Note** If pre_trans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%pretrans` scripts are executed for to be installed packages before any packages are installed/removed
+    ///
+    pub fn pre_trans_prog(mut self, prog: Vec<String>) -> Self {
+        self.pre_trans_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%posttrans` during package install and upgrade,
+    ///
+    /// **Note** `%posttrans` scripts are all executed at the end of the transaction that installed their packages
+    ///
     pub fn post_trans_script(mut self, content: impl Into<String>) -> Self {
         self.post_trans_script = Some(content.into());
+        self
+    }
+
+    /// Sets the scriptlet flags for `%posttrans` during package install and upgrade,
+    ///
+    /// **Note** If post_trans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%posttrans` scripts are all executed at the end of the transaction that installed their packages
+    ///
+    pub fn post_trans_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.post_trans_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%posttrans` during package install and upgrade,
+    ///
+    /// **Note** If post_trans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%posttrans` scripts are all executed at the end of the transaction that installed their packages
+    ///
+    pub fn post_trans_prog(mut self, prog: Vec<String>) -> Self {
+        self.post_trans_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%preuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** `%preuntrans` scripts are executed for to be removed packages before any packages are installed/removed
+    ///
+    pub fn pre_untrans_script(mut self, content: impl Into<String>) -> Self {
+        self.pre_untrans_script = Some(content.into());
+        self
+    }
+
+    /// Sets the scriptlet flags for `%preuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** If pre_untrans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%preuntrans` scripts are executed for to be removed packages before any packages are installed/removed
+    ///
+    pub fn pre_untrans_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.pre_untrans_flags = Some(flags.into());
+        self
+    }
+    /// Sets the scriptlet interpreter/arguments for `%preuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** If pre_untrans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%preuntrans` scripts are executed for to be removed packages before any packages are installed/removed
+    ///
+    pub fn pre_untrans_prog(mut self, prog: Vec<String>) -> Self {
+        self.pre_untrans_prog = Some(prog);
+        self
+    }
+
+    /// Sets the scriptlet content for `%postuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** `%postuntrans` scripts are all executed at the end of the transaction that removes their packages
+    ///
+    pub fn post_untrans_script(mut self, content: impl Into<String>) -> Self {
+        self.post_untrans_script = Some(content.into());
+        self
+    }
+
+    /// Sets the scriptlet flags for `%postuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** If post_untrans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postuntrans` scripts are all executed at the end of the transaction that removes their packages
+    ///
+    pub fn post_untrans_flags(mut self, flags: impl Into<u32>) -> Self {
+        self.post_untrans_flags = Some(flags.into());
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments for `%postuntrans` during package uninstall and upgrade,
+    ///
+    /// **Note** If post_untrans_script is not set, this will be a no-op.
+    ///
+    /// **Note** `%postuntrans` scripts are all executed at the end of the transaction that removes their packages
+    ///
+    pub fn post_untrans_prog(mut self, prog: Vec<String>) -> Self {
+        self.post_untrans_prog = Some(prog);
         self
     }
 
@@ -1224,53 +1507,51 @@ impl PackageBuilder {
             ));
         }
 
-        if let Some(pre_trans_script) = self.pre_trans_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PRETRANS,
-                offset,
-                IndexData::StringTag(pre_trans_script),
-            ));
-        }
-
-        if let Some(pre_inst_script) = self.pre_inst_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PREIN,
-                offset,
-                IndexData::StringTag(pre_inst_script),
-            ));
-        }
-
-        if let Some(post_inst_script) = self.post_inst_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_POSTIN,
-                offset,
-                IndexData::StringTag(post_inst_script),
-            ));
-        }
-
-        if let Some(pre_uninst_script) = self.pre_uninst_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PREUN,
-                offset,
-                IndexData::StringTag(pre_uninst_script),
-            ));
-        }
-
-        if let Some(post_uninst_script) = self.post_uninst_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_POSTUN,
-                offset,
-                IndexData::StringTag(post_uninst_script),
-            ));
-        }
-
-        if let Some(post_trans_script) = self.post_trans_script {
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_POSTTRANS,
-                offset,
-                IndexData::StringTag(post_trans_script),
-            ));
-        }
+        prepare_scriptlet!(
+            self,
+            actual_records,
+            offset,
+            (
+                [pre_inst_script, IndexTag::RPMTAG_PREIN],
+                [pre_inst_flags, IndexTag::RPMTAG_PREINFLAGS],
+                [pre_inst_prog, IndexTag::RPMTAG_PREINPROG]
+            ),
+            (
+                [post_inst_script, IndexTag::RPMTAG_POSTIN],
+                [post_inst_flags, IndexTag::RPMTAG_POSTINFLAGS],
+                [post_inst_prog, IndexTag::RPMTAG_POSTINPROG]
+            ),
+            (
+                [pre_uninst_script, IndexTag::RPMTAG_PREUN],
+                [pre_uninst_flags, IndexTag::RPMTAG_PREUNFLAGS],
+                [pre_uninst_prog, IndexTag::RPMTAG_PREUNPROG]
+            ),
+            (
+                [post_uninst_script, IndexTag::RPMTAG_POSTUN],
+                [post_uninst_flags, IndexTag::RPMTAG_POSTUNFLAGS],
+                [post_uninst_prog, IndexTag::RPMTAG_POSTUNPROG]
+            ),
+            (
+                [pre_trans_script, IndexTag::RPMTAG_PRETRANS],
+                [pre_trans_flags, IndexTag::RPMTAG_PRETRANSFLAGS],
+                [pre_trans_prog, IndexTag::RPMTAG_PRETRANSPROG]
+            ),
+            (
+                [post_trans_script, IndexTag::RPMTAG_POSTTRANS],
+                [post_trans_flags, IndexTag::RPMTAG_POSTTRANSFLAGS],
+                [post_trans_prog, IndexTag::RPMTAG_POSTTRANSPROG]
+            ),
+            (
+                [pre_untrans_script, IndexTag::RPMTAG_PREUNTRANS],
+                [pre_untrans_flags, IndexTag::RPMTAG_PREUNTRANSFLAGS],
+                [pre_untrans_prog, IndexTag::RPMTAG_PREUNTRANSPROG]
+            ),
+            (
+                [post_untrans_script, IndexTag::RPMTAG_POSTUNTRANS],
+                [post_untrans_flags, IndexTag::RPMTAG_POSTUNTRANSFLAGS],
+                [post_untrans_prog, IndexTag::RPMTAG_POSTUNTRANSPROG]
+            )
+        );
 
         if let Some(vendor) = self.vendor {
             actual_records.push(IndexEntry::new(
