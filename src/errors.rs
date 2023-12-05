@@ -123,6 +123,7 @@ impl From<TimestampError> for Error {
     }
 }
 
+// Assert at compile-time that Error implements Send and Sync.
 const _: () = {
     const fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Error>();
