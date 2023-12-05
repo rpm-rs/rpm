@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `Error` now implements `Send + Sync`.
+- `Error` now implements `Send + Sync` (therefore, `Result<Package, Error>` now implements `Send + Sync`).
 
 ## 0.13.0
 
