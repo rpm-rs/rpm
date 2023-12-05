@@ -1,6 +1,5 @@
 //! A collection of types used in various header records.
-use crate::{constants::*, errors, Timestamp};
-use capctl::FileCaps;
+use crate::{constants::*, errors, FileCaps, Timestamp};
 use digest::Digest;
 use std::str::FromStr;
 

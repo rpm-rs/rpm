@@ -72,7 +72,7 @@ However, it does nothing.",
         if f.path.as_os_str() == "/etc/awesome/second.toml" {
             assert_eq!(
                 f.clone().caps.unwrap(),
-                "cap_sys_ptrace,cap_sys_admin=ep".to_string()
+                "cap_sys_admin,cap_sys_ptrace=pe".to_string()
             );
             assert_eq!(f.ownership.user, "hugo".to_string());
         } else if f.path.as_os_str() == "/etc/awesome/config.toml" {

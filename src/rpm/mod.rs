@@ -1,5 +1,6 @@
 mod builder;
 mod compressor;
+mod filecaps;
 mod headers;
 mod package;
 mod timestamp;
@@ -18,3 +19,5 @@ pub use timestamp::*;
 
 #[cfg(feature = "chrono")]
 pub use ::chrono;
+
+pub use filecaps::*;
