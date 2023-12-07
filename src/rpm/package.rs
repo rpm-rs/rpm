@@ -555,7 +555,7 @@ impl PackageMetadata {
         program_tag: IndexTag,
     ) -> Result<Scriptlet, Error> {
         let script = self.header.get_entry_data_as_string(scriptlet_tag);
-        let flags = self.header.get_entry_data_as_u32_array(flags_tag);
+        let flags = self.header.get_entry_data_as_u32(flags_tag);
         let program = self.header.get_entry_data_as_string_array(program_tag);
 
         match (script, flags, program) {
@@ -568,7 +568,7 @@ impl PackageMetadata {
             (Ok(script), Ok(flags), Ok(program)) => {
                 Ok(Scriptlet {
                     script: script.to_string(),
-                    flags: Some(ScriptletFlags::from_bits_retain(flags[0])),
+                    flags: Some(ScriptletFlags::from_bits_retain(flags)),
                     program: Some(program.to_owned()),
                     ty: Some((scriptlet_tag, flags_tag, program_tag)),
                 })
@@ -584,7 +584,7 @@ impl PackageMetadata {
             (Ok(script), Ok(flags), Err(Error::TagNotFound(_))) => {
                 Ok(Scriptlet {
                     script: script.to_string(),
-                    flags: Some(ScriptletFlags::from_bits_retain(flags[0])),
+                    flags: Some(ScriptletFlags::from_bits_retain(flags)),
                     program: None,
                     ty: Some((scriptlet_tag, flags_tag, program_tag)),
                 })
