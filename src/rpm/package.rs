@@ -508,7 +508,7 @@ impl PackageMetadata {
     #[inline]
     pub fn find_scriptlet(&self, ty: impl Into<ScriptletIndexTags>) -> Result<Scriptlet, Error> {
         let (s, f, p) = ty.into();
-        
+
         self.get_scriptlet(s, f, p)
     }
 
@@ -554,56 +554,27 @@ impl PackageMetadata {
         flags_tag: IndexTag,
         program_tag: IndexTag,
     ) -> Result<Scriptlet, Error> {
-        let script = self.header.get_entry_data_as_string(scriptlet_tag);
-        let flags = self.header.get_entry_data_as_u32(flags_tag);
-        let program = self.header.get_entry_data_as_string_array(program_tag);
+        let script = self
+            .header
+            .get_entry_data_as_string(scriptlet_tag)
+            .map(|s| s.to_string())?;
+        let flags = self
+            .header
+            .get_entry_data_as_u32(flags_tag)
+            .ok()
+            .map(|f| ScriptletFlags::from_bits_retain(f));
+        let program = self
+            .header
+            .get_entry_data_as_string_array(program_tag)
+            .ok()
+            .map(|p| p.to_owned());
 
-        match (script, flags, program) {
-            // Return an empty list if the tags are not present
-            (
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-            ) => Err(Error::ScriptletNotFound),
-            (Ok(script), Ok(flags), Ok(program)) => {
-                Ok(Scriptlet {
-                    script: script.to_string(),
-                    flags: Some(ScriptletFlags::from_bits_retain(flags)),
-                    program: Some(program.to_owned()),
-                    ty: Some((scriptlet_tag, flags_tag, program_tag)),
-                })
-            }
-            (Ok(script), Err(Error::TagNotFound(_)), Ok(program)) => {
-                Ok(Scriptlet {
-                    script: script.to_string(),
-                    flags: None,
-                    program: Some(program.to_owned()),
-                    ty: Some((scriptlet_tag, flags_tag, program_tag)),
-                })
-            }
-            (Ok(script), Ok(flags), Err(Error::TagNotFound(_))) => {
-                Ok(Scriptlet {
-                    script: script.to_string(),
-                    flags: Some(ScriptletFlags::from_bits_retain(flags)),
-                    program: None,
-                    ty: Some((scriptlet_tag, flags_tag, program_tag)),
-                })
-            }
-            (Ok(script), Err(Error::TagNotFound(_)), Err(Error::TagNotFound(_))) => {
-                Ok(Scriptlet {
-                    script: script.to_string(),
-                    flags: None,
-                    program: None,
-                    ty: Some((scriptlet_tag, flags_tag, program_tag)),
-                })
-            }
-            (script, flags, program) => {
-                script?;
-                flags?;
-                program?;
-                unreachable!()
-            }
-        }
+        Ok(Scriptlet {
+            script,
+            flags,
+            program,
+            ty: Some((scriptlet_tag, flags_tag, program_tag)),
+        })
     }
 
     /// Get a list of dependencies which this package "provides"
