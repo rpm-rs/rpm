@@ -1,6 +1,7 @@
 //! A collection of types used in various header records.
-use crate::{constants::*, errors, FileCaps, Timestamp};
+use crate::{constants::*, errors, Error, FileCaps, IndexData, IndexEntry, Timestamp};
 use digest::Digest;
+use itertools::Itertools;
 use std::str::FromStr;
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
@@ -382,6 +383,257 @@ impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
     }
 }
 
+/// Type-alias for a tuple containing index tags for a scriptlet type,
+///
+pub type ScriptletIndexTags = (IndexTag, IndexTag, IndexTag);
+
+/// Macro to derive a `scriptlet` fn for a list of helper pointer structs and their respective index_tags which represents the scriptlet type,
+///
+macro_rules! derive_scriptlet_ty {
+    ($(($(#[$meta:meta])* $ty:ty, $tags:ident)),*) => {
+        $(
+            impl $ty {
+                $(#[$meta])*
+                pub fn scriptlet(self, content: impl Into<String>) -> Scriptlet {
+                    Scriptlet {
+                        script: content.into(),
+                        flags: None,
+                        program: None,
+                        ty: Some($tags),
+                    }
+                }
+
+                /// Returns the scriptlet type as an index tag tuple,
+                /// 
+                pub fn ty(self) -> ScriptletIndexTags {
+                    $tags
+                }
+            }
+
+            impl From<$ty> for ScriptletIndexTags {
+                fn from(v: $ty) -> ScriptletIndexTags {
+                    v.ty()
+                }
+            }
+        )*
+    }
+}
+
+/// Pointer-struct helper for creating a %prein scriptlet,
+///
+pub struct PreInstall;
+
+/// Pointer-struct helper for creating a %postin scriptlet,
+///
+pub struct PostInstall;
+
+/// Pointer-struct helper for creating a %preun scriptlet,
+///
+pub struct PreUninstall;
+
+/// Pointer-struct helper for creating a %postun scriptlet,
+///
+pub struct PostUninstall;
+
+/// Pointer-struct helper for creating a %pretrans scriptlet,
+///
+pub struct PreTransaction;
+
+/// Pointer-struct helper for creating a %posttrans scriptlet,
+///
+pub struct PostTransaction;
+
+/// Pointer-struct helper for creating a %preuntrans scriptlet,
+///
+pub struct PreUntransaction;
+
+/// Pointer-struct helper for creating a %postuntrans scriptlet,
+///
+pub struct PostUntransaction;
+
+derive_scriptlet_ty!(
+    (
+        /// Returns a `%prein` scriptlet descriptor,
+        ///
+        PreInstall,
+        PREIN_TAGS
+    ),
+    (
+        /// Returns a `%postin` scriptlet descriptor,
+        ///
+        PostInstall,
+        POSTIN_TAGS
+    ),
+    (
+        /// Returns a `%preun` scriptlet descriptor,
+        ///
+        PreUninstall,
+        PREUN_TAGS
+    ),
+    (
+        /// Returns a `%postun` scriptlet descriptor,
+        ///
+        PostUninstall,
+        POSTUN_TAGS
+    ),
+    (
+        /// Returns a `%pretrans` scriptlet descriptor,
+        ///
+        PreTransaction,
+        PRETRANS_TAGS
+    ),
+    (
+        /// Returns a `%posttrans` scriptlet descriptor,
+        ///
+        PostTransaction,
+        POSTTRANS_TAGS
+    ),
+    (
+        /// Returns a `%preuntrans` scriptlet descriptor,
+        ///
+        PreUntransaction,
+        PREUNTRANS_TAGS
+    ),
+    (
+        /// Returns a `%postuntrans` scriptlet descriptor,
+        ///
+        PostUntransaction,
+        POSTUNTRANS_TAGS
+    )
+);
+
+/// Description of a scriptlet as present in a RPM header record,
+pub struct Scriptlet {
+    /// Content of the scriptlet,
+    ///
+    pub script: String,
+    /// Optional scriptlet flags,
+    ///
+    pub flags: Option<ScriptletFlags>,
+    /// Optional scriptlet interpreter/arguments,
+    ///
+    pub program: Option<Vec<String>>,
+    /// Type of scriptlet, (%prein, $postin, etc)
+    ///
+    pub ty: Option<ScriptletIndexTags>,
+}
+
+impl Scriptlet {
+    /// Returns a new scriplet,
+    /// 
+    /// **Note**: This api is provided for completeness. It is recommended to use one of the 
+    /// pre-defined scriptlet helper types instead .
+    /// 
+    /// **Example**
+    /// 
+    /// ```rs norun
+    /// builder
+    ///     .scriptlet(PreInstall.scriptlet("echo hello world").flags(..).prog(..))
+    ///     .scriptlet(PostTransaction.scriptlet("echo goodbye world").flags(..).prog(..))
+    /// ```
+    /// 
+    /// **Predefined scriptlet types**
+    /// - `PreInstall`
+    /// - `PostInstall`
+    /// - `PreUninstall`
+    /// - `PostUninstall`
+    /// - `PreTransaction`
+    /// - `PostTransaction`
+    /// - `PreUntransaction`
+    /// - `PostUntransaction`
+    /// 
+    pub fn new(script: impl Into<String>) -> Scriptlet {
+        Scriptlet {
+            script: script.into(),
+            flags: None,
+            program: None,
+            ty: None,
+        }
+    }
+
+    /// Sets the scriptlet flags,
+    ///
+    /// **Note** These flags can be used to configure macro expansions etc.
+    ///
+    pub fn flags(mut self, flags: ScriptletFlags) -> Self {
+        self.flags = Some(flags);
+        self
+    }
+
+    /// Sets the scriptlet interpreter/arguments,
+    ///
+    pub fn prog(mut self, mut prog: Vec<impl Into<String>>) -> Self {
+        self.program = Some(prog.drain(..).map(|p| p.into()).collect_vec());
+        self
+    }
+
+    /// Sets the scriptlet type by specifying the scriptlet index tags,
+    ///
+    /// **Note**: This api is provided for completeness, however you should use one of the pre-defined pointer
+    /// structs instead.
+    ///
+    /// **Example**
+    ///
+    /// ```rs norun
+    /// ..
+    /// PreInstall.scriptlet("echo hello world").flags(..).prog(..)
+    /// ..
+    /// ```
+    ///
+    /// **Supported scriptlet types**
+    /// - `PreInstall`
+    /// - `PostInstall`
+    /// - `PreUninstall`
+    /// - `PostUninstall`
+    /// - `PreTransaction`
+    /// - `PostTransaction`
+    /// - `PreUntransaction`
+    /// - `PostUntransaction`
+    ///
+    /// ```
+    ///
+    pub fn ty(mut self, ty: ScriptletIndexTags) -> Self {
+        self.ty = Some(ty);
+        self
+    }
+
+    /// Consumes the receiver and applies all index entries for the scriptlet based on builder state,
+    ///
+    pub(crate) fn apply(
+        self,
+        records: &mut Vec<IndexEntry<IndexTag>>,
+        offset: i32,
+    ) -> Result<(), crate::errors::Error> {
+        if let Some((script_tag, flags_tag, prog_tag)) = self.ty {
+            records.push(IndexEntry::new(
+                script_tag,
+                offset,
+                IndexData::StringTag(self.script),
+            ));
+
+            if let Some(flags) = self.flags {
+                records.push(IndexEntry::new(
+                    flags_tag,
+                    offset,
+                    IndexData::Int32(vec![flags.bits()]),
+                ));
+            }
+
+            if let Some(prog) = self.program {
+                records.push(IndexEntry::new(
+                    prog_tag,
+                    offset,
+                    IndexData::StringArray(prog),
+                ));
+            }
+
+            Ok(())
+        } else {
+            Err(Error::NoScriptletTagsSet)
+        }
+    }
+}
+
 mod test {
     #[test]
     fn test_file_mode() -> Result<(), Box<dyn std::error::Error>> {
@@ -504,5 +756,53 @@ mod test {
         let blank_file = crate::FileOptions::new("/usr/bin/awesome");
         blank_file.caps("cap_net_an,cap_net_raw+p").unwrap_err();
         Ok(())
+    }
+
+    #[test]
+    fn test_scriptlet_builder() {
+        // Test full state
+        let _scriptlet = crate::PreInstall
+            .scriptlet(
+                r#"
+echo `hello world`
+        "#
+                .trim(),
+            )
+            .flags(crate::ScriptletFlags::EXPAND)
+            .prog(vec!["/usr/bin/blah", "-c"]);
+
+        let mut records = vec![];
+        let offset = 0i32;
+
+        _scriptlet.apply(&mut records, offset).expect("should work");
+
+        assert!(records.len() == 3);
+        assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_PREIN as u32);
+        assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
+        assert_eq!(records[1].tag, crate::IndexTag::RPMTAG_PREINFLAGS as u32);
+        assert_eq!(records[1].data, crate::IndexData::Int32(vec![1]));
+        assert_eq!(records[2].tag, crate::IndexTag::RPMTAG_PREINPROG as u32);
+        assert_eq!(
+            records[2].data,
+            crate::IndexData::StringArray(vec!["/usr/bin/blah".to_string(), "-c".to_string()])
+        );
+
+        // Test partial state
+        let _scriptlet = crate::PostUninstall.scriptlet(
+            r#"
+        echo `hello world`
+                "#
+            .trim(),
+        );
+
+        let mut records = vec![];
+        let offset = 0i32;
+
+        _scriptlet.apply(&mut records, offset).expect("should work");
+        assert!(records.len() == 1);
+        assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_POSTUN as u32);
+        assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
+
+        ()
     }
 }
