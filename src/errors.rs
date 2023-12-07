@@ -32,6 +32,8 @@ pub enum Error {
     },
     #[error("unable to find tag {0}")]
     TagNotFound(String),
+    #[error("unable to find scriptlet")]
+    ScriptletNotFound,
     #[error("tag {tag} has data type {actual_data_type}, not {expected_data_type}")]
     UnexpectedTagDataType {
         expected_data_type: &'static str,
@@ -53,8 +55,8 @@ pub enum Error {
     #[error("invalid capabilities specified {caps}")]
     InvalidCapabilities { caps: String },
 
-    #[error("{option} is set without setting {scriptlet}")]
-    ScriptletOptionSetWithoutScript { option: &'static str, scriptlet: &'static str },
+    #[error("scriptlet tags are not set, cannot determine scriptlet type")]
+    NoScriptletTagsSet,
 
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
