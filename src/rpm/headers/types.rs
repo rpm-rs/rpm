@@ -450,27 +450,6 @@ pub struct Scriptlet {
 impl Scriptlet {
     /// Returns a new scriplet,
     /// 
-    /// **Note**: This api is provided for completeness. It is recommended to use one of the 
-    /// pre-defined scriptlet helper types instead .
-    /// 
-    /// **Example**
-    /// 
-    /// ```rs norun
-    /// builder
-    ///     .scriptlet(PreInstall.scriptlet("echo hello world").flags(..).prog(..))
-    ///     .scriptlet(PostTransaction.scriptlet("echo goodbye world").flags(..).prog(..))
-    /// ```
-    /// 
-    /// **Predefined scriptlet types**
-    /// - `PreInstall`
-    /// - `PostInstall`
-    /// - `PreUninstall`
-    /// - `PostUninstall`
-    /// - `PreTransaction`
-    /// - `PostTransaction`
-    /// - `PreUntransaction`
-    /// - `PostUntransaction`
-    /// 
     #[inline]
     pub fn new(script: impl Into<String>) -> Scriptlet {
         Scriptlet {
