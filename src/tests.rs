@@ -51,22 +51,19 @@ However, it does nothing.",
                 .symlink("/usr/bin/awesome"),
         )?
         .pre_install_script("echo preinst")
-        .scriptlet(
-            PostInstall
-                .scriptlet("echo postinst")
+        .post_install_script(
+            Scriptlet::new("echo postinst")
                 .prog(vec!["/bin/blah/bash", "-c"]),
-        )?
-        .scriptlet(
-            PreTransaction
-                .scriptlet("echo pretrans")
+        )
+        .pre_trans_script(
+            Scriptlet::new("echo pretrans")
                 .flags(ScriptletFlags::EXPAND),
-        )?
-        .scriptlet(
-            PostTransaction
-                .scriptlet("echo posttrans")
+        )
+        .post_trans_script(
+            Scriptlet::new("echo posttrans")
                 .flags(ScriptletFlags::EXPAND)
                 .prog(vec!["/bin/blah/bash", "-c"]),
-        )?
+        )
         .add_changelog_entry("me", "was awesome, eh?", 1_681_411_811)
         .add_changelog_entry("you", "yeah, it was", 850_984_797)
         .requires(Dependency::any("wget"))
@@ -102,31 +99,31 @@ However, it does nothing.",
     });
     
     // Test scriptlet builder fn branches
-    let preinst = pkg.metadata.find_scriptlet(PreInstall)?;
+    let preinst = pkg.metadata.find_scriptlet(ScriptletType::PreInstall)?;
     assert_eq!(preinst.script.as_str(), "echo preinst");
     assert!(preinst.flags.is_none());
     assert!(preinst.program.is_none());
-    assert_eq!(preinst.ty, Some(PreInstall.ty()));
+    assert_eq!(preinst.ty, Some(PREIN_TAGS));
     
-    let postinst = pkg.metadata.find_scriptlet(PostInstall)?;
+    let postinst = pkg.metadata.find_scriptlet(ScriptletType::PostInstall)?;
     assert_eq!(postinst.script.as_str(), "echo postinst");
     assert!(postinst.flags.is_none());
     assert_eq!(postinst.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
-    assert_eq!(postinst.ty, Some(PostInstall.ty()));
+    assert_eq!(postinst.ty, Some(POSTIN_TAGS));
 
-    let pretrans = pkg.metadata.find_scriptlet(PreTransaction)?;
+    let pretrans = pkg.metadata.find_scriptlet(ScriptletType::PreTransaction)?;
     assert_eq!(pretrans.script.as_str(), "echo pretrans");
     assert_eq!(pretrans.flags, Some(ScriptletFlags::EXPAND));
     assert!(pretrans.program.is_none());
-    assert_eq!(pretrans.ty, Some(PreTransaction.ty()));
+    assert_eq!(pretrans.ty, Some(PRETRANS_TAGS));
 
-    let posttrans = pkg.metadata.find_scriptlet(PostTransaction)?;
+    let posttrans = pkg.metadata.find_scriptlet(ScriptletType::PostTransaction)?;
     assert_eq!(posttrans.script.as_str(), "echo posttrans");
     assert_eq!(posttrans.flags, Some(ScriptletFlags::EXPAND));
     assert_eq!(posttrans.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
-    assert_eq!(posttrans.ty, Some(PostTransaction.ty()));
+    assert_eq!(posttrans.ty, Some(POSTTRANS_TAGS));
 
-    assert!(pkg.metadata.find_scriptlet(PreUntransaction).is_err());
+    assert!(pkg.metadata.find_scriptlet(ScriptletType::PreUntransaction).is_err());
 
     Ok(())
 }
