@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Support bzip2 compression type (`CompressionType::Bzip2`).
+
 ### Changed
 
 - `Error` now implements `Send + Sync` (therefore, `Result<Package, Error>` now implements `Send + Sync`).

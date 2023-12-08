@@ -1052,6 +1052,7 @@ impl PackageBuilder {
             CompressionWithLevel::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
             CompressionWithLevel::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
             CompressionWithLevel::Xz(level) => Some(("xz".to_owned(), level.to_string())),
+            CompressionWithLevel::Bzip2(level) => Some(("bzip2".to_owned(), level.to_string())),
         };
 
         if let Some((compression_name, compression_level)) = compression_details {

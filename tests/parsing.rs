@@ -64,6 +64,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
             CompressionType::Gzip => &[0x1f, 0x8b],
             CompressionType::Zstd => &[0x28, 0xb5, 0x2f, 0xfd],
             CompressionType::Xz => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
+            CompressionType::Bzip2 => &[0x42, 0x5a],
             CompressionType::None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
         };
 
