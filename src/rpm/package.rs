@@ -504,9 +504,16 @@ impl PackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
     }
 
-    /// Finds a scriptlet based on the scriptlet ty,
+    /// Finds a scriptlet by scriptlet type,
+    /// 
+    /// **Example**
+    /// 
+    /// ```rs norun
+    /// pkg.metadata.find_scriptlet(ScriptletType::PreInstall)?
+    /// ```
+    /// 
     #[inline]
-    pub fn find_scriptlet(&self, ty: impl Into<ScriptletIndexTags>) -> Result<Scriptlet, Error> {
+    pub fn find_scriptlet(&self, ty: ScriptletType) -> Result<Scriptlet, Error> {
         let (s, f, p) = ty.into();
 
         self.get_scriptlet(s, f, p)

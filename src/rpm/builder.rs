@@ -376,8 +376,10 @@ impl PackageBuilder {
     ///
     /// **Note** `%prein` script is executed right before the package is installed
     ///
-    pub fn pre_install_script(mut self, content: impl Into<String>) -> Self {
-        self.pre_inst_script = Some(PreInstall.scriptlet(content.into()));
+    #[inline]
+    pub fn pre_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.pre_inst_script = Some(content.into().ty(ScriptletType::PreInstall));
+        
         self
     }
 
@@ -385,8 +387,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%postin` script is executed right after the package got installed
     ///
-    pub fn post_install_script(mut self, content: impl Into<String>) -> Self {
-        self.post_inst_script = Some(PostInstall.scriptlet(content.into()));
+    #[inline]
+    pub fn post_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.post_inst_script = Some(content.into().ty(ScriptletType::PostInstall));
         self
     }
 
@@ -394,8 +397,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%preun` script is executed right before the package gets removed
     ///
-    pub fn pre_uninstall_script(mut self, content: impl Into<String>) -> Self {
-        self.pre_uninst_script = Some(PreUninstall.scriptlet(content.into()));
+    #[inline]
+    pub fn pre_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.pre_uninst_script = Some(content.into().ty(ScriptletType::PreUninstall));
         self
     }
 
@@ -403,8 +407,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%postun` script is executed right after the package was removed
     ///
-    pub fn post_uninstall_script(mut self, content: impl Into<String>) -> Self {
-        self.post_uninst_script = Some(PostUninstall.scriptlet(content.into()));
+    #[inline]
+    pub fn post_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.post_uninst_script = Some(content.into().ty(ScriptletType::PostUninstall));
         self
     }
 
@@ -412,8 +417,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%pretrans` scripts are executed for to be installed packages before any packages are installed/removed
     ///
-    pub fn pre_trans_script(mut self, content: impl Into<String>) -> Self {
-        self.pre_trans_script = Some(PreTransaction.scriptlet(content.into()));
+    #[inline]
+    pub fn pre_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.pre_trans_script = Some(content.into().ty(ScriptletType::PreTransaction));
         self
     }
 
@@ -421,8 +427,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%posttrans` scripts are all executed at the end of the transaction that installed their packages
     ///
-    pub fn post_trans_script(mut self, content: impl Into<String>) -> Self {
-        self.post_trans_script = Some(PostTransaction.scriptlet(content.into()));
+    #[inline]
+    pub fn post_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.post_trans_script = Some(content.into().ty(ScriptletType::PostTransaction));
         self
     }
 
@@ -430,8 +437,9 @@ impl PackageBuilder {
     ///
     /// **Note** `%preuntrans` scripts are executed for to be removed packages before any packages are installed/removed
     ///
-    pub fn pre_untrans_script(mut self, content: impl Into<String>) -> Self {
-        self.pre_untrans_script = Some(PreUntransaction.scriptlet(content.into()));
+    #[inline]
+    pub fn pre_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.pre_untrans_script = Some(content.into().ty(ScriptletType::PreUntransaction));
         self
     }
 
@@ -439,76 +447,10 @@ impl PackageBuilder {
     ///
     /// **Note** `%postuntrans` scripts are all executed at the end of the transaction that removes their packages
     ///
-    pub fn post_untrans_script(mut self, content: impl Into<String>) -> Self {
-        self.post_untrans_script = Some(PostUntransaction.scriptlet(content.into()));
+    #[inline]
+    pub fn post_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.post_untrans_script = Some(content.into().ty(ScriptletType::PostUntransaction));
         self
-    }
-
-    /// Sets the scriptlet content on this builder, interpreting the type from the scriptlet's `ty` field,
-    /// 
-    /// **Overrides** If an existing scriptlet was set, it will be replaced by this fn.
-    /// 
-    /// **Errors** Returns an error if the "ty" field is not set on the Scriptlet type.
-    /// 
-    /// If using one of the below predefined helper pointer structs, this builder method **must** be **infallible**.
-    /// 
-    /// **Example**
-    /// 
-    /// ```rs norun
-    /// builder
-    ///     .scriptlet(PreInstall.scriptlet("echo hello world").flags(..).prog(..))
-    ///     .scriptlet(PostTransaction.scriptlet("echo goodbye world").flags(..).prog(..))
-    /// ```
-    /// 
-    /// **Predefined scriptlet types**
-    /// - `PreInstall`
-    /// - `PostInstall`
-    /// - `PreUninstall`
-    /// - `PostUninstall`
-    /// - `PreTransaction`
-    /// - `PostTransaction`
-    /// - `PreUntransaction`
-    /// - `PostUntransaction`
-    /// 
-    pub fn scriptlet(mut self, scriptlet: impl Into<Scriptlet>) -> Result<Self, crate::Error> {
-        let scriptlet: Scriptlet = scriptlet.into();
-
-        match scriptlet.ty {
-            Some(ty) => match ty {
-                PREIN_TAGS => {
-                    self.pre_inst_script = Some(scriptlet);
-                },
-                POSTIN_TAGS => {
-                    self.post_inst_script = Some(scriptlet);
-                },
-                PREUN_TAGS => {
-                    self.pre_uninst_script = Some(scriptlet);
-                },
-                POSTUN_TAGS => {
-                    self.post_uninst_script = Some(scriptlet);
-                },
-                PRETRANS_TAGS => {
-                    self.pre_trans_script = Some(scriptlet);
-                },
-                POSTTRANS_TAGS => {
-                    self.post_trans_script = Some(scriptlet);
-                },
-                PREUNTRANS_TAGS => {
-                    self.pre_untrans_script = Some(scriptlet);
-                },
-                POSTUNTRANS_TAGS => {
-                    self.post_untrans_script = Some(scriptlet);
-                },
-                _ => {
-                    return Err(Error::NoScriptletTagsSet)
-                }
-            },
-            _ => {
-                return Err(Error::NoScriptletTagsSet)
-            }
-        }
-
-        Ok(self)
     }
 
     pub fn release(mut self, release: impl Into<String>) -> Self {

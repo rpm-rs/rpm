@@ -42,17 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FileEntry` structs returned by (`Package::get_file_entries`) now include IMA signature information as well as digests for file entries.
 - Add mod `rpm::filecaps` instead of capctl crate
 - Added `pre_trans_script`, `post_trans_script`, `pre_untrans_script`, and `post_untrans_script` methods to `PackageBuilder`. This corresponds with the `%pretrans`, `%postrans`, `%preuntrans`, and `%postuntrans` scriptlets.
-- Added new `scriptlet` method to `PackageBuilder` which enables the ability to configure the scriptlet flag and program tags.
-  - In addition added helper pointer-structs that represent the supported rpm scriptlet types, 
+- Added new `Scriptlet` type which enabled configuring scriptlet flags and interpreter settings
   - Example Usage: 
   ```rs
   package_builder
-    .scriptlet(
-      PreInstall
-        .scriptlet("echo hello world")
+    .pre_install_script(
+      Scriptlet::new("echo hello world")
         .flags(ScriptletFlags::RPMSCRIPTLET_TAGS)
         .prog(vec!["/bin/blah/bash", "-c"])
-    )?
+    )
   ```
 
 ## 0.12.1
