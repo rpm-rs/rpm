@@ -89,7 +89,7 @@ pub enum Error {
     #[error("unable to find key with key-ref: {key_ref}")]
     KeyNotFoundError { key_ref: String },
 
-    #[error("unknown compressor type {0} - only gzip and none are supported")]
+    #[error("unknown compressor type {0} - supported types: gzip, zstd, xz, bzip2 and none")]
     UnknownCompressorType(String),
 
     #[error("unsupported digest algorithm {0:?}")]

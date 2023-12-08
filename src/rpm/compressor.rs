@@ -10,6 +10,7 @@ pub enum CompressionType {
     Gzip,
     Zstd,
     Xz,
+    Bzip2,
 }
 
 impl std::str::FromStr for CompressionType {
@@ -19,6 +20,7 @@ impl std::str::FromStr for CompressionType {
             "gzip" => Ok(CompressionType::Gzip),
             "zstd" => Ok(CompressionType::Zstd),
             "xz" => Ok(CompressionType::Xz),
+            "bzip2" => Ok(CompressionType::Bzip2),
             _ => Err(Error::UnknownCompressorType(raw.to_string())),
         }
     }
@@ -29,6 +31,7 @@ pub enum Compressor {
     Gzip(flate2::write::GzEncoder<Vec<u8>>),
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
     Xz(xz2::write::XzEncoder<Vec<u8>>),
+    Bzip2(bzip2::write::BzEncoder<Vec<u8>>),
 }
 
 impl TryFrom<CompressionWithLevel> for Compressor {
@@ -48,6 +51,9 @@ impl TryFrom<CompressionWithLevel> for Compressor {
                 Vec::new(),
                 level,
             ))),
+            CompressionWithLevel::Bzip2(level) => Ok(Compressor::Bzip2(
+                bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::new(level)),
+            )),
         }
     }
 }
@@ -59,6 +65,7 @@ impl Write for Compressor {
             Compressor::Gzip(encoder) => encoder.write(content),
             Compressor::Zstd(encoder) => encoder.write(content),
             Compressor::Xz(encoder) => encoder.write(content),
+            Compressor::Bzip2(encoder) => encoder.write(content),
         }
     }
     fn flush(&mut self) -> Result<(), std::io::Error> {
@@ -67,6 +74,7 @@ impl Write for Compressor {
             Compressor::Gzip(encoder) => encoder.flush(),
             Compressor::Zstd(encoder) => encoder.flush(),
             Compressor::Xz(encoder) => encoder.flush(),
+            Compressor::Bzip2(encoder) => encoder.flush(),
         }
     }
 }
@@ -78,6 +86,7 @@ impl Compressor {
             Compressor::Gzip(encoder) => Ok(encoder.finish()?),
             Compressor::Zstd(encoder) => Ok(encoder.finish()?),
             Compressor::Xz(encoder) => Ok(encoder.finish()?),
+            Compressor::Bzip2(encoder) => Ok(encoder.finish()?),
         }
     }
 }
@@ -90,6 +99,7 @@ pub enum CompressionWithLevel {
     Zstd(i32),
     Gzip(u32),
     Xz(u32),
+    Bzip2(u32),
 }
 
 impl CompressionWithLevel {
@@ -99,6 +109,7 @@ impl CompressionWithLevel {
             Self::Gzip(_) => CompressionType::Gzip,
             Self::Zstd(_) => CompressionType::Zstd,
             Self::Xz(_) => CompressionType::Xz,
+            Self::Bzip2(_) => CompressionType::Bzip2,
         }
     }
 }
@@ -116,6 +127,7 @@ impl From<CompressionType> for CompressionWithLevel {
             CompressionType::Gzip => CompressionWithLevel::Gzip(9),
             CompressionType::Xz => CompressionWithLevel::Xz(9),
             CompressionType::Zstd => CompressionWithLevel::Zstd(19),
+            CompressionType::Bzip2 => CompressionWithLevel::Bzip2(9),
         }
     }
 }
