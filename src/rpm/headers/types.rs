@@ -1,5 +1,5 @@
 //! A collection of types used in various header records.
-use crate::{constants::*, errors, Error, FileCaps, IndexData, IndexEntry, Timestamp};
+use crate::{constants::*, errors, FileCaps, IndexData, IndexEntry, Timestamp};
 use digest::Digest;
 use itertools::Itertools;
 use std::str::FromStr;
@@ -385,51 +385,7 @@ impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
 
 /// Type-alias for a tuple containing index tags for a scriptlet type,
 ///
-pub type ScriptletIndexTags = (IndexTag, IndexTag, IndexTag);
-
-/// Enumeration of different scriptlet types,
-/// 
-pub enum ScriptletType {
-    /// Type for %prein
-    /// 
-    PreInstall,
-    /// Type for %postin
-    /// 
-    PostInstall,
-    /// Type for %preun
-    /// 
-    PreUninstall,
-    /// Type for %postun
-    /// 
-    PostUninstall,
-    /// Type for %pretrans
-    /// 
-    PreTransaction,
-    /// Type for %posttrans
-    /// 
-    PostTransaction,
-    /// Type for %preuntrans
-    /// 
-    PreUntransaction,
-    /// Type for %postuntrans
-    /// 
-    PostUntransaction,
-}
-
-impl From<ScriptletType> for ScriptletIndexTags {
-    fn from(value: ScriptletType) -> Self {
-        match value {
-            ScriptletType::PreInstall => PREIN_TAGS,
-            ScriptletType::PostInstall => POSTIN_TAGS,
-            ScriptletType::PreUninstall => PREUN_TAGS,
-            ScriptletType::PostUninstall => POSTUN_TAGS,
-            ScriptletType::PreTransaction => PRETRANS_TAGS,
-            ScriptletType::PostTransaction => POSTTRANS_TAGS,
-            ScriptletType::PreUntransaction => PREUNTRANS_TAGS,
-            ScriptletType::PostUntransaction => POSTUNTRANS_TAGS,
-        }
-    }
-}
+pub(crate) type ScriptletIndexTags = (IndexTag, IndexTag, IndexTag);
 
 /// Description of a scriptlet as present in a RPM header record,
 pub struct Scriptlet {
@@ -442,9 +398,6 @@ pub struct Scriptlet {
     /// Optional scriptlet interpreter/arguments,
     ///
     pub program: Option<Vec<String>>,
-    /// Type of scriptlet, (%prein, $postin, etc)
-    ///
-    pub ty: Option<ScriptletIndexTags>,
 }
 
 impl Scriptlet {
@@ -456,7 +409,6 @@ impl Scriptlet {
             script: script.into(),
             flags: None,
             program: None,
-            ty: None,
         }
     }
 
@@ -478,47 +430,36 @@ impl Scriptlet {
         self
     }
 
-    /// Sets the scriptlet type by specifying the scriptlet index tags,
-    ///
-    #[inline]
-    pub fn ty(mut self, ty: ScriptletType) -> Self {
-        self.ty = Some(ty.into());
-        self
-    }
-
     /// Consumes the receiver and applies all index entries for the scriptlet based on builder state,
     ///
     pub(crate) fn apply(
         self,
         records: &mut Vec<IndexEntry<IndexTag>>,
         offset: i32,
-    ) -> Result<(), crate::errors::Error> {
-        if let Some((script_tag, flags_tag, prog_tag)) = self.ty {
+        tags: ScriptletIndexTags,
+    ) {
+        let (script_tag, flags_tag, prog_tag) = tags;
+
+        records.push(IndexEntry::new(
+            script_tag,
+            offset,
+            IndexData::StringTag(self.script),
+        ));
+
+        if let Some(flags) = self.flags {
             records.push(IndexEntry::new(
-                script_tag,
+                flags_tag,
                 offset,
-                IndexData::StringTag(self.script),
+                IndexData::Int32(vec![flags.bits()]),
             ));
+        }
 
-            if let Some(flags) = self.flags {
-                records.push(IndexEntry::new(
-                    flags_tag,
-                    offset,
-                    IndexData::Int32(vec![flags.bits()]),
-                ));
-            }
-
-            if let Some(prog) = self.program {
-                records.push(IndexEntry::new(
-                    prog_tag,
-                    offset,
-                    IndexData::StringArray(prog),
-                ));
-            }
-
-            Ok(())
-        } else {
-            Err(Error::NoScriptletTagsSet)
+        if let Some(prog) = self.program {
+            records.push(IndexEntry::new(
+                prog_tag,
+                offset,
+                IndexData::StringArray(prog),
+            ));
         }
     }
 }
@@ -656,20 +597,19 @@ mod test {
     #[test]
     fn test_scriptlet_builder() {
         // Test full state
-        let _scriptlet = crate::Scriptlet::new(
+        let scriptlet = crate::Scriptlet::new(
                 r#"
 echo `hello world`
         "#
                 .trim(),
             )
             .flags(crate::ScriptletFlags::EXPAND)
-            .prog(vec!["/usr/bin/blah", "-c"])
-            .ty(crate::ScriptletType::PreInstall);
+            .prog(vec!["/usr/bin/blah", "-c"]);
 
         let mut records = vec![];
         let offset = 0i32;
 
-        _scriptlet.apply(&mut records, offset).expect("should work");
+        scriptlet.apply(&mut records, offset, crate::PREIN_TAGS);
 
         assert!(records.len() == 3);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_PREIN as u32);
@@ -683,18 +623,17 @@ echo `hello world`
         );
 
         // Test partial state
-        let _scriptlet = crate::Scriptlet::new(
+        let scriptlet = crate::Scriptlet::new(
             r#"
         echo `hello world`
                 "#
             .trim(),
-        )
-        .ty(crate::ScriptletType::PostUninstall);
+        );
 
         let mut records = vec![];
         let offset = 0i32;
 
-        _scriptlet.apply(&mut records, offset).expect("should work");
+        scriptlet.apply(&mut records, offset, crate::POSTUN_TAGS);
         assert!(records.len() == 1);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_POSTUN as u32);
         assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));

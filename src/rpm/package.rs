@@ -504,19 +504,52 @@ impl PackageMetadata {
             .get_entry_data_as_string(IndexTag::RPMTAG_SOURCERPM)
     }
 
-    /// Finds a scriptlet by scriptlet type,
-    /// 
-    /// **Example**
-    /// 
-    /// ```rs norun
-    /// pkg.metadata.find_scriptlet(ScriptletType::PreInstall)?
-    /// ```
-    /// 
+    /// Get the %prein scriptlet for this package
     #[inline]
-    pub fn find_scriptlet(&self, ty: ScriptletType) -> Result<Scriptlet, Error> {
-        let (s, f, p) = ty.into();
+    pub fn get_pre_install_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(PREIN_TAGS)
+    }
 
-        self.get_scriptlet(s, f, p)
+    /// Get the %postin scriptlet for this package
+    #[inline]
+    pub fn get_post_install_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(POSTIN_TAGS)
+    }
+
+    /// Get the %preun scriptlet for this package
+    #[inline]
+    pub fn get_pre_uninstall_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(PREUN_TAGS)
+    }
+
+    /// Get the %postun scriptlet for this package
+    #[inline]
+    pub fn get_post_uninstall_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(POSTUN_TAGS)
+    }
+
+    /// Get the %pretrans scriptlet for this package
+    #[inline]
+    pub fn get_pre_trans_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(PRETRANS_TAGS)
+    }
+
+    /// Get the %posttrans scriptlet for this package
+    #[inline]
+    pub fn get_post_trans_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(POSTTRANS_TAGS)
+    }
+
+    /// Get the %preuntrans scriptlet for this package
+    #[inline]
+    pub fn get_pre_untrans_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(PREUNTRANS_TAGS)
+    }
+
+    /// Get the %postuntrans scriptlet for this package
+    #[inline]
+    pub fn get_post_untrans_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(POSTUNTRANS_TAGS)
     }
 
     fn get_dependencies(
@@ -557,10 +590,10 @@ impl PackageMetadata {
 
     fn get_scriptlet(
         &self,
-        scriptlet_tag: IndexTag,
-        flags_tag: IndexTag,
-        program_tag: IndexTag,
+        tags: ScriptletIndexTags,
     ) -> Result<Scriptlet, Error> {
+        let (scriptlet_tag, flags_tag, program_tag) = tags;
+
         let script = self
             .header
             .get_entry_data_as_string(scriptlet_tag)
@@ -580,7 +613,6 @@ impl PackageMetadata {
             script,
             flags,
             program,
-            ty: Some((scriptlet_tag, flags_tag, program_tag)),
         })
     }
 
