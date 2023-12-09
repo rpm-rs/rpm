@@ -56,6 +56,12 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
             .user("hugo"),
     )?
     .pre_install_script("echo preinst")
+    // Alternatively, use scriptlet builder api to specify flags and interpreter/arguments
+    .post_trans_script(
+        Scriptlet::new("echo posttrans")
+            .flags(ScriptletFlags::EXPAND)
+            .prog(vec!["/bin/blah/bash", "-c"])
+    )
     // If you don't need reproducible builds,
     // you can remove the following line
     .source_date(source_date)

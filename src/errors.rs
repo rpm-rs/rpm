@@ -55,9 +55,6 @@ pub enum Error {
     #[error("invalid capabilities specified {caps}")]
     InvalidCapabilities { caps: String },
 
-    #[error("scriptlet tags are not set, cannot determine scriptlet type")]
-    NoScriptletTagsSet,
-
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
 

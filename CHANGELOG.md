@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         .prog(vec!["/bin/blah/bash", "-c"])
     )
   ```
+- Added `get_*_script` methods to `PackageMetadata` for finding scriptlets
+  - Example Usage:
+  ```rs
+  package_metadata.get_pre_install_script()?;
+  ```
 
 ## 0.12.1
 

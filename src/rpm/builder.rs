@@ -378,7 +378,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn pre_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.pre_inst_script = Some(content.into().ty(ScriptletType::PreInstall));
+        self.pre_inst_script = Some(content.into());
         self
     }
 
@@ -388,7 +388,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn post_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.post_inst_script = Some(content.into().ty(ScriptletType::PostInstall));
+        self.post_inst_script = Some(content.into());
         self
     }
 
@@ -398,7 +398,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn pre_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.pre_uninst_script = Some(content.into().ty(ScriptletType::PreUninstall));
+        self.pre_uninst_script = Some(content.into());
         self
     }
 
@@ -408,7 +408,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn post_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.post_uninst_script = Some(content.into().ty(ScriptletType::PostUninstall));
+        self.post_uninst_script = Some(content.into());
         self
     }
 
@@ -418,7 +418,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn pre_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.pre_trans_script = Some(content.into().ty(ScriptletType::PreTransaction));
+        self.pre_trans_script = Some(content.into());
         self
     }
 
@@ -428,7 +428,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn post_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.post_trans_script = Some(content.into().ty(ScriptletType::PostTransaction));
+        self.post_trans_script = Some(content.into());
         self
     }
 
@@ -438,7 +438,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn pre_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.pre_untrans_script = Some(content.into().ty(ScriptletType::PreUntransaction));
+        self.pre_untrans_script = Some(content.into());
         self
     }
 
@@ -448,7 +448,7 @@ impl PackageBuilder {
     ///
     #[inline]
     pub fn post_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
-        self.post_untrans_script = Some(content.into().ty(ScriptletType::PostUntransaction));
+        self.post_untrans_script = Some(content.into());
         self
     }
 
@@ -1277,35 +1277,35 @@ impl PackageBuilder {
         }
 
         if let Some(script) = self.pre_inst_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, PREIN_TAGS);
         }
 
         if let Some(script) = self.post_inst_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, POSTIN_TAGS);
         }
 
         if let Some(script) = self.pre_uninst_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, PREUN_TAGS);
         }
 
         if let Some(script) = self.post_uninst_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, POSTUN_TAGS);
         }
 
         if let Some(script) = self.pre_trans_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, PRETRANS_TAGS);
         }
 
         if let Some(script) = self.post_trans_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, POSTTRANS_TAGS);
         }
 
         if let Some(script) = self.pre_untrans_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, PREUNTRANS_TAGS);
         }
 
         if let Some(script) = self.post_untrans_script {
-            script.apply(&mut actual_records, offset)?;
+            script.apply(&mut actual_records, offset, POSTUNTRANS_TAGS);
         }
 
         if let Some(vendor) = self.vendor {

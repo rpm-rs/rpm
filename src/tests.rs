@@ -99,31 +99,27 @@ However, it does nothing.",
     });
     
     // Test scriptlet builder fn branches
-    let preinst = pkg.metadata.find_scriptlet(ScriptletType::PreInstall)?;
+    let preinst = pkg.metadata.get_pre_install_script()?;
     assert_eq!(preinst.script.as_str(), "echo preinst");
     assert!(preinst.flags.is_none());
     assert!(preinst.program.is_none());
-    assert_eq!(preinst.ty, Some(PREIN_TAGS));
     
-    let postinst = pkg.metadata.find_scriptlet(ScriptletType::PostInstall)?;
+    let postinst = pkg.metadata.get_post_install_script()?;
     assert_eq!(postinst.script.as_str(), "echo postinst");
     assert!(postinst.flags.is_none());
     assert_eq!(postinst.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
-    assert_eq!(postinst.ty, Some(POSTIN_TAGS));
 
-    let pretrans = pkg.metadata.find_scriptlet(ScriptletType::PreTransaction)?;
+    let pretrans = pkg.metadata.get_pre_trans_script()?;
     assert_eq!(pretrans.script.as_str(), "echo pretrans");
     assert_eq!(pretrans.flags, Some(ScriptletFlags::EXPAND));
     assert!(pretrans.program.is_none());
-    assert_eq!(pretrans.ty, Some(PRETRANS_TAGS));
 
-    let posttrans = pkg.metadata.find_scriptlet(ScriptletType::PostTransaction)?;
+    let posttrans = pkg.metadata.get_post_trans_script()?;
     assert_eq!(posttrans.script.as_str(), "echo posttrans");
     assert_eq!(posttrans.flags, Some(ScriptletFlags::EXPAND));
     assert_eq!(posttrans.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
-    assert_eq!(posttrans.ty, Some(POSTTRANS_TAGS));
 
-    assert!(pkg.metadata.find_scriptlet(ScriptletType::PreUntransaction).is_err());
+    assert!(pkg.metadata.get_pre_untrans_script().is_err());
 
     Ok(())
 }
