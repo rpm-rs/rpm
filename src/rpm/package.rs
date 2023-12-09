@@ -569,7 +569,7 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_u32(flags_tag)
             .ok()
-            .map(|f| ScriptletFlags::from_bits_retain(f));
+            .map(ScriptletFlags::from_bits_retain);
         let program = self
             .header
             .get_entry_data_as_string_array(program_tag)
