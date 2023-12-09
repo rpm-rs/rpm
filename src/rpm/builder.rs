@@ -379,7 +379,6 @@ impl PackageBuilder {
     #[inline]
     pub fn pre_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.pre_inst_script = Some(content.into().ty(ScriptletType::PreInstall));
-        
         self
     }
 
