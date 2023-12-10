@@ -7,13 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.13.1
+
 ### Added
 
 - Support bzip2 compression type (`CompressionType::Bzip2`).
+- Added `pre_trans_script`, `post_trans_script`, `pre_untrans_script`, and `post_untrans_script` methods to `PackageBuilder`. This corresponds with the `%pretrans`, `%postrans`, `%preuntrans`, and `%postuntrans` scriptlets.
+- Added new `Scriptlet` type which enabled configuring scriptlet flags and interpreter settings
+  - Example Usage:
+
+  ```rs
+  package_builder
+    .pre_install_script(
+      Scriptlet::new("echo hello world")
+        .flags(ScriptletFlags::EXPAND)
+        .prog(vec!["/bin/blah/bash", "-c"])
+    )
+  ```
+
+- Added `get_*_script` methods to `PackageMetadata` for finding scriptlets
+  - Example Usage:
+
+  ```rs
+  package.metadata.get_pre_install_script()?;
+  ```
 
 ### Changed
 
 - `Error` now implements `Send + Sync` (therefore, `Result<Package, Error>` now implements `Send + Sync`).
+- Add mod `rpm::filecaps` instead of capctl crate - this fixes Windows builds
 
 ## 0.13.0
 
@@ -40,23 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the `FileEntry.linkto` field that is a target of a symbolic link.
 - Function `Package::get_file_entries` returns an empty vector for an RPM package without any files.
 - `FileEntry` structs returned by (`Package::get_file_entries`) now include IMA signature information as well as digests for file entries.
-- Add mod `rpm::filecaps` instead of capctl crate
-- Added `pre_trans_script`, `post_trans_script`, `pre_untrans_script`, and `post_untrans_script` methods to `PackageBuilder`. This corresponds with the `%pretrans`, `%postrans`, `%preuntrans`, and `%postuntrans` scriptlets.
-- Added new `Scriptlet` type which enabled configuring scriptlet flags and interpreter settings
-  - Example Usage: 
-  ```rs
-  package_builder
-    .pre_install_script(
-      Scriptlet::new("echo hello world")
-        .flags(ScriptletFlags::RPMSCRIPTLET_TAGS)
-        .prog(vec!["/bin/blah/bash", "-c"])
-    )
-  ```
-- Added `get_*_script` methods to `PackageMetadata` for finding scriptlets
-  - Example Usage:
-  ```rs
-  package_metadata.get_pre_install_script()?;
-  ```
 
 ## 0.12.1
 
