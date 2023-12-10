@@ -402,7 +402,7 @@ pub struct Scriptlet {
 
 impl Scriptlet {
     /// Returns a new scriplet,
-    /// 
+    ///
     #[inline]
     pub fn new(script: impl Into<String>) -> Scriptlet {
         Scriptlet {
@@ -598,13 +598,13 @@ mod test {
     fn test_scriptlet_builder() {
         // Test full state
         let scriptlet = crate::Scriptlet::new(
-                r#"
+            r#"
 echo `hello world`
         "#
-                .trim(),
-            )
-            .flags(crate::ScriptletFlags::EXPAND)
-            .prog(vec!["/usr/bin/blah", "-c"]);
+            .trim(),
+        )
+        .flags(crate::ScriptletFlags::EXPAND)
+        .prog(vec!["/usr/bin/blah", "-c"]);
 
         let mut records = vec![];
         let offset = 0i32;
