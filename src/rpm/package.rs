@@ -588,10 +588,7 @@ impl PackageMetadata {
         }
     }
 
-    fn get_scriptlet(
-        &self,
-        tags: ScriptletIndexTags,
-    ) -> Result<Scriptlet, Error> {
+    fn get_scriptlet(&self, tags: ScriptletIndexTags) -> Result<Scriptlet, Error> {
         let (scriptlet_tag, flags_tag, program_tag) = tags;
 
         let script = self

@@ -51,14 +51,8 @@ However, it does nothing.",
                 .symlink("/usr/bin/awesome"),
         )?
         .pre_install_script("echo preinst")
-        .post_install_script(
-            Scriptlet::new("echo postinst")
-                .prog(vec!["/bin/blah/bash", "-c"]),
-        )
-        .pre_trans_script(
-            Scriptlet::new("echo pretrans")
-                .flags(ScriptletFlags::EXPAND),
-        )
+        .post_install_script(Scriptlet::new("echo postinst").prog(vec!["/bin/blah/bash", "-c"]))
+        .pre_trans_script(Scriptlet::new("echo pretrans").flags(ScriptletFlags::EXPAND))
         .post_trans_script(
             Scriptlet::new("echo posttrans")
                 .flags(ScriptletFlags::EXPAND)
@@ -97,17 +91,20 @@ However, it does nothing.",
             assert_eq!(f.mode, FileMode::from(0o120644));
         }
     });
-    
+
     // Test scriptlet builder fn branches
     let preinst = pkg.metadata.get_pre_install_script()?;
     assert_eq!(preinst.script.as_str(), "echo preinst");
     assert!(preinst.flags.is_none());
     assert!(preinst.program.is_none());
-    
+
     let postinst = pkg.metadata.get_post_install_script()?;
     assert_eq!(postinst.script.as_str(), "echo postinst");
     assert!(postinst.flags.is_none());
-    assert_eq!(postinst.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
+    assert_eq!(
+        postinst.program,
+        Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
+    );
 
     let pretrans = pkg.metadata.get_pre_trans_script()?;
     assert_eq!(pretrans.script.as_str(), "echo pretrans");
@@ -117,7 +114,10 @@ However, it does nothing.",
     let posttrans = pkg.metadata.get_post_trans_script()?;
     assert_eq!(posttrans.script.as_str(), "echo posttrans");
     assert_eq!(posttrans.flags, Some(ScriptletFlags::EXPAND));
-    assert_eq!(posttrans.program, Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()]));
+    assert_eq!(
+        posttrans.program,
+        Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
+    );
 
     assert!(pkg.metadata.get_pre_untrans_script().is_err());
 
