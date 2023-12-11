@@ -464,8 +464,11 @@ impl Scriptlet {
     }
 }
 
-impl From<&str> for Scriptlet {
-    fn from(value: &str) -> Self {
+impl<T> From<T> for Scriptlet
+where
+    T: Into<String>,
+{
+    fn from(value: T) -> Self {
         Scriptlet::new(value)
     }
 }
