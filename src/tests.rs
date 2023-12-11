@@ -58,6 +58,7 @@ However, it does nothing.",
                 .flags(ScriptletFlags::EXPAND)
                 .prog(vec!["/bin/blah/bash", "-c"]),
         )
+        .post_untrans_script(&String::from("echo postuntrans"))
         .add_changelog_entry("me", "was awesome, eh?", 1_681_411_811)
         .add_changelog_entry("you", "yeah, it was", 850_984_797)
         .requires(Dependency::any("wget"))
@@ -118,6 +119,11 @@ However, it does nothing.",
         posttrans.program,
         Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
     );
+
+    let postuntrans = pkg.metadata.get_post_untrans_script()?;
+    assert_eq!(postuntrans.script.as_str(), "echo postuntrans");
+    assert!(postuntrans.flags.is_none());
+    assert!(postuntrans.program.is_none());
 
     assert!(pkg.metadata.get_pre_untrans_script().is_err());
 
