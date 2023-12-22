@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 
 use std::fs;
@@ -717,6 +717,8 @@ impl PackageBuilder {
         let mut file_verify_flags = Vec::with_capacity(files_len);
         let mut dir_indixes = Vec::with_capacity(files_len);
         let mut base_names = Vec::with_capacity(files_len);
+        let mut users_to_create = HashSet::new();
+        let mut groups_to_create = HashSet::new();
 
         let mut combined_file_sizes: u64 = 0;
         let mut uses_file_capabilities = false;
@@ -729,6 +731,12 @@ impl PackageBuilder {
             combined_file_sizes += entry.size;
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
+            }
+            if &entry.user != "root" {
+                users_to_create.insert(entry.user.clone());
+            }
+            if &entry.group != "root" {
+                groups_to_create.insert(entry.group.clone());
             }
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
@@ -799,6 +807,16 @@ impl PackageBuilder {
         if uses_file_capabilities {
             self.requires
                 .push(Dependency::rpmlib("FileCaps", "4.6.1-1".to_owned()));
+        }
+        // TODO: as per https://rpm-software-management.github.io/rpm/manual/users_and_groups.html,
+        // at some point in the future this might make sense as hard requirements, but since it's a new feature,
+        // they have to be weak requirements to avoid breaking things.
+        for user in &users_to_create {
+            self.recommends.push(Dependency::user(user));
+        }
+
+        for group in &groups_to_create {
+            self.recommends.push(Dependency::group(group));
         }
 
         let mut provide_names = Vec::new();
@@ -885,6 +903,8 @@ impl PackageBuilder {
         let small_package = combined_file_sizes <= u32::MAX.into();
 
         let mut actual_records = vec![
+            // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
+            // If the SOURCERPM tag is set, then the package is seen as a binary rpm.
             IndexEntry::new(
                 IndexTag::RPMTAG_SOURCERPM,
                 offset,

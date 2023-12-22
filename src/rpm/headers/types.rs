@@ -408,6 +408,30 @@ impl Dependency {
         )
     }
 
+    /// Create a new user dependency
+    ///
+    /// If such a dependency is required, versions of RPM 4.19 and newer will automatically create
+    /// the required users and groups using systemd sys.users.d.
+    pub fn user(username: &str) -> Self {
+        Self::new(
+            format!("user({})", username),
+            DependencyFlags::SCRIPT_PRE | DependencyFlags::SCRIPT_POSTUN,
+            "".to_owned(),
+        )
+    }
+
+    /// Create a new group dependency
+    ///
+    /// If such a dependency is required, versions of RPM 4.19 and newer will automatically create
+    /// the required users and groups using systemd sys.users.d.
+    pub fn group(groupname: &str) -> Self {
+        Self::new(
+            format!("group({})", groupname),
+            DependencyFlags::SCRIPT_PRE | DependencyFlags::SCRIPT_POSTUN,
+            "".to_owned(),
+        )
+    }
+
     // TODO: Is it ever the case that version matters here? it's at least not the common case
 
     /// Create a dependency on a package or file required for a pre-install script.
