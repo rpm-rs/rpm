@@ -719,6 +719,7 @@ impl PackageBuilder {
         let mut base_names = Vec::with_capacity(files_len);
 
         let mut combined_file_sizes: u64 = 0;
+        let mut uses_file_capabilities = false;
 
         // @todo: sort entries by path?
         // @todo: normalize path?
@@ -726,6 +727,9 @@ impl PackageBuilder {
         // if we remove duplicates, remember anything already pre-computed
         for (cpio_path, entry) in self.files.iter() {
             combined_file_sizes += entry.size;
+            if entry.caps.is_some() {
+                uses_file_capabilities = true;
+            }
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
@@ -790,6 +794,11 @@ impl PackageBuilder {
         if self.compression.compression_type() == CompressionType::Zstd {
             self.requires
                 .push(Dependency::rpmlib("PayloadIsZstd", "5.4.18-1"));
+        }
+
+        if uses_file_capabilities {
+            self.requires
+                .push(Dependency::rpmlib("FileCaps", "4.6.1-1".to_owned()));
         }
 
         let mut provide_names = Vec::new();
