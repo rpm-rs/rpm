@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved documentation
 
+### Fixed
+
+- Using file capabilities now adds the appropriate rpmlib() dependency
+
 ## 0.13.1
 
 ### Added
