@@ -8,6 +8,7 @@ mod common;
 
 use signature::{self, Verifying};
 
+#[cfg(target_os = "linux")]
 mod pgp {
     use super::*;
     use signature::pgp::{Signer, Verifier};
