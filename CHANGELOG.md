@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added support for multiple signatures on a package as supported by upstream RPM.
+- Added `PackageBuilder::with_file_contents()` for inserting binary content directly into packages instead of requiring on-disk files.
 
 ## 0.17.0
 
