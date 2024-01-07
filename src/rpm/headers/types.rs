@@ -399,6 +399,49 @@ impl Dependency {
         )
     }
 
+    /// Add a config dependency
+    pub fn config(dep_name: &str, version: impl Into<String>) -> Self {
+        Self::new(
+            format!("config({})", dep_name),
+            DependencyFlags::CONFIG | DependencyFlags::EQUAL,
+            version.into(),
+        )
+    }
+
+    // TODO: Is it ever the case that version matters here? it's at least not the common case
+
+    /// Create a dependency on a package or file required for a pre-install script.
+    pub fn script_pre(dep_name: impl Into<String>) -> Self {
+        Self::new(dep_name.into(), DependencyFlags::SCRIPT_PRE, "".to_string())
+    }
+
+    /// Create a dependency on a package or file required for a post-install script.
+    pub fn script_post(dep_name: impl Into<String>) -> Self {
+        Self::new(
+            dep_name.into(),
+            DependencyFlags::SCRIPT_POST,
+            "".to_string(),
+        )
+    }
+
+    /// Create a dependency on a package or file required for a pre-un-install script.
+    pub fn script_preun(dep_name: impl Into<String>) -> Self {
+        Self::new(
+            dep_name.into(),
+            DependencyFlags::SCRIPT_PREUN,
+            "".to_string(),
+        )
+    }
+
+    /// Create a dependency on a package or file required for a post-un-install script.
+    pub fn script_postun(dep_name: impl Into<String>) -> Self {
+        Self::new(
+            dep_name.into(),
+            DependencyFlags::SCRIPT_POSTUN,
+            "".to_string(),
+        )
+    }
+
     fn new(dep_name: String, flags: DependencyFlags, version: String) -> Self {
         Dependency {
             name: dep_name,

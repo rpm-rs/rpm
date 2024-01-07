@@ -509,7 +509,7 @@ bitflags! {
         const TRIGGERPREIN = 1 << 25;  // %triggerprein dependency
         const KEYRING	= 1 << 26;
         // bit 27 unused
-        const CONFIG	= 1 << 28;
+        const CONFIG	= 1 << 28;    // config() dependency
         const META	= 1 << 29;	      // meta dependency
     }
 }
