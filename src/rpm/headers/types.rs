@@ -393,7 +393,7 @@ impl Dependency {
     /// Create a dependency on an rpm feature, required to install this package
     pub fn rpmlib(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
         Self::new(
-            dep_name.into(),
+            format!("rpmlib({})", dep_name.into()),
             DependencyFlags::RPMLIB | DependencyFlags::EQUAL,
             version.into(),
         )
