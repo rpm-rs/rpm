@@ -72,6 +72,7 @@ pub struct PackageBuilder {
     post_trans_script: Option<Scriptlet>,
     pre_untrans_script: Option<Scriptlet>,
     post_untrans_script: Option<Scriptlet>,
+    verify_script: Option<Scriptlet>,
 
     /// The author name with email followed by a dash with the version
     /// `Max Mustermann <max@example.com> - 0.1-1`
@@ -484,6 +485,16 @@ impl PackageBuilder {
     #[inline]
     pub fn post_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
         self.post_untrans_script = Some(content.into());
+        self
+    }
+
+    /// Set a script to be executed during package verification, post-installation or using
+    /// `rpm --verify`
+    ///
+    /// See: `%verifyscript` from specfile syntax
+    #[inline]
+    pub fn verify_script(mut self, content: impl Into<Scriptlet>) -> Self {
+        self.verify_script = Some(content.into());
         self
     }
 

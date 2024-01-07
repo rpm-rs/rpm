@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Dependency::script_pre()`, `Dependency::script_post()`, `Dependency::script_preun()`, `Dependency::script_postun()`
 - `Dependency::config()`
+- `PackageBuilder::verify_script()`
 
 ### Changed
 
