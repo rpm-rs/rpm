@@ -82,6 +82,8 @@ pub struct PackageBuilder {
     compression: CompressionWithLevel,
 
     vendor: Option<String>,
+    packager: Option<String>,
+    group: Option<String>,
     url: Option<String>,
     vcs: Option<String>,
     cookie: Option<String>,
@@ -180,6 +182,19 @@ impl PackageBuilder {
     /// Set the package vendor - the name of the organization that is producing the package.
     pub fn vendor(mut self, content: impl Into<String>) -> Self {
         self.vendor = Some(content.into());
+        self
+    }
+
+    /// Set the packager, the name of the person producing the package. This is often not present,
+    /// or set to the same value as the vendor
+    pub fn packager(mut self, content: impl Into<String>) -> Self {
+        self.packager = Some(content.into());
+        self
+    }
+
+    /// Set the package group (this is deprecated in most packaging guidelines)
+    pub fn group(mut self, content: impl Into<String>) -> Self {
+        self.group = Some(content.into());
         self
     }
 
