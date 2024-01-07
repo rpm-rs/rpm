@@ -30,9 +30,7 @@ However, it does nothing.",
         .compression(rpm::CompressionType::Gzip)
         .with_file(
             "Cargo.toml",
-            FileOptions::new("/etc/awesome/config.toml")
-                .is_config()
-                .is_no_replace(),
+            FileOptions::new("/etc/awesome/config.toml").is_config_noreplace(),
         )?
         // file mode is inherited from source file
         .with_file("Cargo.toml", FileOptions::new("/usr/bin/awesome"))?

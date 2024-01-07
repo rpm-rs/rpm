@@ -297,16 +297,18 @@ impl FileOptionsBuilder {
         self
     }
 
-    /// Indicates that a (configuration) file should not be replaced if it has been modified.
-    /// When a package is updated, configuration files will be checked for modifications compared
-    /// to their default state, and if any are present then the new configuration file will
+    /// Indicates that a file is a configuration file and that it should not be replaced if it has been
+    /// modified. When a package is updated, configuration files will be checked for modifications
+    /// compared to their default state, and if any are present then the new configuration file will
     /// be installed with a .rpmnew extension.
     ///
     /// User intervention may be required to reconcile the changes between the new and old configs.
     ///
     /// See: %config(noreplace) from specfile syntax
-    pub fn is_no_replace(mut self) -> Self {
-        self.inner.flag.insert(FileFlags::NOREPLACE);
+    pub fn is_config_noreplace(mut self) -> Self {
+        self.inner
+            .flag
+            .insert(FileFlags::CONFIG | FileFlags::NOREPLACE);
         self
     }
 
