@@ -752,26 +752,18 @@ impl PackageBuilder {
             self.version.clone(),
         ));
 
-        self.requires.push(Dependency::rpmlib(
-            "rpmlib(CompressedFileNames)".to_string(),
-            "3.0.4-1".to_string(),
-        ));
+        self.requires
+            .push(Dependency::rpmlib("CompressedFileNames", "3.0.4-1"));
 
-        self.requires.push(Dependency::rpmlib(
-            "rpmlib(FileDigests)".to_string(),
-            "4.6.0-1".to_string(),
-        ));
+        self.requires
+            .push(Dependency::rpmlib("FileDigests", "4.6.0-1"));
 
-        self.requires.push(Dependency::rpmlib(
-            "rpmlib(PayloadFilesHavePrefix)".to_string(),
-            "4.0-1".to_string(),
-        ));
+        self.requires
+            .push(Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"));
 
         if self.compression.compression_type() == CompressionType::Zstd {
-            self.requires.push(Dependency::rpmlib(
-                "rpmlib(PayloadIsZstd)".to_string(),
-                "5.4.18-1".to_string(),
-            ));
+            self.requires
+                .push(Dependency::rpmlib("PayloadIsZstd", "5.4.18-1"));
         }
 
         let mut provide_names = Vec::new();
