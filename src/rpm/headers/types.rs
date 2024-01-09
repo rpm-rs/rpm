@@ -229,7 +229,7 @@ impl FileOptionsBuilder {
     /// Specifying a non-root user here will direct RPM to create the user via sysusers.d at
     /// installation time.
     ///
-    /// See: %attr from specfile syntax
+    /// See: `%attr` from specfile syntax
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.inner.user = user.into();
         self
@@ -240,7 +240,7 @@ impl FileOptionsBuilder {
     /// Specifying a non-root group here will direct RPM to create the group via sysusers.d at
     /// installation time.
     ///
-    /// See: %attr from specfile syntax
+    /// See: `%attr` from specfile syntax
     pub fn group(mut self, group: impl Into<String>) -> Self {
         self.inner.group = group.into();
         self
@@ -254,7 +254,7 @@ impl FileOptionsBuilder {
 
     /// Set the FileMode - type of file (or directory, or symlink) and permissions.
     ///
-    /// See: %attr from specfile syntax
+    /// See: `%attr` from specfile syntax
     pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
         self.inner.inherit_permissions = false;
@@ -263,7 +263,7 @@ impl FileOptionsBuilder {
 
     /// Indicates that a file should have the provided POSIX file capabilities.
     ///
-    /// See: %caps from specfile syntax
+    /// See: `%caps` from specfile syntax
     pub fn caps(mut self, caps: impl Into<String>) -> Result<Self, errors::Error> {
         // verify capabilities
         self.inner.caps = match FileCaps::from_str(&caps.into()) {
@@ -279,7 +279,7 @@ impl FileOptionsBuilder {
 
     /// Indicates that a file is documentation.
     ///
-    /// See: %doc from specfile syntax
+    /// See: `%doc` from specfile syntax
     pub fn is_doc(mut self) -> Self {
         self.inner.flag.insert(FileFlags::DOC);
         self
@@ -287,11 +287,12 @@ impl FileOptionsBuilder {
 
     /// Indicates that a file is a configuration file. When a package is updated, files marked as
     /// configuration files will be checked for modifications compared to their default state,
-    /// and if any are present then the old configuration file will be saved with a .rpmsave extension.
+    /// and if any are present then the old configuration file will be saved with a `.rpmsave`
+    /// extension.
     ///
     /// User intervention may be required to reconcile the changes between the new and old configs.
     ///
-    /// See: %config from specfile syntax
+    /// See: `%config` from specfile syntax
     pub fn is_config(mut self) -> Self {
         self.inner.flag.insert(FileFlags::CONFIG);
         self
@@ -300,11 +301,11 @@ impl FileOptionsBuilder {
     /// Indicates that a file is a configuration file and that it should not be replaced if it has been
     /// modified. When a package is updated, configuration files will be checked for modifications
     /// compared to their default state, and if any are present then the new configuration file will
-    /// be installed with a .rpmnew extension.
+    /// be installed with a `.rpmnew` extension.
     ///
     /// User intervention may be required to reconcile the changes between the new and old configs.
     ///
-    /// See: %config(noreplace) from specfile syntax
+    /// See: `%config(noreplace)` from specfile syntax
     pub fn is_config_noreplace(mut self) -> Self {
         self.inner
             .flag
@@ -315,7 +316,7 @@ impl FileOptionsBuilder {
     /// Indicates that a file ought not to actually be included in the package, but that it should
     /// still be considered owned by a package (e.g. a log file).  Its attributes are still tracked.
     ///
-    /// See: %ghost from specfile syntax
+    /// See: `%ghost` from specfile syntax
     pub fn is_ghost(mut self) -> Self {
         self.inner.flag.insert(FileFlags::GHOST);
         self
@@ -324,15 +325,15 @@ impl FileOptionsBuilder {
     /// Indicates that a file is a software license. License files are always included - they are
     /// never filtered out during installation.
     ///
-    /// See: %license from specfile syntax
+    /// See: `%license` from specfile syntax
     pub fn is_license(mut self) -> Self {
         self.inner.flag.insert(FileFlags::LICENSE);
         self
     }
 
-    /// Deprecated (use `is_doc()`` instead). Marks a file as a README.
+    /// Deprecated (use `is_doc()` instead). Marks a file as a README.
     ///
-    /// See: %readme from specfile syntax
+    /// See: `%readme` from specfile syntax
     pub fn is_readme(mut self) -> Self {
         self.inner.flag.insert(FileFlags::README);
         self
@@ -434,7 +435,7 @@ impl Dependency {
         )
     }
 
-    // TODO: Is it ever the case that version matters here? it's at least not the common case
+    // @todo: Is it ever the case that version matters here? it's at least not the common case
 
     /// Create a dependency on a package or file required for a pre-install script.
     pub fn script_pre(dep_name: impl Into<String>) -> Self {
