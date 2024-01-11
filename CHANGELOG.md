@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added support for multiple signatures on a package as supported by upstream RPM.
 
+### Fixed
+
+- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
+
 ## 0.17.0
 
 ### Added
