@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Using file capabilities now adds the appropriate rpmlib() dependency
+- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
 
 ## 0.13.1
 
