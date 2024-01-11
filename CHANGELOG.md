@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `FileOptions::verify()`
 
+### Fixed
+
+- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
+
 ### Changed
 
 - As RHEL 7 (thus, CentOS 7 and other derivatives) goes out-of-support on June 30, 2024, support for legacy
