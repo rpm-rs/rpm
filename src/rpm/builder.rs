@@ -16,6 +16,7 @@ use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
+use super::payload;
 use crate::errors::*;
 use crate::{constants::*, Timestamp};
 
@@ -90,6 +91,11 @@ pub struct PackageBuilder {
 
     source_date: Option<Timestamp>,
     build_host: Option<String>,
+
+    // metadata about the package construction itself
+    needs_large_files: bool,
+    has_file_capabilities: bool,
+    combined_file_sizes: u64,
 }
 
 impl PackageBuilder {
@@ -359,6 +365,14 @@ impl PackageBuilder {
 
         let modified_at = input.metadata()?.modified()?.try_into()?;
 
+        if options.caps.is_some() {
+            self.has_file_capabilities = true;
+        }
+        if content.len() > u32::MAX as usize {
+            self.needs_large_files = true;
+        }
+        self.combined_file_sizes += content.len() as u64;
+
         self.add_data(content, modified_at, options)?;
         Ok(self)
     }
@@ -397,6 +411,7 @@ impl PackageBuilder {
             )
         };
 
+        // TODO: make this configurable, probably needs to be computed more lazily?
         let mut hasher = sha2::Sha256::default();
         hasher.update(&content);
         let hash_result = hasher.finalize();
@@ -720,7 +735,6 @@ impl PackageBuilder {
         let mut users_to_create = HashSet::new();
         let mut groups_to_create = HashSet::new();
 
-        let mut combined_file_sizes: u64 = 0;
         let mut uses_file_capabilities = false;
 
         // @todo: sort entries by path?
@@ -728,7 +742,6 @@ impl PackageBuilder {
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
         for (cpio_path, entry) in self.files.iter() {
-            combined_file_sizes += entry.size;
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -741,8 +754,8 @@ impl PackageBuilder {
             file_sizes.push(entry.size);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
-            // I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
-            // Who knows, who cares.
+            // @todo: this is placeholder
+            // It seems like file_rdevice is always 0 and file_device number always 1?
             file_rdevs.push(0);
             file_devices.push(1);
             let mtime = match self.source_date {
@@ -757,7 +770,7 @@ impl PackageBuilder {
             file_groupnames.push(entry.group.to_owned());
             file_inodes.push(ino_index);
             file_langs.push("".to_string());
-            // safe because indexes cannot change after this as the RpmBuilder is consumed
+            // safe because indexes cannot change after this as the PackageBuilder is consumed
             // the dir is guaranteed to be there - or else there is a logic error
             let index = self
                 .directories
@@ -769,19 +782,24 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(FileVerifyFlags::all().bits());
             let content = entry.content.to_owned();
-            let mut writer = cpio::newc::Builder::new(cpio_path)
-                .mode(entry.mode.into())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut archive, content.len() as u32);
+            let mut writer = if !self.needs_large_files {
+                payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, content.len() as u32)
+            } else {
+                payload::Builder::new(cpio_path)
+                    .write_stripped_cpio(&mut archive, content.len() as u32)
+            };
 
             writer.write_all(&content)?;
             writer.finish()?;
 
             ino_index += 1;
         }
-        cpio::newc::trailer(&mut archive)?;
+        payload::trailer(&mut archive)?;
 
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
@@ -900,7 +918,6 @@ impl PackageBuilder {
         }
 
         let offset = 0;
-        let small_package = combined_file_sizes <= u32::MAX.into();
 
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
@@ -952,7 +969,7 @@ impl PackageBuilder {
                 IndexData::I18NString(vec![self.summary]),
             ),
             if small_package {
-                let combined_file_sizes = combined_file_sizes
+                let combined_file_sizes = self.combined_file_sizes
                     .try_into()
                     .expect("combined_file_sizes should be smaller than 4 GiB");
                 IndexEntry::new(
@@ -964,7 +981,7 @@ impl PackageBuilder {
                 IndexEntry::new(
                     IndexTag::RPMTAG_LONGSIZE,
                     offset,
-                    IndexData::Int64(vec![combined_file_sizes]),
+                    IndexData::Int64(vec![self.combined_file_sizes]),
                 )
             },
             IndexEntry::new(
@@ -1126,20 +1143,19 @@ impl PackageBuilder {
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
             ]);
-            if file_caps.iter().any(|caps| caps.is_some()) {
-                actual_records.extend([IndexEntry::new(
+            if self.has_file_capabilities {
+                let file_caps: Vec<String> = file_caps
+                    .iter()
+                    .map(|f| match f {
+                        Some(caps) => caps.to_string(),
+                        None => "".to_string(),
+                    })
+                    .collect();
+                actual_records.push(IndexEntry::new(
                     IndexTag::RPMTAG_FILECAPS,
                     offset,
-                    IndexData::StringArray(
-                        file_caps
-                            .iter()
-                            .map(|f| match f {
-                                Some(caps) => caps.to_string(),
-                                None => "".to_string(),
-                            })
-                            .collect::<Vec<String>>(),
-                    ),
-                )])
+                    IndexData::StringArray(file_caps),
+                ));
             }
         }
 
