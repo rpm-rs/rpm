@@ -532,25 +532,25 @@ bitflags! {
 bitflags! {
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
     pub struct FileVerifyFlags: u32 {
-        const VERIFY_NONE 	= 0;
-        const VERIFY_MD5 	= 1 << 0;	   // from %verify(md5) - obsolete */
-        const VERIFY_FILEDIGEST = 1 << 0;   // from %verify(filedigest) */
-        const VERIFY_FILESIZE 	= 1 << 1;  // from %verify(size) */
-        const VERIFY_LINKTO 	= 1 << 2;	   // from %verify(link)
-        const VERIFY_USER 	= 1 << 3;	   // from %verify(user)
-        const VERIFY_GROUP 	= 1 << 4;	   // from %verify(group)
-        const VERIFY_MTIME 	= 1 << 5;	   // from %verify(mtime)
-        const VERIFY_MODE 	= 1 << 6;	   // from %verify(mode)
-        const VERIFY_RDEV 	= 1 << 7;	   // from %verify(rdev)
-        const VERIFY_CAPS 	= 1 << 8;	   // from %verify(caps)
+        const NONE 	= 0;
+        const MD5 	= 1 << 0;	      // from %verify(md5) - obsolete */
+        const FILEDIGEST = 1 << 0;    // from %verify(filedigest) */
+        const FILESIZE 	= 1 << 1;     // from %verify(size) */
+        const LINKTO 	= 1 << 2;	  // from %verify(link)
+        const USER 	= 1 << 3;	      // from %verify(user)
+        const GROUP 	= 1 << 4;	  // from %verify(group)
+        const MTIME 	= 1 << 5;	  // from %verify(mtime)
+        const MODE 	= 1 << 6;	      // from %verify(mode)
+        const RDEV 	= 1 << 7;	      // from %verify(rdev)
+        const CAPS 	= 1 << 8;	      // from %verify(caps)
         // bits 9-14 unused, reserved for rpmVerifyAttrs
-        const VERIFY_CONTEXTS	= 1 << 15;	// verify: from --nocontexts
+        const CONTEXTS	= 1 << 15;	  // verify: from --nocontexts
         // bits 16-22 used in rpmVerifyFlags
         // bits 23-27 used in rpmQueryFlags
-        const VERIFY_READLINKFAIL= 1 << 28;	// readlink failed
-        const VERIFY_READFAIL	= 1 << 29;	// file read failed
-        const VERIFY_LSTATFAIL	= 1 << 30;	// lstat failed
-        const VERIFY_LGETFILECONFAIL	= 1 << 31;	// lgetfilecon failed
+        const READLINKFAIL= 1 << 28;  // readlink failed
+        const READFAIL	= 1 << 29;	  // file read failed
+        const LSTATFAIL	= 1 << 30;	  // lstat failed
+        const LGETFILECONFAIL	= 1 << 31;	// lgetfilecon failed
     }
 }
 
