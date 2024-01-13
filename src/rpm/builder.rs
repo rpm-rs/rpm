@@ -416,6 +416,7 @@ impl PackageBuilder {
             // and then later check if any were set
             caps: options.caps,
             sha_checksum,
+            verify_flags: options.verify_flags,
         };
 
         self.directories.insert(dir);
@@ -720,7 +721,7 @@ impl PackageBuilder {
             dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
-            file_verify_flags.push(FileVerifyFlags::all().bits());
+            file_verify_flags.push(entry.verify_flags.bits());
             let content = entry.content.to_owned();
             let mut writer = cpio::newc::Builder::new(cpio_path)
                 .mode(entry.mode.into())

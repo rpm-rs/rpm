@@ -28,6 +28,7 @@ pub struct PackageFileEntry {
     pub base_name: String,
     pub dir: String,
     pub caps: Option<FileCaps>,
+    pub verify_flags: FileVerifyFlags,
     pub(crate) content: Vec<u8>,
 }
 
@@ -194,6 +195,7 @@ pub struct FileOptions {
     pub(crate) flag: FileFlags,
     pub(crate) inherit_permissions: bool,
     pub(crate) caps: Option<FileCaps>,
+    pub(crate) verify_flags: FileVerifyFlags,
 }
 
 impl FileOptions {
@@ -213,6 +215,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 inherit_permissions: true,
                 caps: None,
+                verify_flags: FileVerifyFlags::all(),
             },
         }
     }
@@ -275,6 +278,16 @@ impl FileOptionsBuilder {
             }
         };
         Ok(self)
+    }
+
+    /// Direct which aspects of the file you would like RPM to verify.
+    ///
+    /// By default, every aspect of the file will be checked.
+    ///
+    /// See: `%verify` from specfile syntax
+    pub fn verify(mut self, flags: FileVerifyFlags) -> Self {
+        self.inner.verify_flags = flags;
+        self
     }
 
     /// Indicates that a file is documentation.

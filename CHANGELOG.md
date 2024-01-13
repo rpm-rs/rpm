@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Breaking Changes
+
+- `FileVerifyFlags` member names changed to strip the `VERIFY_` prefix.
+
+### Added
+
+- `FileOptions::verify()`
+
 ### Changed
 
 - As RHEL 7 (thus, CentOS 7 and other derivatives) goes out-of-support on June 30, 2024, support for legacy
