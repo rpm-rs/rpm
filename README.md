@@ -11,7 +11,7 @@ A pure rust library for parsing and creating RPM files.
 - Easy to use API
 - Pure rust to make it easy to use in larger Projects
 - Independence of Spec files. Pure programmatic interface for Packaging.
-- Compatibility to Centos 7 / Fedora (I may extend test cases for SUSE)
+- Compatibility from Enterprise Linux 8 (RHEL, Alma, Rocky, CentOS Stream) to Fedora (I may extend test cases for SUSE)
 
 ### Non Goals
 
