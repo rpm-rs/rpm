@@ -2,8 +2,6 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 
 use std::fs;
-#[cfg(feature = "signature-meta")]
-use std::io;
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -24,7 +22,7 @@ use crate::signature;
 
 use crate::Package;
 use crate::PackageMetadata;
-use crate::{CompressionType, CompressionWithLevel, Digests};
+use crate::{CompressionType, CompressionWithLevel};
 
 #[cfg(unix)]
 fn file_mode(file: &fs::File) -> Result<u32, Error> {
@@ -597,19 +595,10 @@ impl PackageBuilder {
         let digest_header = {
             let header = header;
             let header_and_content_len = header.len() + content.len();
-
-            let Digests {
-                header_and_content_digest: header_and_content_digest_md5,
-                header_digest_sha1,
-                header_digest_sha256,
-            } = Package::create_sig_header_digests(header.as_slice(), content.as_slice())?;
+            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
 
             Header::<IndexSignatureTag>::builder()
-                .add_digest(
-                    header_digest_sha1.as_str(),
-                    header_digest_sha256.as_str(),
-                    header_and_content_digest_md5.as_slice(),
-                )
+                .add_digest(header_digest_sha256.as_str())
                 .build(header_and_content_len)
         };
 
@@ -639,35 +628,21 @@ impl PackageBuilder {
 
         let header_and_content_len = header.len() + content.len();
 
-        let Digests {
-            header_and_content_digest: header_and_content_digest_md5,
-            header_digest_sha1,
-            header_digest_sha256,
-        } = Package::create_sig_header_digests(header.as_slice(), content.as_slice())?;
-
         let now = Timestamp::now();
         let signature_timestamp = match source_date {
             Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
             _ => now,
         };
 
-        let builder = Header::<IndexSignatureTag>::builder().add_digest(
-            header_digest_sha1.as_str(),
-            header_digest_sha256.as_str(),
-            header_and_content_digest_md5.as_slice(),
-        );
+        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
+
+        let builder =
+            Header::<IndexSignatureTag>::builder().add_digest(header_digest_sha256.as_str());
 
         let sig_header_only = signer.sign(header.as_slice(), signature_timestamp)?;
 
         let builder = match signer.algorithm() {
-            signature::AlgorithmType::RSA => {
-                let mut header_and_content_cursor =
-                    io::Cursor::new(header.as_slice()).chain(io::Cursor::new(content.as_slice()));
-
-                let sig_header_and_archive =
-                    signer.sign(&mut header_and_content_cursor, signature_timestamp)?;
-                builder.add_rsa_signature(sig_header_only.as_ref(), sig_header_and_archive.as_ref())
-            }
+            signature::AlgorithmType::RSA => builder.add_rsa_signature(sig_header_only.as_ref()),
             signature::AlgorithmType::EdDSA => {
                 builder.add_eddsa_signature(sig_header_only.as_ref())
             }

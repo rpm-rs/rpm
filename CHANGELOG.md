@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- As RHEL 7 (thus, CentOS 7 and other derivatives) goes out-of-support on June 30, 2024, support for legacy
+  features used by distros of that era are being phased out.
+  - "RPM v3" signatures (signatures covering both header and payload) will no longer be added when building
+    or signing an RPM with rpm-rs.
+  - Legacy checksum types ("sha1" and "md5") will not be added when building an RPM with rpm-rs.
+  - As a result of these changes, packages built by rpm-rs will still work on EL7-era distros, but rpm on those
+    platforms won't be as capable of verifying them.
+
+### Deprecated
+
+- In a (near) future version of rpm-rs, support for EL7-era distros may be removed entirely.
+
 ## 0.14.0
 
 ### Breaking Changes

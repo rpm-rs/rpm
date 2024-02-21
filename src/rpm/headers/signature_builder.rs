@@ -80,23 +80,8 @@ where
 
 impl SignatureHeaderBuilder<Empty> {
     /// add a digest over the header and a signature across header and source excluding the static lead
-    pub fn add_digest(
-        mut self,
-        digest_header_sha1: &str,
-        digest_header_sha256: &str,
-        digest_header_and_archive: &[u8],
-    ) -> SignatureHeaderBuilder<WithDigest> {
+    pub fn add_digest(mut self, digest_header_sha256: &str) -> SignatureHeaderBuilder<WithDigest> {
         let offset = 0i32; // filled externally later on
-        self.entries.push(IndexEntry::new(
-            IndexSignatureTag::RPMSIGTAG_MD5,
-            offset,
-            IndexData::Bin(digest_header_and_archive.to_vec()),
-        ));
-        self.entries.push(IndexEntry::new(
-            IndexSignatureTag::RPMSIGTAG_SHA1,
-            offset,
-            IndexData::StringTag(digest_header_sha1.to_string()),
-        ));
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_SHA256,
             offset,
@@ -110,22 +95,16 @@ impl SignatureHeaderBuilder<Empty> {
 }
 
 impl SignatureHeaderBuilder<WithDigest> {
-    /// add a signature over the header and a signature across header and source excluding the static lead
+    /// add a signature over the header
     pub fn add_rsa_signature(
         mut self,
         sig_header_only: &[u8],
-        sig_header_and_archive: &[u8],
     ) -> SignatureHeaderBuilder<WithSignature> {
         let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_RSA,
             offset,
             IndexData::Bin(sig_header_only.to_vec()),
-        ));
-        self.entries.push(IndexEntry::new(
-            IndexSignatureTag::RPMSIGTAG_PGP,
-            offset,
-            IndexData::Bin(sig_header_and_archive.to_vec()),
         ));
         SignatureHeaderBuilder::<WithSignature> {
             entries: self.entries,
@@ -156,35 +135,16 @@ mod test {
     #[test]
     fn signature_builder_w_digest_and_rsa_signature() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
-
         let sig_header_only = [0u8; 32];
-        let sig_header_and_archive = [0u8; 32];
-
-        let digest_header_sha1 = hex::encode([0u8; 64]);
-        let digest_header_sha256: String = hex::encode([0u8; 64]);
-
-        let digest_header_and_archive = [0u8; 64];
+        let digest_header_sha256 = hex::encode([0u8; 64]);
 
         let header = builder
-            .add_digest(
-                digest_header_sha1.as_str(),
-                digest_header_sha256.as_str(),
-                &digest_header_and_archive[..],
-            )
-            .add_rsa_signature(&sig_header_only[..], &sig_header_and_archive[..])
+            .add_digest(digest_header_sha256.as_str())
+            .add_rsa_signature(&sig_header_only[..])
             .build(32);
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_PGP)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
@@ -194,31 +154,16 @@ mod test {
     #[test]
     fn signature_builder_w_digest_and_eddsa_signature() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
-
         let sig_header_only = [0u8; 32];
-
-        let digest_header_sha1 = hex::encode([0u8; 64]);
         let digest_header_sha256: String = hex::encode([0u8; 64]);
 
-        let digest_header_and_archive = [0u8; 64];
-
         let header = builder
-            .add_digest(
-                digest_header_sha1.as_str(),
-                digest_header_sha256.as_str(),
-                &digest_header_and_archive[..],
-            )
+            .add_digest(digest_header_sha256.as_str())
             .add_eddsa_signature(&sig_header_only[..])
             .build(32);
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_DSA)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
             .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
@@ -228,32 +173,12 @@ mod test {
     #[test]
     fn signature_builder_digest_only() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
-
-        let digest_header_sha1 = hex::encode([0u8; 64]);
         let digest_header_sha256: String = hex::encode([0u8; 64]);
-
-        let digest_header_and_archive = [0u8; 64];
-
-        let header = builder
-            .add_digest(
-                digest_header_sha1.as_str(),
-                digest_header_sha256.as_str(),
-                &digest_header_and_archive[..],
-            )
-            .build(32);
+        let header = builder.add_digest(digest_header_sha256.as_str()).build(32);
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
             .is_err());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_PGP)
-            .is_err());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_MD5)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA1)
-            .is_ok());
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
             .is_ok());
@@ -264,12 +189,9 @@ mod test {
     #[test]
     fn signature_header_build() {
         let size: u32 = 209_348;
-        let digest_header_and_archive: &[u8] = &[22u8; 16];
-        let digest_header_sha1 = "5A884F0CB41EC3DA6D6E7FC2F6AB9DECA8826E8D";
         let digest_header_sha256 =
             "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
         let sig_header_only: &[u8] = b"111222333444";
-        let sig_header_and_archive: &[u8] = b"7777888899990000";
 
         let truth = {
             let offset = 0;
@@ -278,17 +200,6 @@ mod test {
                     IndexSignatureTag::RPMSIGTAG_SIZE,
                     offset,
                     IndexData::Int32(vec![size]),
-                ),
-                // TODO consider dropping md5 in favour of sha256
-                IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_MD5,
-                    offset,
-                    IndexData::Bin(digest_header_and_archive.to_vec()),
-                ),
-                IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_SHA1,
-                    offset,
-                    IndexData::StringTag(digest_header_sha1.to_owned()),
                 ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA256,
@@ -300,22 +211,13 @@ mod test {
                     offset,
                     IndexData::Bin(sig_header_only.to_vec()),
                 ),
-                IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_PGP,
-                    offset,
-                    IndexData::Bin(sig_header_and_archive.to_vec()),
-                ),
             ];
             Header::<IndexSignatureTag>::from_entries(entries, IndexSignatureTag::HEADER_SIGNATURES)
         };
 
         let built = Header::<IndexSignatureTag>::builder()
-            .add_digest(
-                digest_header_sha1,
-                digest_header_sha256,
-                digest_header_and_archive,
-            )
-            .add_rsa_signature(sig_header_only, sig_header_and_archive)
+            .add_digest(digest_header_sha256)
+            .add_rsa_signature(sig_header_only)
             .build(size as usize);
 
         assert_eq!(built, truth);

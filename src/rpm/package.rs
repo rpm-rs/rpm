@@ -19,21 +19,6 @@ use std::{fmt::Debug, io::Read};
 use super::headers::*;
 use super::Lead;
 
-/// Combined digest of signature header tags `RPMSIGTAG_MD5` and `RPMSIGTAG_SHA1`
-///
-/// Succinct to cover to "verify" the content of the rpm file. Quotes because
-/// the fact `md5` is used doesn't really give any guarantee anything anymore
-/// in the 2020s.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Digests {
-    /// The sha256 digest of the header.
-    pub(crate) header_digest_sha256: String,
-    /// The sha1 digest of the header.
-    pub(crate) header_digest_sha1: String,
-    /// The sha1 digest of the entire header + payload
-    pub(crate) header_and_content_digest: Vec<u8>,
-}
-
 /// A complete rpm file.
 ///
 /// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
@@ -74,29 +59,6 @@ impl Package {
     /// Write the RPM package to a file
     pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), Error> {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
-    }
-
-    /// Prepare both header and content digests as used by the `SignatureIndex`.
-    pub(crate) fn create_sig_header_digests(
-        header: &[u8],
-        payload: &[u8],
-    ) -> Result<Digests, Error> {
-        let digest_md5 = {
-            let mut hasher = md5::Md5::default();
-            hasher.update(header);
-            hasher.update(payload);
-            let hash_result = hasher.finalize();
-            hash_result.to_vec()
-        };
-
-        let digest_sha1 = hex::encode(sha1::Sha1::digest(header));
-        let digest_sha256 = hex::encode(sha2::Sha256::digest(header));
-
-        Ok(Digests {
-            header_digest_sha256: digest_sha256,
-            header_digest_sha1: digest_sha1,
-            header_and_content_digest: digest_md5,
-        })
     }
 
     /// Create package signatures using an external key and add them to the signature header
@@ -143,34 +105,18 @@ impl Package {
 
         let header_and_content_len = header_bytes.len() + self.content.len();
 
-        let Digests {
-            header_digest_sha256,
-            header_digest_sha1,
-            header_and_content_digest,
-        } = Self::create_sig_header_digests(header_bytes.as_slice(), &self.content)?;
+        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
 
-        let signature_spanning_header_only = signer.sign(header_bytes.as_slice(), t)?;
+        let header_signature = signer.sign(header_bytes.as_slice(), t)?;
 
-        let builder = Header::<IndexSignatureTag>::builder().add_digest(
-            &header_digest_sha1,
-            &header_digest_sha256,
-            &header_and_content_digest,
-        );
+        let builder = Header::<IndexSignatureTag>::builder().add_digest(&header_digest_sha256);
 
         let builder = match signer.algorithm() {
             crate::signature::AlgorithmType::RSA => {
-                let mut header_and_content_cursor =
-                    io::Cursor::new(header_bytes).chain(io::Cursor::new(&self.content));
-
-                let signature_spanning_header_and_archive =
-                    signer.sign(&mut header_and_content_cursor, t)?;
-                builder.add_rsa_signature(
-                    signature_spanning_header_only.as_slice(),
-                    signature_spanning_header_and_archive.as_slice(),
-                )
+                builder.add_rsa_signature(header_signature.as_slice())
             }
             crate::signature::AlgorithmType::EdDSA => {
-                builder.add_eddsa_signature(signature_spanning_header_only.as_slice())
+                builder.add_eddsa_signature(header_signature.as_slice())
             }
         };
 
@@ -273,36 +219,42 @@ impl Package {
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
 
-        let pkg_actual_digests =
-            Self::create_sig_header_digests(header.as_slice(), self.content.as_slice())?;
-
-        let md5 = self
+        let md5_declared = self
             .metadata
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5);
-        let sha1 = self
+        let sha1_declared = self
             .metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1);
-        let sha256 = self
+        let sha256_declared = self
             .metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256);
 
-        if let Ok(md5) = md5 {
-            if md5 != pkg_actual_digests.header_and_content_digest {
+        if let Ok(md5_declared) = md5_declared {
+            let header_and_content_digest_md5 = {
+                let mut hasher = md5::Md5::default();
+                hasher.update(&header);
+                hasher.update(&self.content);
+                let hash_result = hasher.finalize();
+                hash_result.to_vec()
+            };
+            if md5_declared != header_and_content_digest_md5 {
                 return Err(Error::DigestMismatchError);
             }
         }
 
-        if let Ok(sha1) = sha1 {
-            if sha1 != pkg_actual_digests.header_digest_sha1 {
+        if let Ok(sha1_declared) = sha1_declared {
+            let header_digest_sha1 = hex::encode(sha1::Sha1::digest(header.as_slice()));
+            if sha1_declared != header_digest_sha1 {
                 return Err(Error::DigestMismatchError);
             }
         }
 
-        if let Ok(sha256) = sha256 {
-            if sha256 != pkg_actual_digests.header_digest_sha256 {
+        if let Ok(sha256) = sha256_declared {
+            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
+            if sha256 != header_digest_sha256 {
                 return Err(Error::DigestMismatchError);
             }
         }
