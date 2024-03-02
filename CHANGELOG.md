@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.14.0
+
 ### Breaking Changes
 
+- Minimum supported Rust version updated to 1.71
 - `Dependency::rpmlib()` now inserts the `rpmlib()` portion automatically, only the feature name itself should
   be provided in the string passed as the name argument.
 - `FileOptions::is_no_replace()` is now `FileOptions::is_config_noreplace()` to reflect the fact that the noreplace

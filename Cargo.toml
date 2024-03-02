@@ -1,6 +1,6 @@
 [package]
 name = "rpm"
-version = "0.13.1"
+version = "0.14.0"
 authors = [
   "René Richter <richterrettich@gmail.com>",
   "Bernhard Schuster <bernhard@ahoi.io>",
@@ -15,7 +15,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.67.0"
+rust-version = "1.71.0"
 
 [lib]
 name = "rpm"
