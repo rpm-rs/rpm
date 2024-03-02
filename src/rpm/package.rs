@@ -375,7 +375,8 @@ impl PackageMetadata {
         })
     }
 
-    pub(crate) fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
+    /// Write the RPM header to a buffer
+    pub fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
         self.header.write(out)?;
