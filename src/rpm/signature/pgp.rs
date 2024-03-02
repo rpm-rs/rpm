@@ -146,63 +146,8 @@ impl traits::Verifying for Verifier {
     fn verify(&self, mut data: impl io::Read, signature: &[u8]) -> Result<(), Error> {
         let signature = Self::parse_signature(signature)?;
 
-        log::debug!("Signature issued by: {:?}", signature.issuer());
-
-        if let Some(key_id) = signature.issuer() {
-            log::trace!("Signature has issuer ref: {:?}", key_id);
-
-            if self.public_key.key_id() == *key_id {
-                return signature.verify(&self.public_key, data).map_err(|source| {
-                    Error::VerificationError {
-                        source,
-                        key_ref: format!("{:?}", key_id),
-                    }
-                });
-            } else {
-                log::trace!(
-                    "Signature issuer key id {:?} does not match primary keys key id: {:?}",
-                    key_id,
-                    self.public_key.key_id()
-                );
-            }
-
-            let mut result = Err(Error::KeyNotFoundError {
-                key_ref: format!("{:?}", key_id),
-            });
-            for sub_key in &self.public_key.public_subkeys {
-                log::trace!("Trying subkey candidate {:?}", sub_key.key_id());
-
-                if sub_key.key_id().as_ref() == key_id.as_ref() {
-                    log::trace!(
-                        "Subkey key id {:?} matches signature key id",
-                        sub_key.key_id()
-                    );
-
-                    match signature.verify(sub_key, &mut data) {
-                        Ok(_) => {
-                            log::trace!(
-                                "Signature successfully verified with subkey {:?}",
-                                sub_key.key_id()
-                            );
-                            return Ok(());
-                        }
-                        Err(source) => {
-                            log::trace!("Subkey verification failed");
-                            result = Err(Error::VerificationError {
-                                source,
-                                key_ref: format!("{:?}", sub_key.key_id()),
-                            })
-                        }
-                    }
-                } else {
-                    log::trace!(
-                        "Subkey key id {:?} does not match signature",
-                        sub_key.key_id()
-                    );
-                }
-            }
-            result
-        } else {
+        let key_ids = signature.issuer();
+        if key_ids.is_empty() {
             log::trace!(
                 "Signature has no issuer ref, attempting primary key: {:?}",
                 self.public_key.primary_key.key_id()
@@ -213,6 +158,67 @@ impl traits::Verifying for Verifier {
                     source,
                     key_ref: format!("{:?}", self.public_key.key_id()),
                 })
+        } else {
+            let mut result: Option<Error> = None;
+            for key_id in key_ids {
+                log::trace!("Signature has issuer ref: {:?}", key_id);
+                if self.public_key.key_id() == *key_id {
+                    return signature.verify(&self.public_key, data).map_err(|source| {
+                        Error::VerificationError {
+                            source,
+                            key_ref: format!("{:?}", key_id),
+                        }
+                    });
+                } else {
+                    log::trace!(
+                        "Signature issuer key id {:?} does not match primary keys key id: {:?}",
+                        key_id,
+                        self.public_key.key_id()
+                    );
+                }
+
+                for sub_key in &self.public_key.public_subkeys {
+                    log::trace!("Trying subkey candidate {:?}", sub_key.key_id());
+
+                    if sub_key.key_id().as_ref() == key_id.as_ref() {
+                        log::trace!(
+                            "Subkey key id {:?} matches signature key id",
+                            sub_key.key_id()
+                        );
+
+                        match signature.verify(sub_key, &mut data) {
+                            Ok(_) => {
+                                log::trace!(
+                                    "Signature successfully verified with subkey {:?}",
+                                    sub_key.key_id()
+                                );
+                                return Ok(());
+                            }
+                            Err(source) => {
+                                log::trace!("Subkey verification failed");
+                                result = Some(Error::VerificationError {
+                                    source,
+                                    key_ref: format!("{:?}", sub_key.key_id()),
+                                })
+                            }
+                        }
+                    } else {
+                        log::trace!(
+                            "Subkey key id {:?} does not match signature",
+                            sub_key.key_id()
+                        );
+                    }
+                }
+            }
+            let default_err = Error::KeyNotFoundError {
+                key_ref: format!("{:?}", self.public_key.key_id()),
+            };
+
+            if let Some(err) = result {
+                Err(err)
+            } else {
+                Err(default_err)
+            }
         }
     }
 

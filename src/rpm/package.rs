@@ -178,17 +178,16 @@ impl Package {
         Ok(())
     }
 
-    /// Return the key id (issuer) of the signature as a hexadecimal string
+    /// Return the key ids (issuers) of the signature as a hexadecimal string
     #[cfg(feature = "signature-pgp")]
-    pub fn signature_key_id(&self) -> Result<Option<String>, Error> {
+    pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
+        let mut signature = Err(Error::NoSignatureFound);
         let rsa_sig = &self
             .metadata
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
         if let Ok(rsa_sig) = rsa_sig {
-            return Ok(Verifier::parse_signature(rsa_sig)?
-                .issuer()
-                .map(hex::encode));
+            signature = Verifier::parse_signature(rsa_sig);
         }
 
         let eddsa_sig = &self
@@ -196,9 +195,7 @@ impl Package {
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
         if let Ok(eddsa_sig) = eddsa_sig {
-            return Ok(Verifier::parse_signature(eddsa_sig)?
-                .issuer()
-                .map(hex::encode));
+            signature = Verifier::parse_signature(eddsa_sig);
         }
 
         let rpm_v3_sig = &self
@@ -206,12 +203,15 @@ impl Package {
             .signature
             .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
         if let Ok(rpm_v3_sig) = rpm_v3_sig {
-            return Ok(Verifier::parse_signature(rpm_v3_sig)?
-                .issuer()
-                .map(hex::encode));
+            signature = Verifier::parse_signature(rpm_v3_sig);
         }
 
-        Ok(None)
+        let key_ids = signature?
+            .issuer()
+            .iter()
+            .map(|x| format!("{:x}", x))
+            .collect();
+        Ok(key_ids)
     }
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
