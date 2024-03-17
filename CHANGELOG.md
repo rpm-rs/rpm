@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Dependency::config()`, `Dependency::user()`, `Dependency::group()`
 - `PackageBuilder::verify_script()`
 - `PackageBuilder::group()` and `PackageBuilder::packager()`
+- `PackageBuilder::with_file_contents()`
 - Added support for the automatic user/group creation feature in rpm 4.19
 
 ### Changed
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Using file capabilities now adds the appropriate rpmlib() dependency
+- RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency
 
 ## 0.13.1
 
