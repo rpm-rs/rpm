@@ -14,7 +14,7 @@ use crate::signature::pgp::Verifier;
 #[cfg(feature = "signature-meta")]
 use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
-use std::{fmt::Debug, io::Read};
+use std::fmt::Debug;
 
 use super::headers::*;
 use super::Lead;
