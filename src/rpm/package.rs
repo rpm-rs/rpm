@@ -696,7 +696,7 @@ impl PackageMetadata {
 
         let sig_header_start = LEAD_SIZE;
         let sig_header_size = self.signature.size();
-        let padding = (8 - (sig_header_size % 8)) % 8; // todo: share padding code
+        let padding = self.signature.padding_required();
 
         let header_start = sig_header_start + sig_header_size + padding;
         let header_size = self.header.size();
