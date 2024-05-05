@@ -334,24 +334,34 @@ impl Header<IndexSignatureTag> {
         SignatureHeaderBuilder::<Empty>::new()
     }
 
+    /// The signature header is aligned to 8 bytes - the rest is filled up with zeroes.
+    ///
+    /// Parsing and writing out this section requires knowing how much padding is needed to complete
+    /// the alignment.
+    pub(crate) fn padding_required(&self) -> u32 {
+        (8 - (self.index_header.data_section_size % 8)) % 8
+    }
+
+    /// Read a signature header from the byte stream
     pub(crate) fn parse_signature(
         input: &mut impl io::BufRead,
     ) -> Result<Header<IndexSignatureTag>, Error> {
-        let result = Self::parse(input)?;
-        // this structure is aligned to 8 bytes - rest is filled up with zeros.
+        let result: Header<IndexSignatureTag> = Self::parse(input)?;
         // if the size of our store is not a modulo of 8, we discard the padding bytes
-        let padding = (8 - (result.index_header.data_section_size % 8)) % 8;
+        let padding = result.padding_required();
         if padding > 0 {
+            // todo: here and below it would be nice to avoid allocating and throwing away the buffer
             let mut discard = vec![0; padding as usize];
             input.read_exact(&mut discard)?;
         }
         Ok(result)
     }
 
+    /// Write a signature header and it's alignment to the writer
     pub(crate) fn write_signature(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
         self.write(out)?;
         // align to 8 bytes
-        let padding_needed = (8 - (self.index_header.data_section_size % 8)) % 8;
+        let padding_needed = self.padding_required();
         if padding_needed > 0 {
             let padding = vec![0; padding_needed as usize];
             out.write_all(&padding)?;
