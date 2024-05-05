@@ -103,21 +103,21 @@ impl Package {
         self.metadata.header.write(&mut header_bytes)?;
 
         let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
-
         let header_signature = signer.sign(header_bytes.as_slice(), t)?;
 
-        let builder = Header::<IndexSignatureTag>::builder().add_digest(&header_digest_sha256);
+        let sig_header_builder =
+            Header::<IndexSignatureTag>::builder().add_digest(&header_digest_sha256);
 
-        let builder = match signer.algorithm() {
+        let sig_header_builder = match signer.algorithm() {
             crate::signature::AlgorithmType::RSA => {
-                builder.add_rsa_signature(header_signature.as_slice())
+                sig_header_builder.add_rsa_signature(&header_signature)
             }
             crate::signature::AlgorithmType::EdDSA => {
-                builder.add_eddsa_signature(header_signature.as_slice())
+                sig_header_builder.add_eddsa_signature(&header_signature)
             }
         };
 
-        self.metadata.signature = builder.build();
+        self.metadata.signature = sig_header_builder.build();
         Ok(())
     }
 

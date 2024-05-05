@@ -593,8 +593,7 @@ impl PackageBuilder {
         header_idx_tag.write(&mut header)?;
 
         let digest_header = {
-            let header = header;
-            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
+            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(header_digest_sha256.as_str())
@@ -612,46 +611,28 @@ impl PackageBuilder {
 
     /// Build the package and sign it with the provided signer
     ///
+    /// If `source_date` was configured, that timestamp will be used during generation of the signature
+    /// rather than the current one - which makes "reproducible builds" easier.
+    ///
     /// See `signature::Signing` for more details.
     #[cfg(feature = "signature-meta")]
     pub fn build_and_sign<S>(self, signer: S) -> Result<Package, Error>
     where
-        S: signature::Signing,
+        S: signature::Signing<Signature = Vec<u8>>,
     {
         let source_date = self.source_date;
-        let (lead, header_idx_tag, content) = self.prepare_data()?;
-
-        let mut header = Vec::with_capacity(128);
-        header_idx_tag.write(&mut header)?;
-        let header = header;
-
         let now = Timestamp::now();
         let signature_timestamp = match source_date {
             Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
             _ => now,
         };
 
-        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
+        // There's a little bit of duplicate work going on - the header is serialized twice, the header
+        // checksum is calculated twice - but the overhead is small enough that it's not worth making
+        // the codepath more complicated
+        let mut pkg = self.build()?;
+        pkg.sign_with_timestamp(signer, signature_timestamp)?;
 
-        let builder =
-            Header::<IndexSignatureTag>::builder().add_digest(header_digest_sha256.as_str());
-
-        let sig_header_only = signer.sign(header.as_slice(), signature_timestamp)?;
-
-        let builder = match signer.algorithm() {
-            signature::AlgorithmType::RSA => builder.add_rsa_signature(sig_header_only.as_ref()),
-            signature::AlgorithmType::EdDSA => {
-                builder.add_eddsa_signature(sig_header_only.as_ref())
-            }
-        };
-
-        let signature_header = builder.build();
-        let metadata = PackageMetadata {
-            lead,
-            signature: signature_header,
-            header: header_idx_tag,
-        };
-        let pkg = Package { metadata, content };
         Ok(pkg)
     }
 
