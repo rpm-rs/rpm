@@ -594,12 +594,11 @@ impl PackageBuilder {
 
         let digest_header = {
             let header = header;
-            let header_and_content_len = header.len() + content.len();
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
 
             Header::<IndexSignatureTag>::builder()
                 .add_digest(header_digest_sha256.as_str())
-                .build(header_and_content_len)
+                .build()
         };
 
         let metadata = PackageMetadata {
@@ -626,8 +625,6 @@ impl PackageBuilder {
         header_idx_tag.write(&mut header)?;
         let header = header;
 
-        let header_and_content_len = header.len() + content.len();
-
         let now = Timestamp::now();
         let signature_timestamp = match source_date {
             Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
@@ -648,7 +645,7 @@ impl PackageBuilder {
             }
         };
 
-        let signature_header = builder.build(header_and_content_len);
+        let signature_header = builder.build();
         let metadata = PackageMetadata {
             lead,
             signature: signature_header,

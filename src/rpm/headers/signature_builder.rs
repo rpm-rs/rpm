@@ -56,21 +56,7 @@ where
     T: ConstructionStage,
 {
     /// Construct the complete signature header.
-    pub fn build(mut self, headers_plus_payload_size: usize) -> Header<IndexSignatureTag> {
-        let entry = match headers_plus_payload_size.try_into() {
-            Ok(size) => IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_SIZE,
-                0i32,
-                IndexData::Int32(vec![size]),
-            ),
-            Err(_) => IndexEntry::new(
-                IndexSignatureTag::RPMSIGTAG_LONGSIZE,
-                0i32,
-                IndexData::Int64(vec![headers_plus_payload_size as u64]),
-            ),
-        };
-        self.entries.insert(0, entry);
-
+    pub fn build(self) -> Header<IndexSignatureTag> {
         Header::<IndexSignatureTag>::from_entries(
             self.entries,
             IndexSignatureTag::HEADER_SIGNATURES,
@@ -141,7 +127,7 @@ mod test {
         let header = builder
             .add_digest(digest_header_sha256.as_str())
             .add_rsa_signature(&sig_header_only[..])
-            .build(32);
+            .build();
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
@@ -160,7 +146,7 @@ mod test {
         let header = builder
             .add_digest(digest_header_sha256.as_str())
             .add_eddsa_signature(&sig_header_only[..])
-            .build(32);
+            .build();
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_DSA)
@@ -174,7 +160,7 @@ mod test {
     fn signature_builder_digest_only() {
         let builder = SignatureHeaderBuilder::<Empty>::new();
         let digest_header_sha256: String = hex::encode([0u8; 64]);
-        let header = builder.add_digest(digest_header_sha256.as_str()).build(32);
+        let header = builder.add_digest(digest_header_sha256.as_str()).build();
 
         assert!(header
             .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
@@ -188,7 +174,6 @@ mod test {
     #[cfg(feature = "signature-meta")]
     #[test]
     fn signature_header_build() {
-        let size: u32 = 209_348;
         let digest_header_sha256 =
             "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
         let sig_header_only: &[u8] = b"111222333444";
@@ -196,11 +181,6 @@ mod test {
         let truth = {
             let offset = 0;
             let entries = vec![
-                IndexEntry::new(
-                    IndexSignatureTag::RPMSIGTAG_SIZE,
-                    offset,
-                    IndexData::Int32(vec![size]),
-                ),
                 IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SHA256,
                     offset,
@@ -218,7 +198,7 @@ mod test {
         let built = Header::<IndexSignatureTag>::builder()
             .add_digest(digest_header_sha256)
             .add_rsa_signature(sig_header_only)
-            .build(size as usize);
+            .build();
 
         assert_eq!(built, truth);
     }

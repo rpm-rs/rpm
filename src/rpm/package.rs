@@ -1,5 +1,5 @@
 use std::{
-    fs, io,
+    fs, io, io::Read,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -97,13 +97,10 @@ impl Package {
         S: signature::Signing<Signature = Vec<u8>>,
     {
         let t = t.try_into().unwrap();
-        // create a temporary byte repr of the header
-        // and re-create all hashes
+        // create a temporary byte repr of the header and re-create all hashes
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
-
-        let header_and_content_len = header_bytes.len() + self.content.len();
 
         let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
 
@@ -120,7 +117,7 @@ impl Package {
             }
         };
 
-        self.metadata.signature = builder.build(header_and_content_len);
+        self.metadata.signature = builder.build();
         Ok(())
     }
 
