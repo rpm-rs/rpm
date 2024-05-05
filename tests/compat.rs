@@ -22,8 +22,8 @@ mod pgp {
         let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
         // TODO: check signatures on all distros?
         [
-            ("fedora:38", &rpm_sig_check),
-            ("fedora:38", &dnf_cmd),
+            ("fedora:40", &rpm_sig_check),
+            ("fedora:40", &dnf_cmd),
             ("centos:stream9", &dnf_cmd),
             ("centos:stream8", &dnf_cmd),
         ]

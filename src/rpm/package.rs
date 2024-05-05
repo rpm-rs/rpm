@@ -1,5 +1,5 @@
 use std::{
-    fs, io, io::Read,
+    fs, io,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -197,6 +197,7 @@ impl Package {
                 "signature_header(header and content)",
                 signature_header_and_content,
             );
+            use io::Read;
             let header_and_content_cursor =
                 io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
             verifier.verify(header_and_content_cursor, signature_header_and_content)?;
