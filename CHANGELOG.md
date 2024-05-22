@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added support for ecdsa signatures
+- Added `Package::files()` for iterating over the files of an RPM package (metadata & contents).
 
 ## 0.16.0
 
