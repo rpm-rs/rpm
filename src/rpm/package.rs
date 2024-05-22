@@ -1,13 +1,15 @@
 use std::{
     fs, io,
+    io::Read,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
+use cpio;
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::{constants::*, errors::*, CompressionType};
+use crate::{constants::*, decompress_stream, errors::*, CompressionType};
 
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
@@ -59,6 +61,21 @@ impl Package {
     /// Write the RPM package to a file
     pub fn write_file(&self, path: impl AsRef<Path>) -> Result<(), Error> {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
+    }
+
+    /// Iterate over the file contents of the package payload
+    pub fn files(&self) -> Result<FileIterator, Error> {
+        let file_entries = self.metadata.get_file_entries()?;
+        let archive = decompress_stream(
+            self.metadata.get_payload_compressor()?,
+            io::Cursor::new(self.content.clone()),
+        )?;
+
+        Ok(FileIterator {
+            file_entries,
+            archive,
+            count: 0,
+        })
     }
 
     /// Create package signatures using an external key and add them to the signature header
@@ -1017,5 +1034,54 @@ impl PackageMetadata {
                 unreachable!()
             }
         }
+    }
+}
+
+pub struct FileIterator<'a> {
+    file_entries: Vec<FileEntry>,
+    archive: Box<dyn io::Read + 'a>,
+    count: usize,
+}
+
+#[derive(Debug)]
+pub struct RpmFile {
+    pub file_entry: FileEntry,
+    pub content: Vec<u8>,
+}
+
+impl<'a> Iterator for FileIterator<'a> {
+    type Item = Result<RpmFile, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count >= self.file_entries.len() {
+            return None;
+        }
+
+        let file_entry = self.file_entries[self.count].clone();
+        self.count += 1;
+
+        let reader = cpio::NewcReader::new(&mut self.archive);
+
+        if let Ok(mut entry_reader) = reader {
+            if entry_reader.entry().is_trailer() {
+                return None;
+            }
+
+            let mut content = Vec::new();
+
+            if let Err(e) = entry_reader.read_to_end(&mut content) {
+                return Some(Err(Error::Io(e)));
+            }
+            if let Err(e) = entry_reader.finish() {
+                return Some(Err(Error::Io(e)));
+            }
+
+            return Some(Ok(RpmFile {
+                file_entry,
+                content,
+            }));
+        }
+
+        Some(Err(reader.map_err(|e| Error::Io(e)).err()?))
     }
 }
