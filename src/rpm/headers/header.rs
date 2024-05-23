@@ -12,7 +12,7 @@ use std::{
 use super::*;
 use crate::{constants::*, errors::*, Timestamp};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Header<T: Tag> {
     pub(crate) index_header: IndexHeader,
     pub(crate) index_entries: Vec<IndexEntry<T>>,
@@ -394,8 +394,8 @@ pub struct FileOwnership {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FileDigest {
-    digest: String,
-    algo: DigestAlgorithm,
+    pub digest: String,
+    pub algo: DigestAlgorithm,
 }
 
 impl FileDigest {
@@ -490,7 +490,7 @@ where
 }
 
 /// A header keeping track of all other header records.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct IndexHeader {
     /// rpm specific magic header
     pub(crate) magic: [u8; 3],
@@ -557,7 +557,7 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: u32,
     pub(crate) data: IndexData,
@@ -660,7 +660,7 @@ impl<T: Tag> fmt::Display for IndexEntry<T> {
 }
 
 /// Data as present in a [`IndexEntry`](self::IndexEntry) .
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IndexData {
     Null,
     Char(Vec<u8>),
