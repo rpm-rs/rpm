@@ -56,7 +56,7 @@ However, it does nothing.",
                 .flags(ScriptletFlags::EXPAND)
                 .prog(vec!["/bin/blah/bash", "-c"]),
         )
-        .post_untrans_script(&String::from("echo postuntrans"))
+        .post_untrans_script(String::from("echo postuntrans"))
         .add_changelog_entry("me", "was awesome, eh?", 1_681_411_811)
         .add_changelog_entry("you", "yeah, it was", 850_984_797)
         .requires(Dependency::any("wget"))
@@ -430,8 +430,8 @@ fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
     let rpm_file_path = rpm_empty_rpm_file_path();
     let package = Package::open(rpm_file_path)?;
 
-    assert_eq!(true, package.metadata.get_file_paths()?.is_empty());
-    assert_eq!(true, package.metadata.get_file_entries()?.is_empty());
+    assert!(package.metadata.get_file_paths()?.is_empty());
+    assert!(package.metadata.get_file_entries()?.is_empty());
 
     Ok(())
 }

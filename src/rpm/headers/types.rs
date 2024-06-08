@@ -771,7 +771,5 @@ echo `hello world`
         assert!(records.len() == 1);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_POSTUN as u32);
         assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
-
-        ()
     }
 }
