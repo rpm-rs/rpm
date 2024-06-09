@@ -54,6 +54,7 @@ hex = { version = "0.4", features = ["std"] }
 zstd = "0.13"
 xz2 = "0.1"
 bzip2 = "0.4.4"
+binrw = "0.14.0"
 
 [dev-dependencies]
 env_logger = "0.11"
