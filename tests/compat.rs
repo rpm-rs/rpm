@@ -25,7 +25,7 @@ mod pgp {
             ("fedora:40", &rpm_sig_check),
             ("fedora:40", &dnf_cmd),
             ("centos:stream9", &dnf_cmd),
-            ("centos:stream8", &dnf_cmd),
+            ("almalinux:8", &dnf_cmd),
         ]
         .iter()
         .try_for_each(|(image, cmd)| {
