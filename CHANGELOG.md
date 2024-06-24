@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.15.0
+
 ### Breaking Changes
 
 - `FileVerifyFlags` member names changed to strip the `VERIFY_` prefix.
+- Minimum supported Rust version updated to 1.74
 
 ### Added
 
