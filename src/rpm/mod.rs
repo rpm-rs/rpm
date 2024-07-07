@@ -4,6 +4,7 @@ mod filecaps;
 mod headers;
 mod package;
 mod timestamp;
+mod payload;
 
 pub mod signature;
 

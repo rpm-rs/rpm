@@ -14,6 +14,7 @@ use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::Lead;
+use super::payload;
 use crate::errors::*;
 use crate::{constants::*, Timestamp};
 
@@ -677,12 +678,17 @@ impl PackageBuilder {
         let mut combined_file_sizes: u64 = 0;
         let mut uses_file_capabilities = false;
 
+        for (_, entry) in self.files.iter() {
+            combined_file_sizes += entry.size;
+        }
+
+        let uses_large_files = combined_file_sizes > u32::MAX.into();
+
         // @todo: sort entries by path?
         // @todo: normalize path?
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
         for (cpio_path, entry) in self.files.iter() {
-            combined_file_sizes += entry.size;
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -723,19 +729,24 @@ impl PackageBuilder {
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(entry.verify_flags.bits());
             let content = entry.content.to_owned();
-            let mut writer = cpio::newc::Builder::new(cpio_path)
-                .mode(entry.mode.into())
-                .ino(ino_index)
-                .uid(self.uid.unwrap_or(0))
-                .gid(self.gid.unwrap_or(0))
-                .write(&mut archive, content.len() as u32);
+            let mut writer = if !uses_large_files {
+                payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, content.len() as u32)
+            } else {
+                payload::Builder::new(cpio_path)
+                    .write_stripped_cpio(&mut archive, content.len() as u32)
+            };
 
             writer.write_all(&content)?;
             writer.finish()?;
 
             ino_index += 1;
         }
-        cpio::newc::trailer(&mut archive)?;
+        payload::trailer(&mut archive)?;
 
         self.provides
             .push(Dependency::eq(self.name.clone(), self.version.clone()));
@@ -762,6 +773,12 @@ impl PackageBuilder {
             self.requires
                 .push(Dependency::rpmlib("FileCaps", "4.6.1-1".to_owned()));
         }
+
+        if uses_large_files {
+            self.requires
+                .push(Dependency::rpmlib("LargeFiles", "4.12.0-1".to_owned()));
+        }
+
         // TODO: as per https://rpm-software-management.github.io/rpm/manual/users_and_groups.html,
         // at some point in the future this might make sense as hard requirements, but since it's a new feature,
         // they have to be weak requirements to avoid breaking things.
@@ -854,7 +871,6 @@ impl PackageBuilder {
         }
 
         let offset = 0;
-        let small_package = combined_file_sizes <= u32::MAX.into();
 
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
@@ -905,7 +921,13 @@ impl PackageBuilder {
                 offset,
                 IndexData::I18NString(vec![self.summary]),
             ),
-            if small_package {
+            if uses_large_files {
+                IndexEntry::new(
+                    IndexTag::RPMTAG_LONGSIZE,
+                    offset,
+                    IndexData::Int64(vec![combined_file_sizes]),
+                )
+            } else {
                 let combined_file_sizes = combined_file_sizes
                     .try_into()
                     .expect("combined_file_sizes should be smaller than 4 GiB");
@@ -913,12 +935,6 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_SIZE,
                     offset,
                     IndexData::Int32(vec![combined_file_sizes]),
-                )
-            } else {
-                IndexEntry::new(
-                    IndexTag::RPMTAG_LONGSIZE,
-                    offset,
-                    IndexData::Int64(vec![combined_file_sizes]),
                 )
             },
             IndexEntry::new(
@@ -976,7 +992,13 @@ impl PackageBuilder {
 
         // if we have an empty RPM, we have to leave out all file related index entries.
         if !self.files.is_empty() {
-            let size_entry = if small_package {
+            let size_entry = if uses_large_files {
+                IndexEntry::new(
+                    IndexTag::RPMTAG_LONGFILESIZES,
+                    offset,
+                    IndexData::Int64(file_sizes),
+                )
+            } else {
                 let file_sizes = file_sizes
                     .into_iter()
                     .map(u32::try_from)
@@ -989,12 +1011,6 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_FILESIZES,
                     offset,
                     IndexData::Int32(file_sizes),
-                )
-            } else {
-                IndexEntry::new(
-                    IndexTag::RPMTAG_LONGFILESIZES,
-                    offset,
-                    IndexData::Int64(file_sizes),
                 )
             };
             actual_records.extend([
