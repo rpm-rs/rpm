@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- The `Header::parse_header` function gained a speed up related to parsing of the binary headers.
+
 ## 0.15.0
 
 ### Breaking Changes
