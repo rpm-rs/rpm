@@ -117,7 +117,7 @@ pub fn validate_caps_text(s: &str) -> Result<(), Error> {
     }
 
     for part in s.split_whitespace() {
-        let index = match part.find(|c| c == '+' || c == '-' || c == '=') {
+        let index = match part.find(['+', '-', '=']) {
             Some(i) => i,
             None => return Err(Error::InvalidFileCaps("`+/-/=` not found".to_owned())),
         };
