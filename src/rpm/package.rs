@@ -770,7 +770,7 @@ impl PackageMetadata {
                         |mut acc, item| {
                             let (basename, dir_index) = item;
                             if let Some(dir) = dirs.get(dir_index as usize) {
-                                acc.push(PathBuf::from(dir).join(basename));
+                                acc.push(Path::new(dir).join(basename));
                                 Ok(acc)
                             } else {
                                 Err(Error::InvalidTagIndex {
