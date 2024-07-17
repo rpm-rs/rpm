@@ -54,13 +54,14 @@ where
         // add data to entries
         for entry in &mut entries {
             let mut remaining = &bytes[entry.offset as usize..];
+
             match &mut entry.data {
                 IndexData::Null => {}
                 IndexData::Char(ref mut chars) => {
-                    parse_entry_data_number(remaining, entry.num_items, chars, be_u8)?;
+                    parse_binary_entry(remaining, entry.num_items, chars, "Char")?;
                 }
                 IndexData::Int8(ref mut ints) => {
-                    parse_entry_data_number(remaining, entry.num_items, ints, be_u8)?;
+                    parse_binary_entry(remaining, entry.num_items, ints, "Int8")?;
                 }
                 IndexData::Int16(ref mut ints) => {
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u16)?;
@@ -76,7 +77,7 @@ where
                     string.push_str(String::from_utf8_lossy(raw_string).as_ref());
                 }
                 IndexData::Bin(ref mut bin) => {
-                    parse_entry_data_number(remaining, entry.num_items, bin, be_u8)?;
+                    parse_binary_entry(remaining, entry.num_items, bin, "Bin")?;
                 }
                 IndexData::StringArray(ref mut strings) => {
                     for _ in 0..entry.num_items {
@@ -480,6 +481,7 @@ where
     E: nom::error::ParseError<&'a [u8]>,
     F: Fn(&'a [u8]) -> nom::IResult<&'a [u8], T, E>,
 {
+    items.reserve_exact(num_items as usize);
     for _ in 0..num_items {
         let (rest, data) = parser(input)?;
         items.push(data);
@@ -487,6 +489,22 @@ where
     }
 
     Ok((input, ()))
+}
+
+fn parse_binary_entry(
+    input: &[u8],
+    num_items: u32,
+    items: &mut Vec<u8>,
+    bin_type: &str,
+) -> Result<(), Error> {
+    let bin_bytes = input.get(..num_items as usize).ok_or_else(|| {
+        Error::Nom(format!(
+            "Insufficient bytes for IndexData::{} entry",
+            bin_type
+        ))
+    })?;
+    items.extend_from_slice(bin_bytes);
+    Ok(())
 }
 
 /// A header keeping track of all other header records.
