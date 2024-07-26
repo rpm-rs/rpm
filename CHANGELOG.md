@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The `Header::parse_header` function gained a speed up related to parsing of the binary headers.
 - Added `zstdmt` feature which sets zstd compression to use all available cores.
 - Added feature flags for every compression algorithm to support disabling unused ones.
 
@@ -17,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Changed default compression scheme from Gzip to Zstd.
 - Removed bzip2 from the compression options enabled by default.
+
+## 0.15.1
+
+### Changed
+
+- The `Header::parse_header` function gained a speed up related to parsing of the binary headers.
 
 ## 0.15.0
 
