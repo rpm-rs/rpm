@@ -70,3 +70,5 @@ signature-meta = []
 
 # Segregate tests that require podman to be installed
 test-with-podman = ["signature-pgp"]
+
+zstdmt = ["zstd/zstdmt"]
