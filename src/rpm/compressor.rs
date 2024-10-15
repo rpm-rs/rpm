@@ -29,6 +29,8 @@ impl std::str::FromStr for CompressionType {
 pub enum Compressor {
     None(Vec<u8>),
     Gzip(flate2::write::GzEncoder<Vec<u8>>),
+    /// If the `zstdmt` feature flag is enabled, compression will use all available cores to
+    /// compress the file.
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
     Xz(xz2::write::XzEncoder<Vec<u8>>),
     Bzip2(bzip2::write::BzEncoder<Vec<u8>>),
@@ -43,10 +45,19 @@ impl TryFrom<CompressionWithLevel> for Compressor {
             CompressionWithLevel::Gzip(level) => Ok(Compressor::Gzip(
                 flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(level)),
             )),
-            CompressionWithLevel::Zstd(level) => Ok(Compressor::Zstd(zstd::stream::Encoder::new(
-                Vec::new(),
-                level,
-            )?)),
+            CompressionWithLevel::Zstd(level) => {
+                #[cfg_attr(not(feature = "zstdmt"), allow(unused_mut))]
+                let mut stream = zstd::stream::Encoder::new(Vec::new(), level)?;
+
+                #[cfg(feature = "zstdmt")]
+                {
+                    let threads = std::thread::available_parallelism()?;
+                    // If someone has more than 2^32 threads, I'm impressed
+                    stream.multithread(threads.get() as u32)?;
+                }
+
+                Ok(Compressor::Zstd(stream))
+            }
             CompressionWithLevel::Xz(level) => Ok(Compressor::Xz(xz2::write::XzEncoder::new(
                 Vec::new(),
                 level,

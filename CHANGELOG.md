@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The `Header::parse_header` function gained a speed up related to parsing of the binary headers.
+- Added `zstdmt` feature which sets zstd compression to use all available cores.
 
 ## 0.15.0
 
