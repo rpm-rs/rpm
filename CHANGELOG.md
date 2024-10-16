@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - Changed default compression scheme from Gzip to Zstd.
+- Removed bzip2 from the compression options enabled by default.
 
 ## 0.15.0
 
