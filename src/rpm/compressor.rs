@@ -156,11 +156,11 @@ impl Default for CompressionWithLevel {
     // reasonable tradeoff.
     #[allow(unreachable_code)]
     fn default() -> Self {
-        #[cfg(feature = "gzip-compression")]
-        return CompressionType::Gzip.into();
-
         #[cfg(feature = "zstd-compression")]
         return CompressionType::Zstd.into();
+
+        #[cfg(feature = "gzip-compression")]
+        return CompressionType::Gzip.into();
 
         #[cfg(feature = "xz-compression")]
         return CompressionType::Xz.into();
