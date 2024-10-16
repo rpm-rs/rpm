@@ -41,7 +41,7 @@ num = "0.4"
 enum-primitive-derive = "0.3"
 enum-display-derive = "0.1"
 cpio = "0.4"
-flate2 = "1"
+flate2 = { version = "1", optional = true }
 digest = "0.10"
 sha2 = "0.10"
 md-5 = "0.10"
@@ -51,9 +51,9 @@ chrono = { version = "0.4", optional = true }
 log = "0.4"
 itertools = "0.13"
 hex = { version = "0.4", features = ["std"] }
-zstd = "0.13"
-xz2 = "0.1"
-bzip2 = "0.4.4"
+zstd = { version = "0.13", optional = true }
+xz2 = { version = "0.1", optional = true }
+bzip2 = { version = "0.4.4", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"
@@ -63,7 +63,18 @@ gethostname = "0.5"
 hex-literal = "0.4"
 
 [features]
-default = ["signature-pgp"]
+default = [
+    "signature-pgp",
+    "gzip-compression",
+    "zstd-compression",
+    "xz-compression",
+    "bzip2-compression"
+]
+
+gzip-compression = ["flate2"]
+zstd-compression = ["zstd"]
+xz-compression = ["xz2"]
+bzip2-compression = ["bzip2"]
 
 signature-pgp = ["signature-meta", "pgp", "chrono"]
 signature-meta = []
@@ -71,4 +82,4 @@ signature-meta = []
 # Segregate tests that require podman to be installed
 test-with-podman = ["signature-pgp"]
 
-zstdmt = ["zstd/zstdmt"]
+zstdmt = ["zstd-compression", "zstd/zstdmt"]

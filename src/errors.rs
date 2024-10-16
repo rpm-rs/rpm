@@ -94,6 +94,9 @@ pub enum Error {
     #[error("unknown compressor type {0} - supported types: gzip, zstd, xz, bzip2 and none")]
     UnknownCompressorType(String),
 
+    #[error("unsupported compressor type {0} - try enabling the feature flag for it")]
+    UnsupportedCompressorType(String),
+
     #[error("unsupported digest algorithm {0:?}")]
     UnsupportedDigestAlgorithm(DigestAlgorithm),
 
