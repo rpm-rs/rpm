@@ -61,6 +61,12 @@ impl Package {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
+    /// Iterate over the file contents of the package payload
+    pub fn files(&self) -> Iterator<Item = FileEntry> {
+        let file_entries = self.get_file_entries();
+
+    }
+
     /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), Error>
