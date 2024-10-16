@@ -165,9 +165,6 @@ impl Default for CompressionWithLevel {
         #[cfg(feature = "xz-compression")]
         return CompressionType::Xz.into();
 
-        #[cfg(feature = "bzip2-compression")]
-        return CompressionType::Bzip2.into();
-
         CompressionType::None.into()
     }
 }

@@ -68,7 +68,6 @@ default = [
     "gzip-compression",
     "zstd-compression",
     "xz-compression",
-    "bzip2-compression"
 ]
 
 gzip-compression = ["flate2"]
