@@ -3,6 +3,9 @@
 //! A library providing API to parse rpms as well as
 //! creating rpms from individual files.
 //!
+//! All supported compression types are behind feature flags which are enabled by default. They can
+//! be disable if these compression algorithms are unused.
+//!
 //! # Example
 //!
 //! ```
