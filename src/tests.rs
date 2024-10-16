@@ -19,6 +19,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 
 #[test]
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg_attr(not(feature = "gzip-compression"), allow(unused_variables, unused_mut))]
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
 
     let pkg = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -63,69 +64,84 @@ However, it does nothing.",
         .vendor("dummy vendor")
         .url("dummy url")
         .vcs("dummy vcs")
-        .build()?;
+        .build();
 
-    pkg.write(&mut buff)?;
+    #[cfg(not(feature = "gzip-compression"))]
+    {
+        let Err(crate::Error::UnsupportedCompressorType(error)) = pkg else {
+            unreachable!();
+        };
 
-    // check that generated packages has source rpm tag
-    // to be more compatibly recognized as RPM binary packages
-    pkg.metadata.get_source_rpm()?;
+        assert_eq!(error, "gzip, compression level 9");
+        Ok(())
+    }
 
-    pkg.verify_digests()?;
+    #[cfg(feature = "gzip-compression")]
+    {
+        let pkg = pkg?;
 
-    // check various metadata on the files
-    pkg.metadata.get_file_entries()?.iter().for_each(|f| {
-        if f.path.as_os_str() == "/etc/awesome/second.toml" {
-            assert_eq!(
-                f.clone().caps.unwrap(),
-                "cap_sys_admin,cap_sys_ptrace=pe".to_string()
-            );
-            assert_eq!(f.ownership.user, "hugo".to_string());
-        } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
-            assert_eq!(f.caps, Some("".to_string()));
-            assert_eq!(f.flags, FileFlags::CONFIG | FileFlags::NOREPLACE);
-        } else if f.path.as_os_str() == "/usr/bin/awesome" {
-            assert_eq!(f.mode, FileMode::from(0o100644));
-        } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
-            assert_eq!(f.mode, FileMode::from(0o120644));
-        }
-    });
+        pkg.write(&mut buff)?;
 
-    // Test scriptlet builder fn branches
-    let preinst = pkg.metadata.get_pre_install_script()?;
-    assert_eq!(preinst.script.as_str(), "echo preinst");
-    assert!(preinst.flags.is_none());
-    assert!(preinst.program.is_none());
+        // check that generated packages has source rpm tag
+        // to be more compatibly recognized as RPM binary packages
+        pkg.metadata.get_source_rpm()?;
 
-    let postinst = pkg.metadata.get_post_install_script()?;
-    assert_eq!(postinst.script.as_str(), "echo postinst");
-    assert!(postinst.flags.is_none());
-    assert_eq!(
-        postinst.program,
-        Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
-    );
+        pkg.verify_digests()?;
 
-    let pretrans = pkg.metadata.get_pre_trans_script()?;
-    assert_eq!(pretrans.script.as_str(), "echo pretrans");
-    assert_eq!(pretrans.flags, Some(ScriptletFlags::EXPAND));
-    assert!(pretrans.program.is_none());
+        // check various metadata on the files
+        pkg.metadata.get_file_entries()?.iter().for_each(|f| {
+            if f.path.as_os_str() == "/etc/awesome/second.toml" {
+                assert_eq!(
+                    f.clone().caps.unwrap(),
+                    "cap_sys_admin,cap_sys_ptrace=pe".to_string()
+                );
+                assert_eq!(f.ownership.user, "hugo".to_string());
+            } else if f.path.as_os_str() == "/etc/awesome/config.toml" {
+                assert_eq!(f.caps, Some("".to_string()));
+                assert_eq!(f.flags, FileFlags::CONFIG | FileFlags::NOREPLACE);
+            } else if f.path.as_os_str() == "/usr/bin/awesome" {
+                assert_eq!(f.mode, FileMode::from(0o100644));
+            } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
+                assert_eq!(f.mode, FileMode::from(0o120644));
+            }
+        });
 
-    let posttrans = pkg.metadata.get_post_trans_script()?;
-    assert_eq!(posttrans.script.as_str(), "echo posttrans");
-    assert_eq!(posttrans.flags, Some(ScriptletFlags::EXPAND));
-    assert_eq!(
-        posttrans.program,
-        Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
-    );
+        // Test scriptlet builder fn branches
+        let preinst = pkg.metadata.get_pre_install_script()?;
+        assert_eq!(preinst.script.as_str(), "echo preinst");
+        assert!(preinst.flags.is_none());
+        assert!(preinst.program.is_none());
 
-    let postuntrans = pkg.metadata.get_post_untrans_script()?;
-    assert_eq!(postuntrans.script.as_str(), "echo postuntrans");
-    assert!(postuntrans.flags.is_none());
-    assert!(postuntrans.program.is_none());
+        let postinst = pkg.metadata.get_post_install_script()?;
+        assert_eq!(postinst.script.as_str(), "echo postinst");
+        assert!(postinst.flags.is_none());
+        assert_eq!(
+            postinst.program,
+            Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
+        );
 
-    assert!(pkg.metadata.get_pre_untrans_script().is_err());
+        let pretrans = pkg.metadata.get_pre_trans_script()?;
+        assert_eq!(pretrans.script.as_str(), "echo pretrans");
+        assert_eq!(pretrans.flags, Some(ScriptletFlags::EXPAND));
+        assert!(pretrans.program.is_none());
 
-    Ok(())
+        let posttrans = pkg.metadata.get_post_trans_script()?;
+        assert_eq!(posttrans.script.as_str(), "echo posttrans");
+        assert_eq!(posttrans.flags, Some(ScriptletFlags::EXPAND));
+        assert_eq!(
+            posttrans.program,
+            Some(vec!["/bin/blah/bash".to_string(), "-c".to_string()])
+        );
+
+        let postuntrans = pkg.metadata.get_post_untrans_script()?;
+        assert_eq!(postuntrans.script.as_str(), "echo postuntrans");
+        assert!(postuntrans.flags.is_none());
+        assert!(postuntrans.program.is_none());
+
+        assert!(pkg.metadata.get_pre_untrans_script().is_err());
+
+        Ok(())
+    }
 }
 
 #[test]
