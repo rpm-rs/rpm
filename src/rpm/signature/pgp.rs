@@ -6,8 +6,8 @@ use std::io;
 
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::public_key::PublicKeyAlgorithm;
-use pgp::packet::{SignatureConfig, SignatureType, SignatureVersion, Subpacket, SubpacketData};
-use pgp::{self, composed::Deserializable, types::KeyTrait};
+use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
+use pgp::{self, composed::Deserializable, types::PublicKeyTrait};
 use pgp::{SignedPublicKey, SignedSecretKey};
 
 /// Signer implementation using the `pgp` crate.
@@ -26,7 +26,7 @@ impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorit
     fn from(value: traits::AlgorithmType) -> Self {
         match value {
             traits::AlgorithmType::RSA => PublicKeyAlgorithm::RSA,
-            traits::AlgorithmType::EdDSA => PublicKeyAlgorithm::EdDSA,
+            traits::AlgorithmType::EdDSA => PublicKeyAlgorithm::EdDSALegacy,
         }
     }
 }
@@ -45,20 +45,20 @@ impl traits::Signing for Signer {
             // "shouldn't fail as we are using 0 nanoseconds"
             .unwrap();
 
-        let sig_cfg = SignatureConfig {
-            version: SignatureVersion::V4,
-            typ: SignatureType::Binary,
-            pub_alg: self.algorithm().into(),
-            hash_alg: HashAlgorithm::SHA2_256,
-            issuer: Some(self.secret_key.key_id()),
-            created: Some(t),
-            unhashed_subpackets: vec![],
-            hashed_subpackets: vec![
-                Subpacket::critical(SubpacketData::SignatureCreationTime(t)),
-                Subpacket::critical(SubpacketData::Issuer(self.secret_key.key_id())),
-                //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
-            ],
-        };
+        let mut sig_cfg = SignatureConfig::v4(
+            SignatureType::Binary,
+            self.algorithm().into(),
+            HashAlgorithm::SHA2_256,
+        );
+        sig_cfg
+            .hashed_subpackets
+            .push(Subpacket::critical(SubpacketData::SignatureCreationTime(t)));
+        sig_cfg
+            .hashed_subpackets
+            .push(Subpacket::critical(SubpacketData::Issuer(
+                self.secret_key.key_id(),
+            )));
+        //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
 
         let passwd_fn = || self.key_passphrase.clone().unwrap_or_default();
         let signature_packet = sig_cfg
@@ -94,7 +94,7 @@ impl Signer {
                 algorithm: AlgorithmType::RSA,
                 key_passphrase: None,
             }),
-            PublicKeyAlgorithm::EdDSA => Ok(Self {
+            PublicKeyAlgorithm::EdDSALegacy => Ok(Self {
                 secret_key,
                 algorithm: AlgorithmType::EdDSA,
                 key_passphrase: None,
@@ -243,7 +243,7 @@ impl Verifier {
                 public_key,
                 algorithm: AlgorithmType::RSA,
             }),
-            PublicKeyAlgorithm::EdDSA => Ok(Self {
+            PublicKeyAlgorithm::EdDSALegacy => Ok(Self {
                 public_key,
                 algorithm: AlgorithmType::EdDSA,
             }),
@@ -341,9 +341,8 @@ pub(crate) mod test {
         let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
         // stage 2: check parsing success
         //
-        let wrapped = Signature::new(
+        let wrapped = Signature::v4(
             pgp::types::Version::Old,
-            SignatureVersion::V4,
             SignatureType::Binary,
             PublicKeyAlgorithm::RSA,
             HashAlgorithm::SHA2_256,
@@ -385,20 +384,22 @@ pub(crate) mod test {
 
         let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
 
-        let sig_cfg = SignatureConfig {
-            version: SignatureVersion::V4,
-            typ: SignatureType::Binary,
-            pub_alg: PublicKeyAlgorithm::RSA,
-            hash_alg: HashAlgorithm::SHA2_256,
-            issuer: Some(signer.secret_key.key_id()),
-            created: Some(sig_time),
-            unhashed_subpackets: vec![],
-            hashed_subpackets: vec![
-                Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
-                Subpacket::critical(SubpacketData::Issuer(signer.secret_key.key_id())),
-                //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
-            ],
-        };
+        let mut sig_cfg = SignatureConfig::v4(
+            SignatureType::Binary,
+            PublicKeyAlgorithm::RSA,
+            HashAlgorithm::SHA2_256,
+        );
+        sig_cfg
+            .hashed_subpackets
+            .push(Subpacket::critical(SubpacketData::SignatureCreationTime(
+                sig_time,
+            )));
+        sig_cfg
+            .hashed_subpackets
+            .push(Subpacket::critical(SubpacketData::Issuer(
+                signer.secret_key.key_id(),
+            )));
+        //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
 
         let signature_packet = sig_cfg
             .sign(&signer.secret_key, passwd_fn, data)
