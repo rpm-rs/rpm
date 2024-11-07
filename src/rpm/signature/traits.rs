@@ -11,6 +11,7 @@ use std::io;
 #[derive(Clone, Copy, Debug)]
 pub enum AlgorithmType {
     RSA,
+    ECDSA,
     EdDSA,
 }
 

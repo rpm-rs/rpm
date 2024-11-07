@@ -31,6 +31,7 @@ impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorit
         match value {
             traits::AlgorithmType::RSA => PublicKeyAlgorithm::RSA,
             traits::AlgorithmType::EdDSA => PublicKeyAlgorithm::EdDSALegacy,
+            traits::AlgorithmType::ECDSA => PublicKeyAlgorithm::ECDSA,
         }
     }
 }
@@ -98,6 +99,11 @@ where
             PublicKeyAlgorithm::EdDSALegacy => Ok(Self {
                 secret_key: inner,
                 algorithm: AlgorithmType::EdDSA,
+                key_passphrase: None,
+            }),
+            PublicKeyAlgorithm::ECDSA => Ok(Self {
+                secret_key: inner,
+                algorithm: AlgorithmType::ECDSA,
                 key_passphrase: None,
             }),
             algorithm => Err(Error::UnsupportedPGPKeyType(algorithm)),
@@ -262,6 +268,10 @@ impl Verifier {
             PublicKeyAlgorithm::EdDSALegacy => Ok(Self {
                 public_key,
                 algorithm: AlgorithmType::EdDSA,
+            }),
+            PublicKeyAlgorithm::ECDSA => Ok(Self {
+                public_key,
+                algorithm: AlgorithmType::ECDSA,
             }),
             a => Err(Error::UnsupportedPGPKeyType(a)),
         }
