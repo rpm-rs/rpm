@@ -24,7 +24,7 @@ mod pgp {
         [
             ("fedora:40", &rpm_sig_check),
             ("fedora:40", &dnf_cmd),
-            ("centos:stream9", &dnf_cmd),
+            ("quay.io/centos/centos:stream9", &dnf_cmd),
             ("almalinux:8", &dnf_cmd),
         ]
         .iter()
