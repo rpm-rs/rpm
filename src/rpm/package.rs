@@ -115,6 +115,9 @@ impl Package {
             crate::signature::AlgorithmType::EdDSA => {
                 sig_header_builder.add_eddsa_signature(&header_signature)
             }
+            crate::signature::AlgorithmType::ECDSA => {
+                sig_header_builder.add_ecdsa_signature(&header_signature)
+            }
         };
 
         self.metadata.signature = sig_header_builder.build();

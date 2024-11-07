@@ -113,6 +113,22 @@ impl SignatureHeaderBuilder<WithDigest> {
             phantom: Default::default(),
         }
     }
+
+    pub fn add_ecdsa_signature(
+        mut self,
+        sig_header_only: &[u8],
+    ) -> SignatureHeaderBuilder<WithSignature> {
+        let offset = 0i32; // filled externally later on
+        self.entries.push(IndexEntry::new(
+            IndexSignatureTag::RPMSIGTAG_DSA,
+            offset,
+            IndexData::Bin(sig_header_only.to_vec()),
+        ));
+        SignatureHeaderBuilder::<WithSignature> {
+            entries: self.entries,
+            phantom: Default::default(),
+        }
+    }
 }
 
 #[cfg(test)]

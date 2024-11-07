@@ -42,6 +42,16 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
         None,
         &verification_key,
         "eddsa_resigned_pkg.rpm",
+    )?;
+
+    // test ECDSA
+    let (signing_key, verification_key) = common::load_ecdsa_keys();
+    resign_and_verify_with_keys(
+        pkg_path.as_ref(),
+        &signing_key,
+        None,
+        &verification_key,
+        "ecdsa_resigned_pkg.rpm",
     )
 }
 
@@ -58,6 +68,10 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     // test EdDSA
     let (signing_key, verification_key) = common::load_eddsa_keys();
     build_parse_sign_and_verify(&signing_key, &verification_key, "eddsa_signed_pkg.rpm")?;
+
+    // test ECDSA
+    let (signing_key, verification_key) = common::load_ecdsa_keys();
+    build_parse_sign_and_verify(&signing_key, &verification_key, "ecdsa_signed_pkg.rpm")?;
 
     Ok(())
 }
@@ -77,6 +91,14 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
 
     // test EdDSA
     let verification_key = common::eddsa_public_key();
+    let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+    assert!(matches!(
+        pkg.verify_signature(verifier),
+        Err(rpm::Error::NoSignatureFound)
+    ));
+
+    // test ECDSA
+    let verification_key = common::ecdsa_public_key();
     let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
     assert!(matches!(
         pkg.verify_signature(verifier),
