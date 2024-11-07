@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Changed
+### Added
 
 - Added `zstdmt` feature which sets zstd compression to use all available cores.
 - Added feature flags for every compression algorithm to support disabling unused ones.
+- Added support for signing with a key held in an HSM
+
+### Changed
+
 - Bump `pgp` to 0.14.0
 
 ### Breaking Changes
