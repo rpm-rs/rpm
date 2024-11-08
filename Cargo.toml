@@ -1,6 +1,6 @@
 [package]
 name = "rpm"
-version = "0.15.1"
+version = "0.16.0"
 authors = [
   "René Richter <richterrettich@gmail.com>",
   "Bernhard Schuster <bernhard@ahoi.io>",
@@ -33,7 +33,7 @@ path = "tests/signatures.rs"
 
 [dependencies]
 bitflags = "2"
-thiserror = "1"
+thiserror = "2"
 nom = "7"
 num-traits = "0.2"
 num-derive = "0.4"
