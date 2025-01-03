@@ -108,6 +108,43 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test an attempt to verify the signature of a package that is not signed
+#[test]
+fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
+    fn sign_clear_and_verify(signing_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        let unsigned_pkg = rpm::PackageBuilder::new(
+            "roundtrip",
+            "1.0.0",
+            "MIT",
+            "x86_64",
+            "spins round and round",
+        )
+        .build()?;
+
+        let cleared_pkg = {
+            let mut pkg = unsigned_pkg.clone();
+            let signer: Signer = Signer::load_from_asc_bytes(signing_key)?;
+            pkg.sign(signer)?;
+            pkg.clear_signatures()?;
+            pkg
+        };
+
+        cleared_pkg.verify_digests()?;
+        assert_eq!(
+            cleared_pkg.metadata.signature,
+            unsigned_pkg.metadata.signature
+        );
+
+        Ok(())
+    }
+
+    sign_clear_and_verify(&common::eddsa_private_key())?;
+    sign_clear_and_verify(&common::ecdsa_private_key())?;
+    sign_clear_and_verify(&common::rsa_private_key())?;
+
+    Ok(())
+}
+
 /// Test an attempt to verify the signature of a package using the wrong key type
 #[test]
 fn test_verify_package_with_wrong_key_type() -> Result<(), Box<dyn std::error::Error>> {

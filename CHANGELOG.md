@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added support for ecdsa signatures
 - Added `Package::files()` for iterating over the files of an RPM package (metadata & contents).
-- Added `Package::extract()` for extracting the archive contents of an RPM package to a directory on disk
+- Added `Package::extract()` for extracting the archive contents of an RPM package to a directory on disk.
+- Added `Package::clear_signatures()` for removing signatures from an existing package.
 
 ### Changed
 
