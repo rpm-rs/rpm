@@ -593,7 +593,7 @@ impl PackageBuilder {
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
 
-        let digest_header = {
+        let sig_header = {
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
 
             Header::<IndexSignatureTag>::builder()
@@ -603,9 +603,10 @@ impl PackageBuilder {
 
         let metadata = PackageMetadata {
             lead,
-            signature: digest_header,
+            signature: sig_header,
             header: header_idx_tag,
         };
+
         let pkg = Package { metadata, content };
         Ok(pkg)
     }
