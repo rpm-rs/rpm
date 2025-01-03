@@ -25,7 +25,7 @@ use super::Lead;
 ///
 /// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
 /// or used with [`parse`](`self::Package::parse`) to obtain from a file.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Package {
     /// Header and metadata structures.
     ///
@@ -155,6 +155,22 @@ impl Package {
                 _ => unreachable!("Encountered an unknown or invalid FileMode"),
             }
         }
+
+        Ok(())
+    }
+
+    // TODO: this should perhaps modify the header in-place instead?
+    /// Generate a fresh, unsigned signature header
+    #[cfg(feature = "signature-meta")]
+    pub fn clear_signatures(&mut self) -> Result<(), Error> {
+        // create a temporary byte repr of the header and re-create all hashes
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        // make sure to not hash any previous signatures in the header
+        self.metadata.header.write(&mut header_bytes)?;
+        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
+        let sig_header_builder =
+            Header::<IndexSignatureTag>::builder().add_digest(&header_digest_sha256);
+        self.metadata.signature = sig_header_builder.build();
 
         Ok(())
     }
@@ -396,7 +412,7 @@ impl Package {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PackageMetadata {
     pub lead: Lead,
     pub signature: Header<IndexSignatureTag>,

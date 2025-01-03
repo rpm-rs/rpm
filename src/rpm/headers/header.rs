@@ -12,7 +12,7 @@ use std::{
 use super::*;
 use crate::{constants::*, errors::*, Timestamp};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Header<T: Tag> {
     pub(crate) index_header: IndexHeader,
     pub(crate) index_entries: Vec<IndexEntry<T>>,
@@ -331,8 +331,26 @@ impl fmt::Display for Header<IndexTag> {
 }
 
 impl Header<IndexSignatureTag> {
+    /// Just easy access to the builder
     pub fn builder() -> SignatureHeaderBuilder<Empty> {
         SignatureHeaderBuilder::<Empty>::new()
+    }
+
+    /// Construct a new empty signature header
+    pub fn new_empty() -> Self {
+        Self {
+            index_header: IndexHeader::new(0, 0),
+            index_entries: vec![],
+            store: vec![],
+        }
+    }
+
+    /// Clear out the signature header entries
+    pub fn clear(&mut self) {
+        self.index_entries.clear();
+        self.index_header.data_section_size = 0;
+        self.index_header.num_entries = 0;
+        self.store.clear()
     }
 
     /// The signature header is aligned to 8 bytes - the rest is filled up with zeroes.
@@ -368,21 +386,6 @@ impl Header<IndexSignatureTag> {
             out.write_all(&padding)?;
         }
         Ok(())
-    }
-
-    pub fn new_empty() -> Self {
-        Self {
-            index_header: IndexHeader::new(0, 0),
-            index_entries: vec![],
-            store: vec![],
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.index_entries.clear();
-        self.index_header.data_section_size = 0;
-        self.index_header.num_entries = 0;
-        self.store.clear()
     }
 }
 
@@ -508,7 +511,7 @@ fn parse_binary_entry(
 }
 
 /// A header keeping track of all other header records.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct IndexHeader {
     /// rpm specific magic header
     pub(crate) magic: [u8; 3],
@@ -575,7 +578,7 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: u32,
     pub(crate) data: IndexData,
@@ -678,7 +681,7 @@ impl<T: Tag> fmt::Display for IndexEntry<T> {
 }
 
 /// Data as present in a [`IndexEntry`](self::IndexEntry) .
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IndexData {
     Null,
     Char(Vec<u8>),
