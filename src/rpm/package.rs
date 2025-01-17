@@ -1,6 +1,7 @@
 use std::{
-    fs, io,
-    io::Read,
+    fs,
+    io::{self, Read, Write},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -75,6 +76,59 @@ impl Package {
             archive,
             count: 0,
         })
+    }
+
+    /// Extract all contents of the package payload to a given directory
+    pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
+        fs::create_dir_all(&dest)?;
+
+        let dirs = self
+            .metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
+
+        // pull every base directory name in the package and create the directory in advancec
+        for dir in dirs {
+            let dir_path = dest
+                .as_ref()
+                .join(Path::new(dir).strip_prefix("/").unwrap_or(dest.as_ref()));
+            fs::create_dir_all(&dir_path)?;
+        }
+
+        // TODO: reduce memory by replacing this with an impl that writes the files immediately after reading them from the archive
+        // instead of reading each file entirely into memory (while the archive is also entirely in memory) before writing them
+        for file in self.files()? {
+            let file = file?;
+            let file_path = dest.as_ref().join(
+                file.metadata
+                    .path
+                    .strip_prefix("/")
+                    .unwrap_or(dest.as_ref()),
+            );
+
+            let perms = fs::Permissions::from_mode(file.metadata.mode.permissions().into());
+            match file.metadata.mode {
+                FileMode::Dir { .. } => {
+                    fs::create_dir_all(&file_path)?;
+                    fs::set_permissions(&file_path, perms)?;
+                }
+                FileMode::Regular { .. } => {
+                    let mut f = fs::File::create(&file_path)?;
+                    f.write_all(&file.content)?;
+                    fs::set_permissions(&file_path, perms)?;
+                }
+                FileMode::SymbolicLink { .. } => {
+                    // broken symlinks (common for debuginfo handling) are perceived as not existing by "exists()"
+                    if file_path.exists() || file_path.symlink_metadata().is_ok() {
+                        fs::remove_file(&file_path)?;
+                    }
+                    std::os::unix::fs::symlink(&file.metadata.linkto, &file_path)?;
+                }
+                _ => unreachable!("Encountered an unknown or invalid FileMode"),
+            }
+        }
+
+        Ok(())
     }
 
     /// Create package signatures using an external key and add them to the signature header
@@ -1044,7 +1098,7 @@ pub struct FileIterator<'a> {
 
 #[derive(Debug)]
 pub struct RpmFile {
-    pub file_entry: FileEntry,
+    pub metadata: FileEntry,
     pub content: Vec<u8>,
 }
 
@@ -1077,7 +1131,7 @@ impl Iterator for FileIterator<'_> {
                 }
 
                 Some(Ok(RpmFile {
-                    file_entry,
+                    metadata: file_entry,
                     content,
                 }))
             }
