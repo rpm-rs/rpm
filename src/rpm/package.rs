@@ -64,6 +64,19 @@ impl Package {
     }
 
     /// Iterate over the file contents of the package payload
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let package = rpm::Package::open("test_assets/freesrp-udev-0.3.0-1.25.x86_64.rpm")?;
+    /// for entry in package.files()? {
+    ///     let file = entry?;
+    ///     // do something with file.content
+    ///     println!("{} is {} bytes", file.metadata.path.display(), file.content.len());
+    /// }
+    /// # Ok(()) }
+    /// ```
     pub fn files(&self) -> Result<FileIterator, Error> {
         let file_entries = self.metadata.get_file_entries()?;
         let archive = decompress_stream(
@@ -78,16 +91,31 @@ impl Package {
         })
     }
 
-    /// Extract all contents of the package payload to a given directory
+    /// Extract all contents of the package payload to a given directory.
+    ///
+    /// # Implementation
+    ///
+    /// The if the directory is nested, its parent directories must already exist. If the
+    /// directory itself already exists, the operation will fail. All extracted files will be
+    /// dropped relative to the provided directory (it will not install any files).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// package.extract(&package.metadata.get_name()?)?;
+    /// # Ok(()) }
+    /// ```
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
-        fs::create_dir_all(&dest)?;
+        fs::create_dir(&dest)?;
 
         let dirs = self
             .metadata
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
 
-        // pull every base directory name in the package and create the directory in advancec
+        // pull every base directory name in the package and create the directory in advance
         for dir in dirs {
             let dir_path = dest
                 .as_ref()
@@ -147,6 +175,7 @@ impl Package {
     /// prefer using the [`sign`][Package::sign] method instead.
     ///
     /// # Examples
+    ///
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut package = rpm::Package::open("test_assets/ima_signed.rpm")?;
@@ -270,7 +299,6 @@ impl Package {
                 "signature_header(header and content)",
                 signature_header_and_content,
             );
-            use io::Read;
             let header_and_content_cursor =
                 io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
             verifier.verify(header_and_content_cursor, signature_header_and_content)?;
@@ -813,6 +841,17 @@ impl PackageMetadata {
     }
 
     /// Extract a the set of contained file names.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// for path in package.metadata.get_file_paths()? {
+    ///     println!("{}", path.display());
+    /// }
+    /// # Ok(()) }
+    /// ```
     pub fn get_file_paths(&self) -> Result<Vec<PathBuf>, Error> {
         // reconstruct the messy de-constructed paths
         let basenames = self
@@ -880,7 +919,18 @@ impl PackageMetadata {
             })
     }
 
-    /// Extract a the set of contained file names including the additional metadata.
+    /// Get a list of metadata about the files in the RPM, without the file contents.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// for entry in package.metadata.get_file_entries()? {
+    ///     println!("{} is {} bytes", entry.path.display(), entry.size);
+    /// }
+    /// # Ok(()) }
+    /// ```
     pub fn get_file_entries(&self) -> Result<Vec<FileEntry>, Error> {
         // rpm does not encode it, if it is the default md5
         let algorithm = self
