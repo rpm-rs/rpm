@@ -34,7 +34,7 @@ path = "tests/signatures.rs"
 [dependencies]
 bitflags = "2"
 thiserror = "2"
-nom = "7"
+nom = "8"
 num-traits = "0.2"
 num-derive = "0.4"
 num = "0.4"
