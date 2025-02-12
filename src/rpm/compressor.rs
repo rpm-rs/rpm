@@ -47,7 +47,7 @@ pub enum Compressor {
     #[cfg(feature = "zstd-compression")]
     Zstd(zstd::stream::Encoder<'static, Vec<u8>>),
     #[cfg(feature = "xz-compression")]
-    Xz(xz2::write::XzEncoder<Vec<u8>>),
+    Xz(liblzma::write::XzEncoder<Vec<u8>>),
     #[cfg(feature = "bzip2-compression")]
     Bzip2(bzip2::write::BzEncoder<Vec<u8>>),
 }
@@ -77,7 +77,7 @@ impl TryFrom<CompressionWithLevel> for Compressor {
                 Ok(Compressor::Zstd(stream))
             }
             #[cfg(feature = "xz-compression")]
-            CompressionWithLevel::Xz(level) => Ok(Compressor::Xz(xz2::write::XzEncoder::new(
+            CompressionWithLevel::Xz(level) => Ok(Compressor::Xz(liblzma::write::XzEncoder::new(
                 Vec::new(),
                 level,
             ))),
@@ -216,7 +216,7 @@ pub(crate) fn decompress_stream(
         #[cfg(feature = "zstd-compression")]
         CompressionType::Zstd => Ok(Box::new(zstd::stream::Decoder::new(reader)?)),
         #[cfg(feature = "xz-compression")]
-        CompressionType::Xz => Ok(Box::new(xz2::bufread::XzDecoder::new(reader))),
+        CompressionType::Xz => Ok(Box::new(liblzma::bufread::XzDecoder::new(reader))),
         #[cfg(feature = "bzip2-compression")]
         CompressionType::Bzip2 => Ok(Box::new(bzip2::bufread::BzDecoder::new(reader))),
         // This is an issue when building with all compression types enabled
