@@ -1,5 +1,5 @@
 use nom::bytes::complete;
-use nom::number::complete::{be_u16, be_u8};
+use nom::number::complete::{be_u8, be_u16};
 use std::convert::TryInto;
 
 use crate::constants::*;

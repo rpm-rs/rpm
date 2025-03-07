@@ -145,12 +145,16 @@ mod test {
             .add_rsa_signature(&sig_header_only[..])
             .build();
 
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
-            .is_ok());
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
+                .is_ok()
+        );
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -164,12 +168,16 @@ mod test {
             .add_eddsa_signature(&sig_header_only[..])
             .build();
 
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_DSA)
-            .is_ok());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
-            .is_ok());
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_DSA)
+                .is_ok()
+        );
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -178,12 +186,16 @@ mod test {
         let digest_header_sha256: String = hex::encode([0u8; 64]);
         let header = builder.add_digest(digest_header_sha256.as_str()).build();
 
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
-            .is_err());
-        assert!(header
-            .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
-            .is_ok());
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_RSA)
+                .is_err()
+        );
+        assert!(
+            header
+                .find_entry_or_err(IndexSignatureTag::RPMSIGTAG_SHA256)
+                .is_ok()
+        );
     }
 
     // @todo: this test is kind of duplicative, probably not necessary?

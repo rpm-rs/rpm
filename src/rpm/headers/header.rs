@@ -1,6 +1,6 @@
 use nom::{
     bytes::complete,
-    number::complete::{be_i32, be_u16, be_u32, be_u64, be_u8},
+    number::complete::{be_i32, be_u8, be_u16, be_u32, be_u64},
 };
 use std::{
     fmt::{self, Display},
@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::*;
-use crate::{constants::*, errors::*, Timestamp};
+use crate::{Timestamp, constants::*, errors::*};
 
 #[derive(Debug, PartialEq)]
 pub struct Header<T: Tag> {
@@ -57,29 +57,29 @@ where
 
             match &mut entry.data {
                 IndexData::Null => {}
-                IndexData::Char(ref mut chars) => {
+                IndexData::Char(chars) => {
                     parse_binary_entry(remaining, entry.num_items, chars, "Char")?;
                 }
-                IndexData::Int8(ref mut ints) => {
+                IndexData::Int8(ints) => {
                     parse_binary_entry(remaining, entry.num_items, ints, "Int8")?;
                 }
-                IndexData::Int16(ref mut ints) => {
+                IndexData::Int16(ints) => {
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u16)?;
                 }
-                IndexData::Int32(ref mut ints) => {
+                IndexData::Int32(ints) => {
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u32)?;
                 }
-                IndexData::Int64(ref mut ints) => {
+                IndexData::Int64(ints) => {
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u64)?;
                 }
-                IndexData::StringTag(ref mut string) => {
+                IndexData::StringTag(string) => {
                     let (_rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
                     string.push_str(String::from_utf8_lossy(raw_string).as_ref());
                 }
-                IndexData::Bin(ref mut bin) => {
+                IndexData::Bin(bin) => {
                     parse_binary_entry(remaining, entry.num_items, bin, "Bin")?;
                 }
-                IndexData::StringArray(ref mut strings) => {
+                IndexData::StringArray(strings) => {
                     for _ in 0..entry.num_items {
                         let (rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
                         // the null byte is still in there.. we need to cut it out.
@@ -88,7 +88,7 @@ where
                         strings.push(string);
                     }
                 }
-                IndexData::I18NString(ref mut strings) => {
+                IndexData::I18NString(strings) => {
                     for _ in 0..entry.num_items {
                         let (rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
                         remaining = rest;

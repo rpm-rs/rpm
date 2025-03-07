@@ -1,6 +1,6 @@
 use rpm::*;
-use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::prelude::*;
 use std::path::Path;
 use std::process::Stdio;
 
@@ -18,7 +18,10 @@ mod pgp {
     fn try_installation_and_verify_signatures(
         path: impl AsRef<Path>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let dnf_cmd = format!("dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y {};", path.as_ref().display());
+        let dnf_cmd = format!(
+            "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y {};",
+            path.as_ref().display()
+        );
         let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
         // TODO: check signatures on all distros?
         [

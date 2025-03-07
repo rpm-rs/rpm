@@ -1,5 +1,5 @@
 //! A collection of types used in various header records.
-use crate::{constants::*, errors, FileCaps, IndexData, IndexEntry, Timestamp};
+use crate::{FileCaps, IndexData, IndexEntry, Timestamp, constants::*, errors};
 use digest::Digest;
 use itertools::Itertools;
 use std::str::FromStr;
@@ -274,7 +274,7 @@ impl FileOptionsBuilder {
             Err(e) => {
                 return Err(errors::Error::InvalidCapabilities {
                     caps: e.to_string(),
-                })
+                });
             }
         };
         Ok(self)

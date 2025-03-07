@@ -97,7 +97,7 @@ fn validate_suffix(s: &str) -> Result<(), Error> {
                 Some('=') | Some('+') | Some('-') => {
                     return Err(Error::InvalidFileCaps(
                         "No `+/-/=` following each other".to_owned(),
-                    ))
+                    ));
                 }
                 _ => (),
             },
@@ -108,7 +108,7 @@ fn validate_suffix(s: &str) -> Result<(), Error> {
                 return Err(Error::InvalidFileCaps(format!(
                     "Invalid suffix char {}",
                     ch
-                )))
+                )));
             }
         }
 

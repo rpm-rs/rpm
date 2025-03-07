@@ -7,7 +7,7 @@ authors = [
   "Max Dymond <cmeister2@gmail.com>",
   "Daniel Alley <dalley@redhat.com>",
 ]
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0 OR MIT"
 description = "A pure rust library for building and parsing RPMs"
 homepage = "https://github.com/rpm-rs/rpm"
@@ -15,7 +15,7 @@ repository = "https://github.com/rpm-rs/rpm"
 readme = "README.md"
 keywords = ["RPM", "packaging"]
 categories = ["parsing", "development-tools"]
-rust-version = "1.75.0"
+rust-version = "1.85.0"
 
 [lib]
 name = "rpm"
@@ -46,7 +46,7 @@ digest = "0.10"
 sha2 = "0.10"
 md-5 = "0.10"
 sha1 = "0.10"
-pgp = { version = "0.14", optional = true }
+pgp = { version = "0.15", optional = true }
 chrono = { version = "0.4", optional = true }
 log = "0.4"
 itertools = "0.14"
@@ -60,7 +60,7 @@ env_logger = "0.11"
 serial_test = "3.2"
 pretty_assertions = "1.4"
 gethostname = "1.0"
-hex-literal = "0.4"
+hex-literal = "1.0"
 
 [features]
 default = [

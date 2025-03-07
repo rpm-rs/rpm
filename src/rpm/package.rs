@@ -9,17 +9,17 @@ use std::{
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::{constants::*, decompress_stream, errors::*, CompressionType};
+use crate::{CompressionType, constants::*, decompress_stream, errors::*};
 
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
 #[cfg(feature = "signature-meta")]
-use crate::{signature, Timestamp};
+use crate::{Timestamp, signature};
 #[cfg(feature = "signature-meta")]
 use std::fmt::Debug;
 
-use super::headers::*;
 use super::Lead;
+use super::headers::*;
 
 /// A complete rpm file.
 ///

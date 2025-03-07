@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Package::files()` for iterating over the files of an RPM package (metadata & contents).
 - Added `Package::extract()` for extracting the archive contents of an RPM package to a directory on disk
 
+### Changed
+
+- Replaced unmaintained `xz2` dependency with the maintained `liblzma` fork
+
+### Breaking Changes
+
+- Minimum supported Rust version updated to 1.85 (Edition 2024)
+
 ## 0.16.0
 
 ### Added
@@ -24,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `pgp` to 0.14.0
-- Replaced unmaintained `xz2` dependency with the maintained `liblzma` fork
 
 ### Breaking Changes
 
