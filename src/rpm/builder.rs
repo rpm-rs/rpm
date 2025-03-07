@@ -11,11 +11,11 @@ use std::path::{Path, PathBuf};
 
 use digest::Digest;
 
+use super::Lead;
 use super::compressor::Compressor;
 use super::headers::*;
-use super::Lead;
 use crate::errors::*;
-use crate::{constants::*, Timestamp};
+use crate::{Timestamp, constants::*};
 
 #[cfg(feature = "signature-meta")]
 use crate::signature;

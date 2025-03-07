@@ -1,6 +1,6 @@
-use super::{traits, AlgorithmType};
-use crate::errors::Error;
+use super::{AlgorithmType, traits};
 use crate::Timestamp;
+use crate::errors::Error;
 
 use std::io;
 
@@ -125,7 +125,7 @@ impl Signer {
         Self::new(secret_key)
     }
 
-    /// Configues the [Signer] with the provided PGP key passphrase.
+    /// Configures the [Signer] with the provided PGP key passphrase.
     pub fn with_key_passphrase(self, key_passphrase: impl Into<String>) -> Self {
         Self {
             key_passphrase: Some(key_passphrase.into()),
@@ -236,10 +236,9 @@ impl traits::Verifying for Verifier {
                 key_ref: format!("{:?}", self.public_key.key_id()),
             };
 
-            if let Some(err) = result {
-                Err(err)
-            } else {
-                Err(default_err)
+            match result {
+                Some(err) => Err(err),
+                _ => Err(default_err),
             }
         }
     }
@@ -281,7 +280,7 @@ impl Verifier {
 #[cfg(test)]
 pub(crate) mod test {
 
-    use super::super::{echo_signature, Signing, Verifying};
+    use super::super::{Signing, Verifying, echo_signature};
     use super::*;
     use hex_literal::hex;
 
@@ -342,8 +341,8 @@ pub(crate) mod test {
     #[test]
     fn verify_pgp_crate() {
         use chrono::{TimeZone, Utc};
-        use pgp::types::{PublicKeyTrait, SecretKeyTrait};
         use pgp::Signature;
+        use pgp::types::{PublicKeyTrait, SecretKeyTrait};
 
         const RPM_SHA2_256: [u8; 32] =
             hex!("d92bfe276e311a67fe128768c5df4d06fd461e043afdf872ba4c679d860db81e");

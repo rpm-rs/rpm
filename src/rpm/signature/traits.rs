@@ -3,8 +3,8 @@
 //! Does not contain hashing! Hashes are fixed by the rpm
 //! "spec" to sha1, md5 (yes, that is correct), sha2_256.
 
-use crate::errors::*;
 use crate::Timestamp;
+use crate::errors::*;
 use std::fmt::Debug;
 use std::io;
 
