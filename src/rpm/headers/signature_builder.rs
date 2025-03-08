@@ -16,14 +16,9 @@ pub struct Empty;
 /// Implies that headers and content are complete.
 pub struct WithDigest;
 
-/// Builder already has a hash and is ready for completion.
-pub struct WithSignature;
-
 impl ConstructionStage for Empty {}
 
 impl ConstructionStage for WithDigest {}
-
-impl ConstructionStage for WithSignature {}
 
 /// base signature header builder
 ///
@@ -33,6 +28,7 @@ where
     T: ConstructionStage,
 {
     entries: Vec<IndexEntry<IndexSignatureTag>>,
+    signatures: Vec<String>,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -40,6 +36,7 @@ impl SignatureHeaderBuilder<Empty> {
     pub fn new() -> Self {
         Self {
             entries: Vec::with_capacity(10),
+            signatures: Vec::new(),
             phantom: Default::default(),
         }
     }
@@ -75,59 +72,56 @@ impl SignatureHeaderBuilder<Empty> {
         ));
         SignatureHeaderBuilder::<WithDigest> {
             entries: self.entries,
+            signatures: Vec::new(),
             phantom: Default::default(),
         }
     }
 }
 
 impl SignatureHeaderBuilder<WithDigest> {
+    pub fn add_openpgp_signature(mut self, signature: String) -> Self {
+        self.signatures.push(signature);
+        self
+    }
+
     /// add a signature over the header
     pub fn add_rsa_signature(
         mut self,
         sig_header_only: &[u8],
-    ) -> SignatureHeaderBuilder<WithSignature> {
+    ) -> Self {
         let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_RSA,
             offset,
             IndexData::Bin(sig_header_only.to_vec()),
         ));
-        SignatureHeaderBuilder::<WithSignature> {
-            entries: self.entries,
-            phantom: Default::default(),
-        }
+        self
     }
 
     pub fn add_eddsa_signature(
         mut self,
         sig_header_only: &[u8],
-    ) -> SignatureHeaderBuilder<WithSignature> {
+    ) -> SignatureHeaderBuilder<WithDigest> {
         let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_DSA,
             offset,
             IndexData::Bin(sig_header_only.to_vec()),
         ));
-        SignatureHeaderBuilder::<WithSignature> {
-            entries: self.entries,
-            phantom: Default::default(),
-        }
+        self
     }
 
     pub fn add_ecdsa_signature(
         mut self,
         sig_header_only: &[u8],
-    ) -> SignatureHeaderBuilder<WithSignature> {
+    ) -> SignatureHeaderBuilder<WithDigest> {
         let offset = 0i32; // filled externally later on
         self.entries.push(IndexEntry::new(
             IndexSignatureTag::RPMSIGTAG_DSA,
             offset,
             IndexData::Bin(sig_header_only.to_vec()),
         ));
-        SignatureHeaderBuilder::<WithSignature> {
-            entries: self.entries,
-            phantom: Default::default(),
-        }
+        self
     }
 }
 
