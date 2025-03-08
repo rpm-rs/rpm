@@ -3,6 +3,7 @@ mod compressor;
 mod filecaps;
 mod headers;
 mod package;
+mod payload;
 mod timestamp;
 
 pub mod signature;

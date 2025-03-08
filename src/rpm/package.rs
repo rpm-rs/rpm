@@ -18,8 +18,8 @@ use crate::{signature, Timestamp};
 #[cfg(feature = "signature-meta")]
 use std::fmt::Debug;
 
-use super::headers::*;
 use super::Lead;
+use super::{headers::*, payload};
 
 /// A complete rpm file.
 ///
@@ -1160,14 +1160,15 @@ impl Iterator for FileIterator<'_> {
             return None;
         }
 
+        // @todo: probably safe to hand out a reference instead of cloning, just a bit more painful
         let file_entry = self.file_entries[self.count].clone();
         self.count += 1;
 
-        let reader = cpio::NewcReader::new(&mut self.archive);
+        let reader = payload::Reader::new(&mut self.archive, &self.file_entries);
 
         match reader {
             Ok(mut entry_reader) => {
-                if entry_reader.entry().is_trailer() {
+                if entry_reader.is_trailer() {
                     return None;
                 }
 
