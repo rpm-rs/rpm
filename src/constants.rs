@@ -14,8 +14,8 @@ pub const HEADER_IMMUTABLE: u32 = 63;
 pub const HEADER_REGIONS: u32 = 64;
 pub const HEADER_I18NTABLE: u32 = 100;
 pub const HEADER_SIGBASE: u32 = 256;
+pub const HEADER_SIGTOP: u32 = 999;
 pub const HEADER_TAGBASE: u32 = 1000;
-pub const RPMTAG_SIG_BASE: u32 = HEADER_SIGBASE;
 
 #[repr(u32)]
 #[derive(
@@ -37,28 +37,29 @@ pub enum IndexTag {
 
     RPMTAG_HEADERI18NTABLE = HEADER_I18NTABLE,
 
-    RPMTAG_SIGSIZE = RPMTAG_SIG_BASE,
-    RPMTAG_SIGLEMD5_1 = RPMTAG_SIG_BASE + 2,
-    RPMTAG_SIGPGP = RPMTAG_SIG_BASE + 3,
-    RPMTAG_SIGLEMD5_2 = RPMTAG_SIG_BASE + 4,
-    RPMTAG_SIGMD5 = RPMTAG_SIG_BASE + 5,
+    RPMTAG_SIGSIZE = HEADER_SIGBASE,
+    RPMTAG_SIGLEMD5_1 = HEADER_SIGBASE + 2,
+    RPMTAG_SIGPGP = HEADER_SIGBASE + 3,
+    RPMTAG_SIGLEMD5_2 = HEADER_SIGBASE + 4,
+    RPMTAG_SIGMD5 = HEADER_SIGBASE + 5,
 
-    RPMTAG_SIGGPG = RPMTAG_SIG_BASE + 6,
-    RPMTAG_SIGPGP5 = RPMTAG_SIG_BASE + 7,
+    RPMTAG_SIGGPG = HEADER_SIGBASE + 6,
+    RPMTAG_SIGPGP5 = HEADER_SIGBASE + 7,
 
-    RPMTAG_BADSHA1_1 = RPMTAG_SIG_BASE + 8,
-    RPMTAG_BADSHA1_2 = RPMTAG_SIG_BASE + 9,
-    RPMTAG_PUBKEYS = RPMTAG_SIG_BASE + 10,
-    RPMTAG_DSAHEADER = RPMTAG_SIG_BASE + 11,
-    RPMTAG_RSAHEADER = RPMTAG_SIG_BASE + 12,
-    RPMTAG_SHA1HEADER = RPMTAG_SIG_BASE + 13,
+    RPMTAG_BADSHA1_1 = HEADER_SIGBASE + 8,
+    RPMTAG_BADSHA1_2 = HEADER_SIGBASE + 9,
+    RPMTAG_PUBKEYS = HEADER_SIGBASE + 10,
+    RPMTAG_DSAHEADER = HEADER_SIGBASE + 11,
+    RPMTAG_RSAHEADER = HEADER_SIGBASE + 12,
+    RPMTAG_SHA1HEADER = HEADER_SIGBASE + 13,
 
-    RPMTAG_LONGSIGSIZE = RPMTAG_SIG_BASE + 14,
-    RPMTAG_LONGARCHIVESIZE = RPMTAG_SIG_BASE + 15,
+    RPMTAG_LONGSIGSIZE = HEADER_SIGBASE + 14,
+    RPMTAG_LONGARCHIVESIZE = HEADER_SIGBASE + 15,
 
-    RPMTAG_SHA256HEADER = RPMTAG_SIG_BASE + 17,
-    RPMTAG_VERITYSIGNATURES = RPMTAG_SIG_BASE + 20,
-    RPMTAG_VERITYSIGNATUREALGO = RPMTAG_SIG_BASE + 21,
+    RPMTAG_SHA256HEADER = HEADER_SIGBASE + 17,
+    RPMTAG_VERITYSIGNATURES = HEADER_SIGBASE + 20,
+    RPMTAG_VERITYSIGNATUREALGO = HEADER_SIGBASE + 21,
+    RPMTAG_OPENPGP = HEADER_SIGBASE + 22,
 
     RPMTAG_NAME = 1000,
     RPMTAG_VERSION = 1001,
@@ -360,6 +361,12 @@ pub enum IndexTag {
     RPMTAG_SYSUSERS = 5109,
     RPMTAG_BUILDSYSTEM = 5110,
     RPMTAG_BUILDOPTION = 5111,
+    RPMTAG_PAYLOADSIZE = 5112,
+    RPMTAG_PAYLOADSIZEALT = 5113,
+    RPMTAG_RPMFORMAT = 5114,
+    RPMTAG_FILEMIMEINDEX = 5115,
+    RPMTAG_MIMEDICT = 5116,
+    RPMTAG_FILEMIMES = 5117,
 }
 
 #[repr(u32)]
@@ -420,6 +427,9 @@ pub enum IndexSignatureTag {
     /// Algorithm used for FSVerity signatures.
     RPMSIGTAG_VERITYSIGNATUREALGO = IndexTag::RPMTAG_VERITYSIGNATUREALGO as u32,
 
+    /// All OpenPGP signatures present in the header
+    RPMSIGTAG_OPENPGP = IndexTag::RPMTAG_OPENPGP as u32,
+
     /// This tag specifies the RSA signature of the combined Header and Payload sections.
     /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_PGP = 1002,
@@ -462,6 +472,18 @@ impl Tag for IndexSignatureTag {
 
     fn to_u32(&self) -> u32 {
         *self as u32
+    }
+}
+
+impl From<IndexTag> for u32 {
+    fn from(val: IndexTag) -> Self {
+        val.to_u32()
+    }
+}
+
+impl From<IndexSignatureTag> for u32 {
+    fn from(val: IndexSignatureTag) -> Self {
+        val.to_u32()
     }
 }
 
@@ -582,6 +604,8 @@ pub enum DigestAlgorithm {
     Sha2_384 = 9,
     Sha2_512 = 10,
     Sha2_224 = 11,
+    Sha3_256 = 12,
+    Sha3_512 = 14,
 }
 
 /// Index tag values for the %prein scriptlet,

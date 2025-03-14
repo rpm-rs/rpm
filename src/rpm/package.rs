@@ -17,6 +17,8 @@ use crate::signature::pgp::Verifier;
 use crate::{Timestamp, signature};
 #[cfg(feature = "signature-meta")]
 use std::fmt::Debug;
+#[cfg(feature = "signature-pgp")]
+use pgp::{base64_decoder::Base64Decoder, base64_reader::Base64Reader};
 
 use super::Lead;
 use super::headers::*;
@@ -25,7 +27,7 @@ use super::headers::*;
 ///
 /// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
 /// or used with [`parse`](`self::Package::parse`) to obtain from a file.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Package {
     /// Header and metadata structures.
     ///
@@ -159,6 +161,22 @@ impl Package {
         Ok(())
     }
 
+    // TODO: this should perhaps modify the header in-place instead?
+    /// Generate a fresh, unsigned signature header
+    #[cfg(feature = "signature-meta")]
+    pub fn clear_signatures(&mut self) -> Result<(), Error> {
+        // create a temporary byte repr of the header and re-create all hashes
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        // make sure to not hash any previous signatures in the header
+        self.metadata.header.write(&mut header_bytes)?;
+        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
+        let sig_header_builder =
+            Header::<IndexSignatureTag>::builder().add_digest(&header_digest_sha256);
+        self.metadata.signature = sig_header_builder.build();
+
+        Ok(())
+    }
+
     /// Create package signatures using an external key and add them to the signature header
     #[cfg(feature = "signature-meta")]
     pub fn sign<S>(&mut self, signer: S) -> Result<(), Error>
@@ -226,37 +244,66 @@ impl Package {
     /// Return the key ids (issuers) of the signature as a hexadecimal string
     #[cfg(feature = "signature-pgp")]
     pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
-        let mut signature = Err(Error::NoSignatureFound);
-        let rsa_sig = &self
+        let openpgp_sigs = &self
             .metadata
             .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
-        if let Ok(rsa_sig) = rsa_sig {
-            signature = Verifier::parse_signature(rsa_sig);
-        }
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
 
-        let eddsa_sig = &self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
-        if let Ok(eddsa_sig) = eddsa_sig {
-            signature = Verifier::parse_signature(eddsa_sig);
-        }
+        // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
+        if let Ok(openpgp_sigs) = openpgp_sigs {
+            let mut key_ids: Vec<String> = Vec::new();
 
-        let rpm_v3_sig = &self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
-        if let Ok(rpm_v3_sig) = rpm_v3_sig {
-            signature = Verifier::parse_signature(rpm_v3_sig);
-        }
+            for base64_sig in openpgp_sigs.iter() {
+                let mut signature = Vec::new();
+                let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
+                decoder.read_to_end(&mut signature)?;
+                let signature = Verifier::parse_signature(&signature)?;
 
-        let key_ids = signature?
-            .issuer()
-            .iter()
-            .map(|x| format!("{:x}", x))
-            .collect();
-        Ok(key_ids)
+                let new_key_ids: Vec<String> = signature
+                    .issuer()
+                    .iter()
+                    .map(|x| format!("{:x}", x))
+                    .collect();
+
+                // @TODO: is this right?  figure out what's up with multiple issuers per sig + multiple sigs
+                key_ids.extend(new_key_ids);
+            }
+
+            Ok(key_ids)
+        } else {
+            let mut signature = Err(Error::NoSignatureFound);
+
+            let rsa_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
+            if let Ok(rsa_sig) = rsa_sig {
+                signature = Verifier::parse_signature(rsa_sig);
+            }
+
+            let eddsa_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
+            if let Ok(eddsa_sig) = eddsa_sig {
+                signature = Verifier::parse_signature(eddsa_sig);
+            }
+
+            let rpm_v3_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
+            if let Ok(rpm_v3_sig) = rpm_v3_sig {
+                signature = Verifier::parse_signature(rpm_v3_sig);
+            }
+
+            let key_ids = signature?
+                .issuer()
+                .iter()
+                .map(|x| format!("{:x}", x))
+                .collect();
+            Ok(key_ids)
+        }
     }
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
@@ -272,41 +319,59 @@ impl Package {
         self.metadata.header.write(&mut header_bytes)?;
         self.verify_digests()?;
 
-        let rsa_sig = &self
+        let openpgp_sigs = &self
             .metadata
             .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
-        let eddsa_sig = &self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
-        let rpm_v3_sig = &self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
 
-        if !rsa_sig.is_ok() && !eddsa_sig.is_ok() && !rpm_v3_sig.is_ok() {
-            return Err(Error::NoSignatureFound);
-        }
+        // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
+        if let Ok(openpgp_signatures) = openpgp_sigs {
+            for base64_sig in openpgp_signatures.iter() {
+                let mut signature = Vec::new();
+                let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
+                decoder.read_to_end(&mut signature)?;
+                signature::echo_signature("signature_header(header only)", &signature);
+                verifier.verify(header_bytes.as_slice(), &signature)?;
+            }
 
-        if let Ok(signature_header_only) = eddsa_sig {
-            signature::echo_signature("signature_header(header only)", signature_header_only);
-            verifier.verify(header_bytes.as_slice(), signature_header_only)?;
-        }
+            return Ok(());
+        } else {
+            let rsa_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
+            let eddsa_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
+            let rpm_v3_sig = &self
+                .metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
 
-        if let Ok(signature_header_and_content) = rpm_v3_sig {
-            signature::echo_signature(
-                "signature_header(header and content)",
-                signature_header_and_content,
-            );
-            let header_and_content_cursor =
-                io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
-            verifier.verify(header_and_content_cursor, signature_header_and_content)?;
-        }
+            if !rsa_sig.is_ok() && !eddsa_sig.is_ok() && !rpm_v3_sig.is_ok() {
+                return Err(Error::NoSignatureFound);
+            }
 
-        if let Ok(signature_header_only) = rsa_sig {
-            signature::echo_signature("signature_header(header only)", signature_header_only);
-            verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+            if let Ok(signature_header_only) = eddsa_sig {
+                signature::echo_signature("signature_header(header only)", signature_header_only);
+                verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+            }
+
+            if let Ok(signature_header_only) = rsa_sig {
+                signature::echo_signature("signature_header(header only)", signature_header_only);
+                verifier.verify(header_bytes.as_slice(), signature_header_only)?;
+            }
+
+            if let Ok(signature_header_and_content) = rpm_v3_sig {
+                signature::echo_signature(
+                    "signature_header(header and content)",
+                    signature_header_and_content,
+                );
+                let header_and_content_cursor =
+                    io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
+                verifier.verify(header_and_content_cursor, signature_header_and_content)?;
+            }
         }
 
         Ok(())
@@ -396,7 +461,7 @@ impl Package {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PackageMetadata {
     pub lead: Lead,
     pub signature: Header<IndexSignatureTag>,
