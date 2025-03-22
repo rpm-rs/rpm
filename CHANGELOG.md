@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.17.0
+
 ### Added
 
 - Added support for ecdsa signatures
@@ -17,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Replaced unmaintained `xz2` dependency with the maintained `liblzma` fork
+
+### Fixed
+
+- Resolved an issue where package signatures produced by this library were not able to be verified on older
+  versions of RPM such as the one used on EL8.
 
 ### Breaking Changes
 
