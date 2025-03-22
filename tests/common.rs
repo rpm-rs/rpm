@@ -9,13 +9,11 @@ pub fn test_public_key_path() -> std::path::PathBuf {
 }
 
 pub fn test_protected_private_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("test_assets/fixture_packages/signing_keys/secret_rsa4096_protected.asc")
+    cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa3072_protected.asc")
 }
 
 pub fn test_protected_public_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("test_assets/fixture_packages/signing_keys/public_rsa4096_protected.asc")
+    cargo_manifest_dir().join("tests/assets/signing_keys/public_rsa3072_protected.asc")
 }
 
 pub fn test_protected_private_key_passphrase() -> String {
