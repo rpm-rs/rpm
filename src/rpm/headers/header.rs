@@ -398,8 +398,8 @@ pub struct FileOwnership {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FileDigest {
-    digest: String,
-    algo: DigestAlgorithm,
+    pub digest: String,
+    pub algo: DigestAlgorithm,
 }
 
 impl FileDigest {
@@ -578,7 +578,7 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: u32,
     pub(crate) data: IndexData,
