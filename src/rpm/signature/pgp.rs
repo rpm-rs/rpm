@@ -60,10 +60,10 @@ where
         );
         sig_cfg
             .hashed_subpackets
-            .push(Subpacket::critical(SubpacketData::SignatureCreationTime(t)));
+            .push(Subpacket::regular(SubpacketData::SignatureCreationTime(t)));
         sig_cfg
             .hashed_subpackets
-            .push(Subpacket::critical(SubpacketData::Issuer(
+            .push(Subpacket::regular(SubpacketData::Issuer(
                 self.secret_key.key_id(),
             )));
         //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
