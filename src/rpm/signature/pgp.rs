@@ -66,6 +66,11 @@ where
             .push(Subpacket::regular(SubpacketData::Issuer(
                 self.secret_key.key_id(),
             )));
+        sig_cfg
+            .hashed_subpackets
+            .push(Subpacket::regular(SubpacketData::IssuerFingerprint(
+                self.secret_key.fingerprint(),
+            )));
         //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
 
         let passwd_fn = || self.key_passphrase.clone().unwrap_or_default();
