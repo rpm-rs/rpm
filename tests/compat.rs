@@ -19,7 +19,7 @@ mod pgp {
         path: impl AsRef<Path>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dnf_cmd = format!(
-            "dnf --disablerepo=updates,updates-testing,updates-modular,fedora-modular install -y {};",
+            "${{DNF}} ${{REPOS}} install -y {};",
             path.as_ref().display()
         );
         let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
@@ -357,6 +357,32 @@ fn podman_container_launcher(
         r#"
 set -e
 
+# Common defaults for package management
+DNF=dnf
+REPOS="--disablerepo=* --enablerepo=fedora"
+PACKAGES="rpm-sign sd gpg"
+
+# Mirrorlist no longer supported on centos, disable
+if grep -Eq "ID=.*(centos|almalinux)" /etc/os-release; then
+    mirrorlist_repos=$(grep -l mirrorlist.centos.org /etc/yum.repos.d/* || true)
+    if [ -n "$mirrorlist_repos" ]; then
+        sed -i s/mirror.centos.org/vault.centos.org/g $mirrorlist_repos
+        sed -i s/^#.*baseurl=http/baseurl=http/g $mirrorlist_repos
+        sed -i s/^mirrorlist=http/#mirrorlist=http/g $mirrorlist_repos
+    fi
+
+    REPOS="--disablerepo=* --enablerepo=base*"
+    PACKAGES="rpm-sign gpg"
+
+    if grep -q "VERSION_ID=.*7" /etc/os-release; then
+        DNF=yum
+    fi
+fi
+
+echo "\### install tooling for signing"
+
+${DNF} install ${REPOS} -y ${PACKAGES}
+
 # prepare rpm macros
 
 cat > ~/.rpmmacros << EOF_RPMMACROS
@@ -435,11 +461,6 @@ echo "\### expected pub key and exported pubkey differ"
     gpg "${PK}"
     exit 77
 fi
-
-echo "\### install tooling for signing"
-
-dnf install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign sd || \
-yum install --disablerepo=updates,updates-testing,updates-modular -y rpm-sign
 
 echo "\### import pub key"
 
