@@ -4,5 +4,6 @@ out
 **/*.rpm
 Cargo.lock
 !test_assets/*
+!tests/assets/*
 dnf-cache
 .idea
