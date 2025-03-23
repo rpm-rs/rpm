@@ -29,11 +29,11 @@ pub fn rpm_ima_signed_file_path() -> std::path::PathBuf {
 }
 
 pub fn rpm_empty_source_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.src.rpm")
+    cargo_manifest_dir().join("tests/assets/rpm-empty-0-0.src.rpm")
 }
 
 pub fn rpm_empty_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.x86_64.rpm")
+    cargo_manifest_dir().join("tests/assets/rpm-empty-0-0.x86_64.rpm")
 }
 
 pub fn cargo_manifest_dir() -> std::path::PathBuf {
@@ -55,28 +55,55 @@ pub fn load_rsa_keys() -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn rsa_private_key() -> Vec<u8> {
+<<<<<<< HEAD
     let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa4096.asc");
+=======
+    let private_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa4096.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(private_key).unwrap()
 }
 
 pub fn rsa_public_key() -> Vec<u8> {
+<<<<<<< HEAD
     let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_rsa4096.asc");
+=======
+    let public_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/public_rsa4096.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(public_key).unwrap()
 }
 
 pub fn load_protected_rsa_keys() -> (Vec<u8>, Vec<u8>) {
+<<<<<<< HEAD
     let signing_key = include_bytes!("assets/signing_keys/secret_rsa3072_protected.asc");
     let verification_key = include_bytes!("assets/signing_keys/public_rsa3072_protected.asc");
+=======
+    let signing_key =
+        include_bytes!("assets/signing_keys/secret_rsa3072_protected.asc");
+    let verification_key =
+        include_bytes!("assets/signing_keys/public_rsa3072_protected.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     (signing_key.to_vec(), verification_key.to_vec())
 }
 
 pub fn eddsa_private_key() -> Vec<u8> {
+<<<<<<< HEAD
     let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ed25519.asc");
+=======
+    let private_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/secret_ed25519.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(private_key).unwrap()
 }
 
 pub fn eddsa_public_key() -> Vec<u8> {
+<<<<<<< HEAD
     let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ed25519.asc");
+=======
+    let public_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/public_ed25519.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(public_key).unwrap()
 }
 
@@ -85,12 +112,22 @@ pub fn load_eddsa_keys() -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn ecdsa_private_key() -> Vec<u8> {
+<<<<<<< HEAD
     let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_p256.asc");
+=======
+    let private_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/secret_nistp256.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(private_key).unwrap()
 }
 
 pub fn ecdsa_public_key() -> Vec<u8> {
+<<<<<<< HEAD
     let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_p256.asc");
+=======
+    let public_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/public_nistp256.asc");
+>>>>>>> 3bb303d (Move new-style fixtures from test_assets/ to tests/assets/)
     std::fs::read(public_key).unwrap()
 }
 
