@@ -71,7 +71,12 @@ where
             .push(Subpacket::regular(SubpacketData::IssuerFingerprint(
                 self.secret_key.fingerprint(),
             )));
-        //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
+        // sig_cfg
+        //     .hashed_subpackets
+        //     .push(Subpacket::regular(SubpacketData::SignersUserID(
+        //         self.secret_key.details.users.id
+        //         "none".into(),
+        //     )));
 
         let passwd_fn = || self.key_passphrase.clone().unwrap_or_default();
         let signature_packet = sig_cfg
@@ -269,7 +274,7 @@ impl Verifier {
                 public_key,
                 algorithm: AlgorithmType::RSA,
             }),
-            PublicKeyAlgorithm::EdDSALegacy => Ok(Self {
+            PublicKeyAlgorithm::EdDSALegacy | PublicKeyAlgorithm::Ed25519 => Ok(Self {
                 public_key,
                 algorithm: AlgorithmType::EdDSA,
             }),
@@ -379,8 +384,8 @@ pub(crate) mod test {
             [digest[0], digest[1]],
             signature,
             vec![
-                Subpacket::critical(SubpacketData::SignatureCreationTime(sig_time)),
-                Subpacket::critical(SubpacketData::Issuer(signing_key.key_id())),
+                Subpacket::regular(SubpacketData::SignatureCreationTime(sig_time)),
+                Subpacket::regular(SubpacketData::Issuer(signing_key.key_id())),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
             vec![],
@@ -421,12 +426,12 @@ pub(crate) mod test {
         );
         sig_cfg
             .hashed_subpackets
-            .push(Subpacket::critical(SubpacketData::SignatureCreationTime(
+            .push(Subpacket::regular(SubpacketData::SignatureCreationTime(
                 sig_time,
             )));
         sig_cfg
             .hashed_subpackets
-            .push(Subpacket::critical(SubpacketData::Issuer(
+            .push(Subpacket::regular(SubpacketData::Issuer(
                 signer.secret_key.key_id(),
             )));
         //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition

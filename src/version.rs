@@ -249,6 +249,7 @@ impl<'a> From<(&'a str, &'a str, &'a str)> for Evr<'a> {
 }
 
 impl PartialEq for Evr<'_> {
+    #[allow(clippy::comparison_to_empty)]
     fn eq(&self, other: &Self) -> bool {
         ((self.epoch == other.epoch)
             || (self.epoch == "" && other.epoch == "0")

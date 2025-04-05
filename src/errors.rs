@@ -104,6 +104,10 @@ pub enum Error {
     #[error("unsupported PGP key type {0:?}")]
     UnsupportedPGPKeyType(pgp::crypto::public_key::PublicKeyAlgorithm),
 
+    #[cfg(feature = "signature-pgp")]
+    #[error("signature contains {0} issuer packets - should have exactly one")]
+    UnexpectedIssuerCount(u32),
+
     #[error("invalid file mode {raw_mode} - {reason}")]
     InvalidFileMode { raw_mode: i32, reason: &'static str },
 

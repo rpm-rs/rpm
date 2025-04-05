@@ -228,58 +228,6 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
 
         Ok(())
     }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_verify_raw_gpg_signature() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (_signing_key, verification_key) = common::load_asc_keys();
-
-        let test_file = common::cargo_out_dir().join("test.file");
-        let test_file_sig = common::cargo_out_dir().join("test.file.sig");
-
-        std::fs::write(&test_file, "test").expect("Must be able to write");
-        let _ = std::fs::remove_file(&test_file_sig);
-
-        let cmd= r#"
-echo "test" > /out/test.file
-
-echo ">>> sign like rpm"
-cmd="$(rpm -vv --define "__signature_filename /out/test.file.sig" \
-        --define "__plaintext_filename /out/test.file" \
-        --define "_gpg_name Package Manager" \
-        --eval "%{__gpg_sign_cmd}" | sd '\n' ' ')"
-
-echo "cmd: ${cmd}"
-eval ${cmd}
-
-alias gpg='gpg --batch --verbose --keyid-format long --no-armor --pinentry-mode error --no-secmem-warning --local-user "Package Manager"'
-#gpg \
-#    --sign \
-#    --detach-sign \
-#    --output /out/test.file.sig \
-#    /out/test.file 2>&1
-
-echo ">>> inspect signature"
-gpg -d /out/test.file.sig 2>&1
-
-echo ">>> verify external gpg signature"
-gpg --verify /out/test.file.sig /out/test.file 2>&1
-
-"#.to_owned();
-
-        podman_container_launcher(cmd.as_str(), "fedora:38", vec![])
-            .expect("Container execution must be flawless");
-
-        let verifier =
-            Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("Must load");
-
-        let raw_sig = std::fs::read(&test_file_sig).expect("must load signature");
-        let data = std::fs::read(&test_file).expect("must load file");
-        verifier.verify(data.as_slice(), raw_sig.as_slice())?;
-
-        Ok(())
-    }
 }
 
 fn wait_and_print_helper(mut child: std::process::Child, stdin_cmd: &str) -> std::io::Result<()> {
@@ -335,7 +283,11 @@ fn podman_container_launcher(
         "{}/test_assets:/assets:z",
         common::cargo_manifest_dir().display()
     );
-    mappings.extend(vec![out, assets, var_cache]);
+    let new_assets = format!(
+        "{}/tests/assets/signing_keys:/signing_keys:z",
+        common::cargo_manifest_dir().display(),
+    );
+    mappings.extend(vec![out, assets, new_assets, var_cache]);
     let mut args = mappings
         .iter()
         .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
@@ -470,7 +422,7 @@ echo "\### import pub key"
 
 rpm -vv --import "${PK}" 2>&1
 
-rpm -vv --import "/assets/fixture_packages/signing_keys/public_rsa4096_protected.asc" 2>&1
+rpm -vv --import "/signing_keys/public_rsa3072_protected.asc" 2>&1
 
 set -x
 

@@ -249,3 +249,7 @@ fn build_parse_sign_and_verify(
 
     Ok(())
 }
+
+// @todo:
+//  * check for the existence of certain digests
+//  * check for the existence of RSA / DSA tags when a key of the appropriate type was used
