@@ -32,6 +32,7 @@ required-features = ["signature-meta"]
 path = "tests/signatures.rs"
 
 [dependencies]
+base64 = "0.22"
 bitflags = "2"
 thiserror = "2"
 nom = "8"
@@ -61,6 +62,7 @@ serial_test = "3.2"
 pretty_assertions = "1.4"
 gethostname = "1.0"
 hex-literal = "1.0"
+bstr = "1.4.0"
 
 [features]
 default = [

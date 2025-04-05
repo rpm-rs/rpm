@@ -331,11 +331,6 @@ impl fmt::Display for Header<IndexTag> {
 }
 
 impl Header<IndexSignatureTag> {
-    /// Just easy access to the builder
-    pub fn builder() -> SignatureHeaderBuilder<Empty> {
-        SignatureHeaderBuilder::<Empty>::new()
-    }
-
     /// Construct a new empty signature header
     pub fn new_empty() -> Self {
         Self {
@@ -398,8 +393,8 @@ pub struct FileOwnership {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FileDigest {
-    digest: String,
-    algo: DigestAlgorithm,
+    pub digest: String,
+    pub algo: DigestAlgorithm,
 }
 
 impl FileDigest {
@@ -578,7 +573,7 @@ impl IndexHeader {
 }
 
 /// A single entry within the [`IndexHeader`](self::IndexHeader)
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: u32,
     pub(crate) data: IndexData,

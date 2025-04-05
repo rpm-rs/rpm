@@ -12,7 +12,39 @@ mod common;
 /// Resign an already-signed package with new keys, and verify it with the new keys
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg_path = common::rpm_ima_signed_file_path();
+    let pkg_path = common::rpm_basic_pkg_path_rsa_signed();
+
+    // test RSA
+    let (signing_key, verification_key) = common::load_rsa_keys();
+    resign_and_verify_with_keys(
+        pkg_path.as_ref(),
+        &signing_key,
+        None,
+        &verification_key,
+        "rsa_resigned_pkg.rpm",
+    )?;
+
+    // test RSA - with secret key protected by a passphrase
+    let (signing_key, verification_key) = common::load_protected_rsa_keys();
+    resign_and_verify_with_keys(
+        pkg_path.as_ref(),
+        &signing_key,
+        Some(common::test_protected_private_key_passphrase()),
+        &verification_key,
+        "rsa_resigned_pkg.rpm",
+    )?;
+
+    // test EdDSA
+    let (signing_key, verification_key) = common::load_eddsa_keys();
+    resign_and_verify_with_keys(
+        pkg_path.as_ref(),
+        &signing_key,
+        None,
+        &verification_key,
+        "eddsa_resigned_pkg.rpm",
+    )?;
+
+    let pkg_path = common::rpm_basic_pkg_path_eddsa_signed();
 
     // test RSA
     let (signing_key, verification_key) = common::load_rsa_keys();
@@ -249,3 +281,7 @@ fn build_parse_sign_and_verify(
 
     Ok(())
 }
+
+// @todo:
+//  * check for the existence of certain digests
+//  * check for the existence of RSA / DSA tags when a key of the appropriate type was used

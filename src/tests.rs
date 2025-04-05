@@ -10,7 +10,7 @@ fn rpm_freesrp_file_path() -> std::path::PathBuf {
 }
 
 fn rpm_empty_rpm_file_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.x86_64.rpm")
+    cargo_manifest_dir().join("tests/assets/rpm-empty-0-0.x86_64.rpm")
 }
 
 fn cargo_manifest_dir() -> std::path::PathBuf {
