@@ -331,11 +331,6 @@ impl fmt::Display for Header<IndexTag> {
 }
 
 impl Header<IndexSignatureTag> {
-    /// Just easy access to the builder
-    pub fn builder() -> SignatureHeaderBuilder<Empty> {
-        SignatureHeaderBuilder::<Empty>::new()
-    }
-
     /// Construct a new empty signature header
     pub fn new_empty() -> Self {
         Self {

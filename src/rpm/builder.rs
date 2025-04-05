@@ -596,9 +596,9 @@ impl PackageBuilder {
         let sig_header = {
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
 
-            Header::<IndexSignatureTag>::builder()
-                .add_digest(header_digest_sha256.as_str())
-                .build()
+            SignatureHeaderBuilder::new()
+                .set_sha256_digest(header_digest_sha256.as_str())
+                .build()?
         };
 
         let metadata = PackageMetadata {

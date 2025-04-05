@@ -283,7 +283,11 @@ fn podman_container_launcher(
         "{}/test_assets:/assets:z",
         common::cargo_manifest_dir().display()
     );
-    mappings.extend(vec![out, assets, var_cache]);
+    let new_assets = format!(
+        "{}/tests/assets/signing_keys:/signing_keys:z",
+        common::cargo_manifest_dir().display(),
+    );
+    mappings.extend(vec![out, assets, new_assets, var_cache]);
     let mut args = mappings
         .iter()
         .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
@@ -418,7 +422,7 @@ echo "\### import pub key"
 
 rpm -vv --import "${PK}" 2>&1
 
-rpm -vv --import "/assets/fixture_packages/signing_keys/public_rsa4096_protected.asc" 2>&1
+rpm -vv --import "/signing_keys/public_rsa3072_protected.asc" 2>&1
 
 set -x
 
