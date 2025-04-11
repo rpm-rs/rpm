@@ -1,13 +1,5 @@
 #![allow(dead_code)]
 
-pub fn test_private_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/secret_key.asc")
-}
-
-pub fn test_public_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/public_key.asc")
-}
-
 pub fn test_protected_private_key_path() -> std::path::PathBuf {
     cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa3072_protected.asc")
 }
@@ -20,20 +12,58 @@ pub fn test_protected_private_key_passphrase() -> String {
     "thisisN0Tasecuredpassphrase".to_owned()
 }
 
-pub fn rpm_389_ds_file_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
-}
-
-pub fn rpm_ima_signed_file_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/ima_signed.rpm")
-}
-
 pub fn rpm_empty_source_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.src.rpm")
+    cargo_manifest_dir().join("tests/assets/SRPMS/rpm-empty-0-0.src.rpm")
 }
 
 pub fn rpm_empty_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/fixture_packages/rpm-empty-0-0.x86_64.rpm")
+    cargo_manifest_dir().join("tests/assets/RPMS/x86_64/rpm-empty-0-0.x86_64.rpm")
+}
+
+pub fn rpm_basic_pkg_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")
+}
+
+pub fn rpm_basic_pkg_path_ima_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm")
+}
+
+pub fn rpm_basic_pkg_path_rsa_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/RPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm")
+}
+
+pub fn rpm_basic_pkg_path_ecdsa_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/RPMS/signed/rpm-basic-with-ecdsa-2.3.4-5.el9.noarch.rpm")
+}
+
+pub fn rpm_basic_pkg_path_eddsa_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm")
+}
+
+pub fn rpm_basic_source_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm")
+}
+
+pub fn rpm_basic_source_path_eddsa_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/SRPMS/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm")
+}
+
+pub fn rpm_basic_source_path_rsa_signed() -> std::path::PathBuf {
+    cargo_manifest_dir()
+        .join("tests/assets/SRPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm")
+}
+
+pub fn rpm_with_patch_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-with-patch-1.0-0.noarch.rpm")
+}
+
+pub fn rpm_file_attrs_path() -> std::path::PathBuf {
+    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-file-attrs-1.0-1.noarch.rpm")
 }
 
 pub fn cargo_manifest_dir() -> std::path::PathBuf {
@@ -42,12 +72,6 @@ pub fn cargo_manifest_dir() -> std::path::PathBuf {
 
 pub fn cargo_out_dir() -> std::path::PathBuf {
     cargo_manifest_dir().join("target")
-}
-
-pub fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
-    let signing_key = include_bytes!("../test_assets/secret_key.asc");
-    let verification_key = include_bytes!("../test_assets/public_key.asc");
-    (signing_key.to_vec(), verification_key.to_vec())
 }
 
 pub fn load_rsa_keys() -> (Vec<u8>, Vec<u8>) {
@@ -85,12 +109,12 @@ pub fn load_eddsa_keys() -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn ecdsa_private_key() -> Vec<u8> {
-    let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_p256.asc");
+    let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_nistp256.asc");
     std::fs::read(private_key).unwrap()
 }
 
 pub fn ecdsa_public_key() -> Vec<u8> {
-    let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_p256.asc");
+    let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_nistp256.asc");
     std::fs::read(public_key).unwrap()
 }
 
