@@ -77,7 +77,7 @@ mod pgp {
                 FileOptions::new("/etc/Cargo.toml"),
             )?
             .with_file(
-                "./test_assets/empty_file_for_symlink_create",
+                "./tests/assets/SOURCES/empty_file_for_symlink_create",
                 FileOptions::new("/usr/bin/awesome_link")
                     .mode(0o120644)
                     .symlink("/usr/bin/awesome"),
@@ -134,7 +134,7 @@ mod pgp {
     #[serial_test::serial]
     fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
+        let (signing_key, _) = common::load_rsa_keys();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
@@ -173,7 +173,7 @@ mod pgp {
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
+        let (signing_key, _) = common::load_rsa_keys();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
@@ -193,11 +193,11 @@ mod pgp {
     #[serial_test::serial]
     fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_, verification_key) = common::load_asc_keys();
+        let (_, verification_key) = common::load_rsa_keys();
 
         let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
 
-        let rpm_file_path = common::rpm_389_ds_file_path();
+        let rpm_file_path = common::rpm_basic_pkg_path();
         let out_file =
             common::cargo_out_dir().join(rpm_file_path.file_name().unwrap().to_str().unwrap());
 
@@ -210,7 +210,7 @@ mod pgp {
         let cmd = format!(
             r#"
 echo ">>> sign"
-rpm -vv --addsign /out/{rpm_file} 2>&1
+rpmsign -vv --addsign --key-id 849998A2A3F9AE91F2A91696AAC6E3F545417F99 /out/{rpm_file} 2>&1
 
 echo ">>> verify signature with rpm"
 rpm -vv --checksig /out/{rpm_file} 2>&1
@@ -218,7 +218,7 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
             rpm_file = out_file.file_name().unwrap().to_str().unwrap()
         );
 
-        podman_container_launcher(cmd.as_str(), "fedora:38", vec![])?;
+        podman_container_launcher(cmd.as_str(), "fedora:41", vec![])?;
 
         let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
         let mut buf_reader = std::io::BufReader::new(out_file);
@@ -280,7 +280,7 @@ fn podman_container_launcher(
     let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
     let out = format!("{}:/out:z", common::cargo_out_dir().display());
     let assets = format!(
-        "{}/test_assets:/assets:z",
+        "{}/tests/assets:/assets:z",
         common::cargo_manifest_dir().display()
     );
     let new_assets = format!(

@@ -1,17 +1,23 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use common::rpm_basic_pkg_path;
 use rpm::*;
+
+use pretty_assertions::assert_eq;
 
 mod common;
 
 #[test]
 fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
-    assert_boundaries(common::rpm_389_ds_file_path().as_ref())?;
-    assert_boundaries(common::rpm_ima_signed_file_path().as_ref())?;
     assert_boundaries(common::rpm_empty_path().as_ref())?;
     assert_boundaries(common::rpm_empty_source_path().as_ref())?;
+    assert_boundaries(common::rpm_basic_pkg_path().as_ref())?;
+    assert_boundaries(common::rpm_basic_pkg_path_eddsa_signed().as_ref())?;
+    assert_boundaries(common::rpm_basic_pkg_path_ecdsa_signed().as_ref())?;
+    assert_boundaries(common::rpm_basic_pkg_path_rsa_signed().as_ref())?;
+    assert_boundaries(common::rpm_basic_pkg_path_ima_signed().as_ref())?;
 
     let constructed_pkg =
         rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "").build()?;
@@ -21,7 +27,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "signature-meta")]
     {
         use rpm::signature::pgp::Signer;
-        let (signing_key, _) = common::load_asc_keys();
+        let (signing_key, _) = common::load_rsa_keys();
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
         let constructed_pkg_with_sig =
             rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "")

@@ -32,8 +32,8 @@ gpg --output ./signing_keys/secret_rsa4096.asc --armor --export-secret-key rpm-s
 gpg --output ./signing_keys/public_ed25519.asc --armor --export rpm-signing-key-ed25519@example.com
 gpg --output ./signing_keys/secret_ed25519.asc --armor --export-secret-key rpm-signing-key-ed25519@example.com
 
-gpg --output ./signing_keys/public_ecdsa_nistp256.asc --armor --export rpm-signing-key-ecdsa-nistp256@example.com
-gpg --output ./signing_keys/secret_ecdsa_nistp256.asc --armor --export-secret-key rpm-signing-key-ecdsa-nistp256@example.com
+gpg --output ./signing_keys/public_ecdsa_nistp256.asc --armor --export rpm-signing-key-ecdsa-p256@example.com
+gpg --output ./signing_keys/secret_ecdsa_nistp256.asc --armor --export-secret-key rpm-signing-key-ecdsa-p256@example.com
 
 gpg --output ./signing_keys/public_rsa3072_protected.asc --armor --export rpm-signing-key-protected@example.com
 gpg --batch --passphrase="${passphrase}" --pinentry-mode=loopback --output ./signing_keys/secret_rsa3072_protected.asc --armor --export-secret-key rpm-signing-key-protected@example.com
