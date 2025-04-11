@@ -70,9 +70,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("test_assets/freesrp-udev-0.3.0-1.25.x86_64.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.files()? {
     ///     let file = entry?;
     ///     // do something with file.content
@@ -104,11 +104,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// ```text
     /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// package.extract(&package.metadata.get_name()?)?;
-    /// # Ok(()) }
     /// ```
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
         fs::create_dir(&dest)?;
