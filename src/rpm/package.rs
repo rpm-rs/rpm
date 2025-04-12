@@ -971,8 +971,7 @@ impl PackageMetadata {
 
     /// The digest algorithm used per file.
     ///
-    /// Note that this is not necessarily the same as the digest
-    /// used for headers.
+    /// Note that this is not necessarily the same as the digest used for headers.
     pub fn get_file_digest_algorithm(&self) -> Result<DigestAlgorithm, Error> {
         self.header
             .get_entry_data_as_u32(IndexTag::RPMTAG_FILEDIGESTALGO)
@@ -1048,6 +1047,7 @@ impl PackageMetadata {
             Err(Error::TagNotFound(_)) => Ok(None),
             Err(e) => return Err(e),
         };
+        // TODO: verify this is correct behavior for links?
         let links = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS);
@@ -1057,10 +1057,7 @@ impl PackageMetadata {
         {
             Ok(ima_signatures) => Ok(Some(ima_signatures)),
             Err(Error::TagNotFound(_)) => Ok(None),
-            Err(e) => {
-                println!("{e:?}");
-                return Err(e);
-            }
+            Err(e) => return Err(e),
         };
 
         match (
