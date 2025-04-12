@@ -432,8 +432,7 @@ exit 0
 
     println!("Container execution starting...");
 
-    // this is far from perfect, but at least pumps
-    // stdio and stderr out
+    // this is far from perfect, but at least pumps stdio and stderr out
     wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())?;
     println!("Container execution ended.");
     Ok(())
