@@ -102,9 +102,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("test_assets/freesrp-udev-0.3.0-1.25.x86_64.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.files()? {
     ///     let file = entry?;
     ///     // do something with file.content
@@ -136,11 +136,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// ```text
+    /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// package.extract(&package.metadata.get_name()?)?;
-    /// # Ok(()) }
     /// ```
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
         fs::create_dir(&dest)?;
@@ -248,8 +246,8 @@ impl Package {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::Package::open("test_assets/ima_signed.rpm")?;
-    /// let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+    /// let mut package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_rsa4096.asc")?;
     /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
     /// let source_date = 1_600_000_000;
@@ -933,7 +931,7 @@ impl PackageMetadata {
     ///
     /// ```
     /// # use rpm::Package;
-    /// # let package = Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm").unwrap();
+    /// # let package = Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm").unwrap();
     /// let offsets = package.metadata.get_package_segment_offsets();
     /// let lead = offsets.lead..offsets.signature_header;
     /// let sig_header = offsets.signature_header..offsets.header;
@@ -1010,7 +1008,7 @@ impl PackageMetadata {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for path in package.metadata.get_file_paths()? {
     ///     println!("{}", path.display());
     /// }
@@ -1088,7 +1086,7 @@ impl PackageMetadata {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("test_assets/ima_signed.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.metadata.get_file_entries()? {
     ///     println!("{} is {} bytes", entry.path.display(), entry.size);
     /// }
