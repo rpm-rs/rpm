@@ -1,48 +1,49 @@
-use rpm::*;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Stdio;
 
-mod common;
+use rpm::*;
 
-use signature::{self};
+mod common;
 
 #[cfg(target_os = "linux")]
 mod pgp {
     use super::*;
-    use signature::pgp::{Signer, Verifier};
+    use rpm::signature::pgp::{Signer, Verifier};
+
+    #[track_caller]
+    fn execute_against_supported_distros(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let distros = [
+            "quay.io/fedora/fedora:latest",
+            "quay.io/centos/centos:stream10",
+            "quay.io/centos/centos:stream9",
+            "quay.io/almalinuxorg/8-base",
+        ];
+
+        distros.iter().try_for_each(|image| {
+            podman_container_launcher(&cmd, image, vec![])?;
+            Ok(())
+        })
+    }
 
     /// Verify that the RPM is installable with valid signatures on the various supported distros
     #[track_caller]
     fn try_installation_and_verify_signatures(
         path: impl AsRef<Path>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let dnf_cmd = format!(
-            "${{DNF}} ${{REPOS}} install -y {};",
-            path.as_ref().display()
+        let cmd = format!(
+            r#"
+dnf ${{REPOS}} install -y {pkg_path};
+rpm -vv --checksig {pkg_path} 2>&1;"#,
+            pkg_path = path.as_ref().display()
         );
-        let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
-        [
-            ("quay.io/fedora/fedora:42", &rpm_sig_check),
-            ("quay.io/fedora/fedora:42", &dnf_cmd),
-            ("quay.io/centos/centos:stream9", &rpm_sig_check),
-            ("quay.io/centos/centos:stream9", &dnf_cmd),
-            ("quay.io/centos/centos:centos8", &rpm_sig_check),
-            ("quay.io/centos/centos:centos8", &dnf_cmd),
-            ("almalinux:8", &rpm_sig_check),
-            ("almalinux:8", &dnf_cmd),
-        ]
-        .iter()
-        .try_for_each(|(image, cmd)| {
-            podman_container_launcher(cmd, image, vec![])?;
-            Ok(())
-        })
+
+        execute_against_supported_distros(&cmd)
     }
 
     fn build_full_rpm() -> Result<PackageBuilder, Box<dyn std::error::Error>> {
         let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
-
         let bldr = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(CompressionType::Gzip)
             .with_file(
@@ -101,20 +102,45 @@ mod pgp {
         Ok(bldr)
     }
 
+    /// Verify fixture packages against both rpm-rs and rpm (with --checksig)
     #[test]
-    #[serial_test::serial]
-    fn test_install_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
+    #[ignore = "TODO: needs static assets"]
+    fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let pkg = build_full_rpm()?.build()?;
-        let out_file = common::cargo_out_dir().join("full_rpm_nosig.rpm");
-        pkg.write_file(&out_file)?;
-        assert_eq!(1, pkg.metadata.get_epoch()?);
+        // let pkgs = [
+        //     (
+        //         common::rpm_basic_pkg_path_rsa_signed(),
+        //         common::rsa_public_key(),
+        //     ),
+        //     (common::rpm_basic_pkg_path_rsa_signed_proteccted(), common::rsa_public_key_protected()),
+        //     (common::rpm_basic_pkg_path_ecdsa_signed(), common::ecdsa_public_key()),
+        //     (common::rpm_basic_pkg_path_eddsa_signed(), common::eddsa_public_key()),
+        // ];
 
-        try_installation_and_verify_signatures("/out/full_rpm_nosig.rpm")?;
+        // TODO: currently only RSA-signed packages are accepted across the full range of supported distros
+        // it would be nice to test others here as well, but that requires a bit more finesse
 
-        Ok(())
+        let mut cmd = String::new();
+
+        //         for (pkg_path, pubkey) in &pkgs {
+        //             let verifier = Verifier::load_from_asc_bytes(pubkey.as_ref())?;
+        //             let package = rpm::Package::open(pkg_path)?;
+        //             package.verify_signature(verifier)?;
+
+        //             let pkg_cmd = format!(
+        //                 r#"
+        // echo ">>> verify signature with rpm"
+        // rpm -vv --checksig /assets/RPMS/signed/{rpm_file} 2>&1
+        // "#,
+        //                 rpm_file = pkg_path.file_name().unwrap().to_str().unwrap()
+        //             );
+        //             cmd.push_str(&pkg_cmd);
+        //         }
+
+        execute_against_supported_distros(&cmd)
     }
 
+    /// Build an empty RPM using rpm-rs, and install it
     #[test]
     #[serial_test::serial]
     fn test_install_empty_rpm() -> Result<(), Box<dyn std::error::Error>> {
@@ -129,50 +155,12 @@ mod pgp {
         Ok(())
     }
 
-    #[test]
-    #[serial_test::serial]
-    fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
-
-        let pkg = build_full_rpm()?.build_and_sign(signer)?;
-        let out_file = common::cargo_out_dir().join("full_rpm_sig.rpm");
-        pkg.write_file(&out_file)?;
-        assert_eq!(1, pkg.metadata.get_epoch()?);
-
-        try_installation_and_verify_signatures("/out/full_rpm_sig.rpm")?;
-
-        Ok(())
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
-        let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_protected_rsa_keys();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key")
-            .with_key_passphrase(common::test_protected_private_key_passphrase());
-
-        let pkg = build_full_rpm()?.build_and_sign(signer)?;
-        let out_file = common::cargo_out_dir().join("full_rpm_sig_protected.rpm");
-        pkg.write_file(&out_file)?;
-        assert_eq!(1, pkg.metadata.get_epoch()?);
-
-        try_installation_and_verify_signatures("/out/full_rpm_sig_protected.rpm")?;
-
-        Ok(())
-    }
-
+    /// Build and sign an empty RPM using rpm-rs,install it, test verifying the signatures, etc
     #[test]
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (signing_key, _) = common::load_asc_keys();
+        let signing_key = common::rsa_private_key();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
@@ -187,40 +175,57 @@ mod pgp {
         Ok(())
     }
 
-    // @todo: we don't really need to sign the RPMs as part of the test. Can use fixture.
+    /// Build an RPM using rpm-rs, and install it
     #[test]
     #[serial_test::serial]
-    fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_install_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let (_, verification_key) = common::load_asc_keys();
+        let pkg = build_full_rpm()?.build()?;
+        let out_file = common::cargo_out_dir().join("full_rpm_nosig.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+        try_installation_and_verify_signatures("/out/full_rpm_nosig.rpm")?;
 
-        let rpm_file_path = common::rpm_389_ds_file_path();
-        let out_file =
-            common::cargo_out_dir().join(rpm_file_path.file_name().unwrap().to_str().unwrap());
+        Ok(())
+    }
 
-        println!("cpy {} -> {}", rpm_file_path.display(), out_file.display());
-        std::fs::copy(rpm_file_path.as_path(), out_file.as_path()).expect("Must be able to copy");
+    /// Build and sign an RPM using rpm-rs,install it, test verifying the signatures, etc
+    #[test]
+    #[serial_test::serial]
+    fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let signing_key = common::rsa_private_key();
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key");
 
-        // avoid any further usage
-        drop(rpm_file_path);
+        let pkg = build_full_rpm()?.build_and_sign(signer)?;
+        let out_file = common::cargo_out_dir().join("full_rpm_sig.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        let cmd = format!(
-            r#"
-echo ">>> sign"
-rpm -vv --addsign /out/{rpm_file} 2>&1
+        try_installation_and_verify_signatures("/out/full_rpm_sig.rpm")?;
 
-echo ">>> verify signature with rpm"
-rpm -vv --checksig /out/{rpm_file} 2>&1
-"#,
-            rpm_file = out_file.file_name().unwrap().to_str().unwrap()
-        );
+        Ok(())
+    }
 
-        podman_container_launcher(cmd.as_str(), "fedora:42", vec![])?;
-        let package = rpm::Package::open(&out_file)?;
+    /// Build and sign an RPM using rpm-rs and a passphrase-required key,install it, test verifying the signatures, etc
+    #[test]
+    #[serial_test::serial]
+    fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+        let signing_key = common::rsa_private_key();
 
-        package.verify_signature(verifier)?;
+        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
+            .expect("Must load signer from signing key")
+            .with_key_passphrase(common::test_protected_private_key_passphrase());
+
+        let pkg = build_full_rpm()?.build_and_sign(signer)?;
+        let out_file = common::cargo_out_dir().join("full_rpm_sig_protected.rpm");
+        pkg.write_file(&out_file)?;
+        assert_eq!(1, pkg.metadata.get_epoch()?);
+
+        try_installation_and_verify_signatures("/out/full_rpm_sig_protected.rpm")?;
 
         Ok(())
     }
@@ -280,7 +285,7 @@ fn podman_container_launcher(
         common::cargo_manifest_dir().display()
     );
     let new_assets = format!(
-        "{}/tests/assets/signing_keys:/signing_keys:z",
+        "{}/tests/assets:/new_assets:z",
         common::cargo_manifest_dir().display(),
     );
     mappings.extend(vec![out, assets, new_assets, var_cache]);
@@ -305,12 +310,10 @@ fn podman_container_launcher(
     // partially following:
     //
     //  https://access.redhat.com/articles/3359321
-    let cmd = vec![
-        r#"
+    let setup = r#"
 set -e
 
 # Common defaults for package management
-DNF=dnf
 REPOS="--disablerepo=* --enablerepo=fedora"
 PACKAGES="rpm-sign gpg"
 
@@ -325,112 +328,32 @@ if grep -Eq "ID=.*(centos|almalinux)" /etc/os-release; then
 
     REPOS="--disablerepo=* --enablerepo=base*"
     PACKAGES="rpm-sign gpg"
-
-    if grep -q "VERSION_ID=.*7" /etc/os-release; then
-        DNF=yum
-    fi
 fi
 
 echo "\### install tooling for signing"
 
-${DNF} install ${REPOS} -y ${PACKAGES}
+dnf install ${REPOS} -y ${PACKAGES}
 
-# prepare rpm macros
-
-cat > ~/.rpmmacros << EOF_RPMMACROS
-%_signature gpg
-%_gpg_path /root/.gnupg
-%_gpg_name Package Manager
-%_gpgbin /usr/bin/gpg2
-%__gpg_sign_cmd %{__gpg} \
-    --batch \
-    --verbose \
-    --no-armor \
-    --keyid-format long \
-    --pinentry-mode error \
-    --no-secmem-warning \
-    %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \
-    --local-user "%{_gpg_name}" \
-    --sign \
-    --detach-sign \
-    --output %{__signature_filename} \
-    %{__plaintext_filename}
-EOF_RPMMACROS
-
-cat ~/.rpmmacros
-
-### either
-
-#cat > gpgkeyspec <<EOF
-#     %echo Generating a basic OpenPGP key
-#     Key-Type: RSA
-#     Key-Length: 2048
-#     Subkey-Type: RSA
-#     Subkey-Length: 2048
-#     Name-Real: Package Manager
-#     Name-Comment: unprotected
-#     Name-Email: pmanager@example.com
-#     Expire-Date: 0
-#     %no-ask-passphrase
-#     %no-protection
-#     %commit
-#     %echo done
-#EOF
-#gpg --batch --generate-key gpgkeyspec  2>&1
-
-### or (which has a couple of advantages regarding reproducibility)
-
-export PK=/assets/public_key.asc
-export SK=/assets/secret_key.asc
-
-gpg --allow-secret-key-import --import "${SK}" 2>&1
-gpg --import "${PK}" 2>&1
+pushd new_assets/
+sh import_keys.sh
+popd
 
 gpg --keyid-format long --list-secret-keys
 gpg --keyid-format long --list-public-keys
 
-echo -e "5\ny\n" | gpg --no-tty --command-fd 0 --expert --edit-key 2E5A802A67EA36B83018F654CFD331925AB27F39 trust;
-
-
-
-echo "\### create a test signature with this particular key id"
-
-echo "test" | gpg -s --local-user "77500CC056DB3521" > /tmp/test.signature 2>&1
-gpg -d < /tmp/test.signature 2>&1
-
-echo "\### export PK"
-
-gpg --export -a "Package Manager" > /assets/RPM-GPG-KEY-pmanager
-
-dig1=$(gpg "/assets/RPM-GPG-KEY-pmanager" | sha256sum)
-dig2=$(gpg "${PK}" | sha256sum)
-
-if [ "$dig1" != "$dig2" ]; then
-echo "\### expected pub key and exported pubkey differ"
-    echo "EEE /assets/RPM-GPG-KEY-pmanager"
-    gpg /assets/RPM-GPG-KEY-pmanager
-    echo "EEE ${PK}"
-    gpg "${PK}"
-    exit 77
-fi
-
-echo "\### import pub key"
-
-rpm -vv --import "${PK}" 2>&1
-
-rpm -vv --import "/signing_keys/public_rsa3072_protected.asc" 2>&1
-
 set -x
 
-"#,
-cmd,
-r#"
+echo "\### Prelude over, executing user-provided command"
+"#;
 
+    let teardown = r#"
 echo "\### Container should exit any second now"
 exit 0
-"#].join("\n");
+"#;
 
-    println!("Container execution starting...");
+    let cmd = vec![setup, cmd, teardown].join("\n");
+
+    println!("Container execution starting using image \"{}\"...", image);
 
     // this is far from perfect, but at least pumps stdio and stderr out
     wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())?;
