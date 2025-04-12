@@ -109,12 +109,14 @@ pub fn load_eddsa_keys() -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn ecdsa_private_key() -> Vec<u8> {
-    let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_nistp256.asc");
+    let private_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_nistp256.asc");
     std::fs::read(private_key).unwrap()
 }
 
 pub fn ecdsa_public_key() -> Vec<u8> {
-    let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_nistp256.asc");
+    let public_key =
+        cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_nistp256.asc");
     std::fs::read(public_key).unwrap()
 }
 
