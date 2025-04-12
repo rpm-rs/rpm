@@ -285,40 +285,23 @@ impl Verifier {
 
 #[cfg(test)]
 pub(crate) mod test {
-
-    use super::super::{Signing, Verifying, echo_signature};
     use super::*;
+    use crate::signature::pgp::{Signer, Verifier};
+    use crate::signature::{Signing, Verifying, echo_signature};
     use hex_literal::hex;
-
-    use super::Signer;
-    use super::Verifier;
+    use std::io::Cursor;
 
     fn prep() -> (Signer, Verifier) {
         let _ = env_logger::try_init();
-        let (signing_key, verification_key) = load_asc_keys();
+        let signing_key = include_bytes!("../../../tests/assets/signing_keys/public_rsa4096.asc");
+        let verification_key =
+            include_bytes!("../../../tests/assets/signing_keys/secret_rsa4096.asc");
         let verifier =
             Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
         let signer =
-            Signer::load_from_asc_bytes(signing_key.as_slice()).expect("PK parsing failed");
+            Signer::load_from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
         (signer, verifier)
     }
-
-    /// Load a pair of sample keys.
-    pub(crate) fn load_asc_keys() -> (Vec<u8>, Vec<u8>) {
-        let signing_key = include_bytes!("../../../test_assets/secret_key.asc");
-        let verification_key = include_bytes!("../../../test_assets/public_key.asc");
-        (signing_key.to_vec(), verification_key.to_vec())
-    }
-
-    #[test]
-    fn parse_asc() {
-        // assert `prep()` itself is sane
-        let (signing_key, verification_key) = load_asc_keys();
-        assert!(Signer::load_from_asc_bytes(signing_key.as_ref()).is_ok());
-        assert!(Verifier::load_from_asc_bytes(verification_key.as_ref()).is_ok());
-    }
-
-    use std::io::Cursor;
 
     #[test]
     fn sign_verify_roundtrip() {

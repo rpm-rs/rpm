@@ -114,7 +114,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         //         common::rpm_basic_pkg_path_rsa_signed(),
         //         common::rsa_public_key(),
         //     ),
-        //     (common::rpm_basic_pkg_path_rsa_signed_proteccted(), common::rsa_public_key_protected()),
+        //     (common::rpm_basic_pkg_path_rsa_signed_protected(), common::rsa_public_key_protected()),
         //     (common::rpm_basic_pkg_path_ecdsa_signed(), common::ecdsa_public_key()),
         //     (common::rpm_basic_pkg_path_eddsa_signed(), common::eddsa_public_key()),
         // ];
@@ -283,14 +283,10 @@ fn podman_container_launcher(
     let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
     let out = format!("{}:/out:z", common::cargo_out_dir().display());
     let assets = format!(
-        "{}/test_assets:/assets:z",
-        common::cargo_manifest_dir().display()
-    );
-    let new_assets = format!(
-        "{}/tests/assets:/new_assets:z",
+        "{}/tests/assets:/assets:z",
         common::cargo_manifest_dir().display(),
     );
-    mappings.extend(vec![out, assets, new_assets, var_cache]);
+    mappings.extend(vec![out, assets, var_cache]);
     let mut args = mappings
         .iter()
         .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
@@ -336,7 +332,7 @@ echo "\### install tooling for signing"
 
 dnf install ${REPOS} -y ${PACKAGES}
 
-pushd new_assets/
+pushd assets/
 sh import_keys.sh
 popd
 

@@ -69,25 +69,24 @@ pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 use rpm::signature::pgp::Signer;
 
 let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
-
-let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_ed25519.asc")?;
 // It's recommended to use timestamp of last commit in your VCS
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .using_config(build_config)
     .with_file(
-        "./test_assets/awesome.toml",
+        "./tests/assets/SOURCES/example_config.toml",
         rpm::FileOptions::new("/etc/awesome/config.toml")
             .is_config()
             .is_no_replace(),
     )?
     // file mode is inherited from source file
     .with_file(
-        "./test_assets/awesome.py",
+        "./tests/assets/SOURCES/multiplication_tables.py",
         rpm::FileOptions::new("/usr/bin/awesome"),
     )?
     .with_file(
-        "./test_assets/awesome.toml",
+        "./tests/assets/SOURCES/example_config.toml",
         // you can set a custom mode and custom user too
         rpm::FileOptions::new("/etc/awesome/second.toml")
             .mode(rpm::FileMode::regular(0o644))
