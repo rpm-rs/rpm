@@ -112,7 +112,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         //         common::rpm_basic_pkg_path_rsa_signed(),
         //         common::rsa_public_key(),
         //     ),
-        //     (common::rpm_basic_pkg_path_rsa_signed_proteccted(), common::rsa_public_key_protected()),
+        //     (common::rpm_basic_pkg_path_rsa_signed_protected(), common::rsa_public_key_protected()),
         //     (common::rpm_basic_pkg_path_ecdsa_signed(), common::ecdsa_public_key()),
         //     (common::rpm_basic_pkg_path_eddsa_signed(), common::eddsa_public_key()),
         // ];
