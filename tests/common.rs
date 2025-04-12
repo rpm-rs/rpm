@@ -25,8 +25,7 @@ pub fn rpm_basic_pkg_path() -> std::path::PathBuf {
 }
 
 pub fn rpm_basic_pkg_path_ima_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm")
+    cargo_manifest_dir().join("tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm")
 }
 
 pub fn rpm_basic_pkg_path_rsa_signed() -> std::path::PathBuf {
