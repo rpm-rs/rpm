@@ -220,9 +220,7 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
 
         podman_container_launcher(cmd.as_str(), "fedora:41", vec![])?;
 
-        let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
-        let mut buf_reader = std::io::BufReader::new(out_file);
-        let package = rpm::Package::parse(&mut buf_reader)?;
+        let package = rpm::Package::open(&out_file)?;
 
         package.verify_signature(verifier)?;
 
@@ -436,8 +434,7 @@ exit 0
 
     println!("Container execution starting...");
 
-    // this is far from perfect, but at least pumps
-    // stdio and stderr out
+    // this is far from perfect, but at least pumps stdio and stderr out
     wait_and_print_helper(podman_cmd.spawn()?, cmd.as_str())?;
     println!("Container execution ended.");
     Ok(())

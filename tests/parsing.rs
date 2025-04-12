@@ -27,7 +27,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "signature-meta")]
     {
         use rpm::signature::pgp::Signer;
-        let (signing_key, _) = common::load_rsa_keys();
+        let signing_key = common::rsa_private_key();
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
         let constructed_pkg_with_sig =
             rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "")
