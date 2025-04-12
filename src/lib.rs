@@ -1,7 +1,7 @@
 //! # rpm-rs
 //!
-//! A library providing API to parse rpms as well as
-//! creating rpms from individual files.
+//! A library providing API to parse RPM packages as well as creating RPM packages
+//! from individual files.
 //!
 //! All supported compression types are behind feature flags. All of them except bzip2 are enabled
 //! by default. They can be disable if these compression algorithms are unused.
@@ -22,11 +22,12 @@
 //! # let _ = env_logger::Builder::new().filter_level(log::LevelFilter::Trace).is_test(true).try_init();
 //! # #[cfg(feature = "signature-pgp")]
 //! # {
+//! let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 //! // It's recommended to use timestamp of last commit in your VCS
 //! let source_date = 1_600_000_000;
 //! let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-//!     .compression(rpm::CompressionType::Gzip)
+//!     .using_config(build_config)
 //!     .with_file(
 //!         "./test_assets/awesome.toml",
 //!         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),

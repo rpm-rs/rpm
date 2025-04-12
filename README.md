@@ -31,11 +31,13 @@ This library does not build software like rpmbuild. It is meant for finished art
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
 
+let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
+
 let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
 // It's recommended to use timestamp of last commit in your VCS
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
-    .compression(rpm::CompressionType::Gzip)
+    .using_config(build_config)
     .with_file(
         "./test_assets/awesome.toml",
         rpm::FileOptions::new("/etc/awesome/config.toml")

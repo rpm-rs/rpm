@@ -44,8 +44,10 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
 
     fn build_full_rpm() -> Result<PackageBuilder, Box<dyn std::error::Error>> {
         let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let config = BuildConfig::default().compression(CompressionType::Gzip);
+
         let bldr = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
-            .compression(CompressionType::Gzip)
+            .using_config(config)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/foo.toml"),

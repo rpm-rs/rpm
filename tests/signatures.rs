@@ -208,6 +208,7 @@ fn build_parse_sign_and_verify(
     let _ = env_logger::try_init();
 
     let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+    let config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
 
     let mut pkg = rpm::PackageBuilder::new(
         "roundtrip",
@@ -216,7 +217,7 @@ fn build_parse_sign_and_verify(
         "x86_64",
         "spins round and round",
     )
-    .compression(rpm::CompressionType::Gzip)
+    .using_config(config)
     .with_file(
         cargo_file.to_str().unwrap(),
         rpm::FileOptions::new("/etc/foobar/hugo/bazz.toml")

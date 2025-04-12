@@ -36,21 +36,90 @@ fn file_mode(_file: &fs::File) -> Result<u32, Error> {
     Ok(0)
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum RpmFormat {
-    #[default]
     V4,
     V6,
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct BuildConfig {
     format: RpmFormat,
+    compression: CompressionWithLevel,
 }
 
 impl From<RpmFormat> for BuildConfig {
     fn from(value: RpmFormat) -> Self {
-        Self { format: value }
+        match value {
+            RpmFormat::V4 => Self::v4(),
+            RpmFormat::V6 => Self::v6(),
+        }
+    }
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self::v4()
+    }
+}
+
+impl BuildConfig {
+    /// Use "RPM v4" defaults for the RPM - may impact compatibility
+    pub fn v4() -> Self {
+        Self {
+            format: RpmFormat::V4,
+            compression: CompressionWithLevel::default(),
+        }
+    }
+
+    /// Use "RPM v6" defaults for the RPM - may impact compatibility
+    pub fn v6() -> Self {
+        Self {
+            format: RpmFormat::V4,
+            compression: CompressionWithLevel::default(),
+        }
+    }
+
+    /// Set the compression type and/or level to be used for the payload of the built package
+    ///
+    /// Passing a `CompressionType` value will use a default compression level which has been
+    /// optimized for package size over compression time.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .using_config(build_config)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    /// If you would like to specify a custom compression level (for faster package builds, at the
+    /// expense of package size), pass a `CompressionWithLevel` value instead.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let build_config = rpm::BuildConfig::default().compression(rpm::CompressionWithLevel::Zstd(3));
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .using_config(build_config)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// For Gzip compression, the expected range is 0 to 9, with a default value of 9.
+    /// For Xz compression, the expected range is 0 to 9, with a default value of 9.
+    /// For Zstd compression, the expected range is 1 to 22, with a default value of 19.
+    ///
+    /// If this method is not called, the payload will be Gzip compressed by default. This may
+    /// change in future versions of the library.
+    pub fn compression(mut self, compression: impl Into<CompressionWithLevel>) -> Self {
+        self.compression = compression.into();
+        self
     }
 }
 
@@ -99,7 +168,6 @@ pub struct PackageBuilder {
     changelog_names: Vec<String>,
     changelog_entries: Vec<String>,
     changelog_times: Vec<Timestamp>,
-    compression: CompressionWithLevel,
 
     vendor: Option<String>,
     packager: Option<String>,
@@ -149,7 +217,7 @@ impl PackageBuilder {
     /// /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
-    ///     .using_config(RpmFormat::V4)
+    ///     .using_config(BuildConfig::v4().compression(CompressionType::Gzip))
     ///     .build();
     /// # Ok(())
     /// # }
@@ -279,45 +347,6 @@ impl PackageBuilder {
         self.cookie = Some(cookie.as_ref().to_owned());
         self
     }
-
-    /// Set the compression type and/or level to be used for the payload of the built package
-    ///
-    /// Passing a `CompressionType` value will use a default compression level which has been
-    /// optimized for package size over compression time.
-    ///
-    /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    ///
-    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
-    ///     .compression(rpm::CompressionType::Gzip)
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    /// If you would like to specify a custom compression level (for faster package builds, at the
-    /// expense of package size), pass a `CompressionWithLevel` value instead.
-    ///
-    /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    ///
-    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
-    ///     .compression(rpm::CompressionWithLevel::Zstd(3))
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// For Gzip compression, the expected range is 0 to 9, with a default value of 9.
-    /// For Xz compression, the expected range is 0 to 9, with a default value of 9.
-    /// For Zstd compression, the expected range is 1 to 22, with a default value of 19.
-    ///
-    /// If this method is not called, the payload will be Gzip compressed by default. This may
-    /// change in future versions of the library.
-    pub fn compression(mut self, comp: impl Into<CompressionWithLevel>) -> Self {
-        self.compression = comp.into();
-        self
-    }
-    // @todo: move compression() to the package config
 
     /// Add an entry to the package changelog.
     ///
@@ -724,7 +753,7 @@ impl PackageBuilder {
 
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
-        let mut compressor: Compressor = self.compression.try_into()?;
+        let mut compressor: Compressor = self.config.compression.try_into()?;
         let mut archive = ChecksummingWriter::new(&mut compressor);
 
         let mut ino_index = 1;
@@ -842,7 +871,7 @@ impl PackageBuilder {
                 .push(Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"));
         }
 
-        if self.compression.compression_type() == CompressionType::Zstd {
+        if self.config.compression.compression_type() == CompressionType::Zstd {
             self.requires
                 .push(Dependency::rpmlib("PayloadIsZstd", "5.4.18-1"));
         }
@@ -1261,7 +1290,7 @@ impl PackageBuilder {
             ]);
         }
 
-        let compression_details = match self.compression {
+        let compression_details = match self.config.compression {
             CompressionWithLevel::None => None,
             CompressionWithLevel::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
             CompressionWithLevel::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),

@@ -21,6 +21,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg_attr(not(feature = "gzip-compression"), allow(unused_variables, unused_mut))]
     let mut buff = std::io::Cursor::new(Vec::<u8>::new());
+    let config = BuildConfig::default().compression(CompressionType::Gzip);
 
     let pkg = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
         .description(
@@ -28,7 +29,7 @@ fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
 
 However, it does nothing.",
         )
-        .compression(rpm::CompressionType::Gzip)
+        .using_config(config)
         .with_file(
             "Cargo.toml",
             FileOptions::new("/etc/awesome/config.toml").is_config_noreplace(),
