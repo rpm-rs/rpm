@@ -161,7 +161,7 @@ impl CompressionWithLevel {
 }
 
 impl Default for CompressionWithLevel {
-    // The preference of the default compression type is listed in decending order and dependent on
+    // The preference of the default compression type is listed in descending order and dependent on
     // the enabled feature flags.
     // Writing this without allowing unreachable code is possible but not very pretty. It involves
     // checking if the previous features haven't been enabled on each return so this is a

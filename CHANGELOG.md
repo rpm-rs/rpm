@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   See [#108](https://github.com/rpm-rs/rpm/issues/108) or the notes in `src/payload.rs`.
 - Switched the `flate2` and `bzip2` dependencies to use native Rust implementations of the underlying compression.
 - Added `PackageBuilder::with_file_contents()` for inserting binary content directly into packages instead of requiring on-disk files.
+- Moved `PackageBuilder::compression()` functionality to the new build config via `BuildConfig::compression()`.
 - Bump `pgp` to `0.16.0`
 - Bump `bzip2` to `0.6.0`
 
