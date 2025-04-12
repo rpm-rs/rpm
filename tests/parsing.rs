@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use common::rpm_basic_pkg_path;
 use rpm::*;
@@ -83,30 +83,23 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn test_rpm_file_signatures() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = common::rpm_ima_signed_file_path();
-    let metadata = rpm::PackageMetadata::open(rpm_file_path)?;
+fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = common::rpm_empty_path();
+    let package = Package::open(rpm_file_path)?;
 
-    let signatures: Vec<_> = metadata
-        .get_file_entries()?
-        .iter()
-        .map(|f| f.ima_signature.clone())
-        .collect();
+    assert!(package.metadata.get_file_paths()?.is_empty());
+    assert!(package.metadata.get_file_entries()?.is_empty());
 
-    assert_eq!(
-        signatures,
-        [
-            Some(String::from(
-                "0302041adfaa0e004630440220162785458f5d81d1393cc72afc642c86167c15891ea39213e28907b1c4e8dc6c02202fa86ad2f5e474d36c59300f736f52cb5ed24abb55759a71ec224184a7035a78"
-            )),
-            Some(String::from(
-                "0302041adfaa0e00483046022100bd940093777b75650980afb656507f2729a05c9b1bc9986993106de9f301a172022100b3384f6ba200a5a80647a0f0727c5b8f3ab01f74996a1550db605b44af3d10bf"
-            )),
-            Some(String::from(
-                "0302041adfaa0e00473045022068953626d7a5b65aa4b1f1e79a2223f2d3500ddcb3d75a7050477db0480a13e10221008637cefe8c570044e11ff95fa933c1454fd6aa8793bbf3e87edab2a2624df460"
-            )),
-        ],
-    );
+    Ok(())
+}
+
+#[test]
+fn test_rpm_no_symlinks() -> Result<(), Box<dyn std::error::Error>> {
+    let rpm_file_path = rpm_basic_pkg_path();
+    let package = Package::open(rpm_file_path)?;
+
+    assert_eq!(11, package.metadata.get_file_entries()?.len());
+    // TODO: this test could probably use improvement?  What is the goal here?
 
     Ok(())
 }
