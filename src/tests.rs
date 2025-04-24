@@ -451,3 +451,26 @@ fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_metadata_size() -> Result<(), Box<dyn std::error::Error>> {
+    // these numbers are calculated with the help of createrepo.
+    // here is how to reproduce if necessary:
+    // copy all listed RPM's in a directory, run "createrepo --update ." in this directory
+    // inspect the resulting primary.xml file and search for package > format > rpm:header-range.
+    // the field "end" contains the value you are looking for.
+    let test_table = [
+        ("389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm", 148172),
+        ("freesrp-udev-0.3.0-1.25.x86_64.rpm", 7989),
+        ("ima_signed.rpm", 6520),
+        ("rpm-sign-4.15.1-1.fc31.x86_64.rpm", 17328),
+    ];
+
+    for (pkg_name, expected) in test_table {
+        let path = cargo_manifest_dir().join("test_assets").join(pkg_name);
+        let pkg = Package::open(path)?;
+        assert_eq!(expected, pkg.metadata.get_total_metadata_size())
+    }
+
+    Ok(())
+}

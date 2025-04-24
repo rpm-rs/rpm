@@ -284,7 +284,7 @@ where
     }
 
     /// Size (in bytes) of this header in on-disk representation, not including padding
-    pub(crate) fn size(&self) -> u32 {
+    pub fn size(&self) -> u32 {
         let index_size = self.index_header.num_entries * INDEX_ENTRY_SIZE;
         let data_size = self.index_header.data_section_size;
 
@@ -352,7 +352,7 @@ impl Header<IndexSignatureTag> {
     ///
     /// Parsing and writing out this section requires knowing how much padding is needed to complete
     /// the alignment.
-    pub(crate) fn padding_required(&self) -> u32 {
+    pub fn padding_required(&self) -> u32 {
         (8 - (self.index_header.data_section_size % 8)) % 8
     }
 
@@ -381,6 +381,12 @@ impl Header<IndexSignatureTag> {
             out.write_all(&padding)?;
         }
         Ok(())
+    }
+
+    /// Calculate the padded size for the this signature header.
+    /// This is the actual size this header will take on disk.
+    pub fn padded_size(&self) -> u32 {
+        self.size() + self.padding_required()
     }
 }
 

@@ -9,7 +9,12 @@ use std::{
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::{CompressionType, constants::*, decompress_stream, errors::*};
+use crate::{
+    CompressionType,
+    constants::{self, *},
+    decompress_stream,
+    errors::*,
+};
 
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
@@ -490,6 +495,11 @@ impl PackageMetadata {
             signature: signature_header,
             header,
         })
+    }
+
+    /// Calculate the complete size of the metadata block, including lead, signature, padding and header size.
+    pub fn get_total_metadata_size(&self) -> u32 {
+        self.header.size() + self.signature.padded_size() + constants::LEAD_SIZE
     }
 
     /// Write the RPM header to a buffer
