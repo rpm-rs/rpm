@@ -6,7 +6,7 @@ use std::process::Stdio;
 
 mod common;
 
-use signature::{self, Verifying};
+use signature::{self};
 
 #[cfg(target_os = "linux")]
 mod pgp {

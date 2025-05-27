@@ -9,7 +9,7 @@ use crate::signature::pgp::Verifier;
 #[cfg(feature = "signature-pgp")]
 use pgp::crypto::public_key::PublicKeyAlgorithm;
 #[cfg(feature = "signature-pgp")]
-use pgp::{base64_decoder::Base64Decoder, base64_reader::Base64Reader};
+use pgp::{base64::Base64Decoder, base64::Base64Reader};
 
 use std::default::Default;
 
@@ -61,7 +61,11 @@ impl SignatureHeaderBuilder {
             // need to base64-encode the raw bytes of the signatures
             for sig_bytes in &self.openpgp_signatures {
                 let signature = Verifier::parse_signature(sig_bytes)?;
-                let tag = match signature.config.pub_alg {
+                let tag = match signature
+                    .config()
+                    .ok_or(crate::Error::UnknownVersionSignature)?
+                    .pub_alg
+                {
                     PublicKeyAlgorithm::RSA => IndexSignatureTag::RPMSIGTAG_RSA,
                     PublicKeyAlgorithm::ECDSA
                     | PublicKeyAlgorithm::EdDSALegacy
