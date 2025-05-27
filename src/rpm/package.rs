@@ -16,7 +16,7 @@ use crate::signature::pgp::Verifier;
 #[cfg(feature = "signature-meta")]
 use crate::{Timestamp, signature};
 #[cfg(feature = "signature-pgp")]
-use pgp::{base64_decoder::Base64Decoder, base64_reader::Base64Reader};
+use pgp::base64::{Base64Decoder, Base64Reader};
 #[cfg(feature = "signature-meta")]
 use std::fmt::Debug;
 
@@ -250,11 +250,8 @@ impl Package {
                 decoder.read_to_end(&mut signature)?;
                 let signature = Verifier::parse_signature(&signature)?;
 
-                let new_key_ids: Vec<String> = signature
-                    .issuer()
-                    .iter()
-                    .map(|x| format!("{:x}", x))
-                    .collect();
+                let new_key_ids: Vec<String> =
+                    signature.issuer().iter().map(|x| format!("{x}")).collect();
 
                 if key_ids.len() != 1 {
                     return Err(Error::UnexpectedIssuerCount(
@@ -293,11 +290,7 @@ impl Package {
                 signature = Verifier::parse_signature(rpm_v3_sig);
             }
 
-            let key_ids: Vec<String> = signature?
-                .issuer()
-                .iter()
-                .map(|x| format!("{:x}", x))
-                .collect();
+            let key_ids: Vec<String> = signature?.issuer().iter().map(|x| format!("{x}")).collect();
 
             if key_ids.len() != 1 {
                 return Err(Error::UnexpectedIssuerCount(

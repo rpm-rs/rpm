@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internally vendored and modified Jonathan Creekmore's `cpio` dependency, as RPM doesn't use vanilla CPIO.
   See [#108](https://github.com/rpm-rs/rpm/issues/108) or the notes in `src/payload.rs`.
 - Switched the `flate2` and `bzip2` dependencies to use native Rust implementations of the underlying compression.
+- Bump `pgp` to `0.16.0`
 
 ## 0.17.0
 
