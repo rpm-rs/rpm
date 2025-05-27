@@ -58,6 +58,9 @@ pub enum Error {
     #[error("signature packet not found in what is supposed to be a signature")]
     NoSignatureFound,
 
+    #[error("signature packet found, but no version was specified")]
+    UnknownVersionSignature,
+
     #[cfg(feature = "signature-pgp")]
     #[error("error creating signature: {0}")]
     SignError(#[source] pgp::errors::Error),
