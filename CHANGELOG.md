@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for multiple signatures on a package as supported by upstream RPM.
 - RPMs that internally use the stripped-cpio format for the archive (v6 RPMs, or older ones with a file
   larger than 4gb) are now supported.
+- Added support for Sha3 checksums in headers and payloads - includes the addition of these checksums to
+  newly-built packages.
 
 ### Fixed
 

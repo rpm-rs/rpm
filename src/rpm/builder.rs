@@ -399,7 +399,7 @@ impl PackageBuilder {
         let mut hasher = sha2::Sha256::default();
         hasher.update(&content);
         let hash_result = hasher.finalize();
-        let sha_checksum = hex::encode(hash_result); // encode as string
+        let sha256_checksum = hex::encode(hash_result); // encode as string
         let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
@@ -416,7 +416,7 @@ impl PackageBuilder {
             // We do this so that it's possible to verify that caps are correct when provided
             // and then later check if any were set
             caps: options.caps,
-            sha_checksum,
+            sha_checksum: sha256_checksum,
             verify_flags: options.verify_flags,
         };
 
@@ -654,7 +654,7 @@ impl PackageBuilder {
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
         let mut compressor: Compressor = self.compression.try_into()?;
-        let mut archive = Sha256Writer::new(&mut compressor);
+        let mut archive = ChecksummingWriter::new(&mut compressor);
 
         let mut ino_index = 1;
 
@@ -1135,8 +1135,10 @@ impl PackageBuilder {
             ),
         ]);
 
+        let (archive_sha256, archive_sha3_256) = archive.into_digests();
         // digest of the uncompressed raw archive calculated on the inner writer
-        let raw_archive_digest_sha256 = hex::encode(archive.into_digest());
+        let raw_archive_digest_sha256 = hex::encode(&archive_sha256);
+        let raw_archive_digest_sha3_256 = hex::encode(&archive_sha3_256);
         let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
@@ -1146,9 +1148,15 @@ impl PackageBuilder {
             hex::encode(hasher.finalize())
         };
 
+        let payload_digest_sha3_256 = {
+            let mut hasher = sha3::Sha3_256::default();
+            hasher.update(payload.as_slice());
+            hex::encode(hasher.finalize())
+        };
+
         actual_records.extend([
             IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADDIGEST,
+                IndexTag::RPMTAG_PAYLOADSHA256,
                 offset,
                 IndexData::StringArray(vec![payload_digest_sha256]),
             ),
@@ -1158,9 +1166,19 @@ impl PackageBuilder {
                 IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
             ),
             IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADDIGESTALT,
+                IndexTag::RPMTAG_PAYLOADSHA256ALT,
                 offset,
                 IndexData::StringArray(vec![raw_archive_digest_sha256]),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOAD_SHA3_256,
+                offset,
+                IndexData::StringTag(payload_digest_sha3_256),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
+                offset,
+                IndexData::StringTag(raw_archive_digest_sha3_256),
             ),
         ]);
 
