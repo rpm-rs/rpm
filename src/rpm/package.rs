@@ -171,8 +171,10 @@ impl Package {
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
         let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
-        let sig_header_builder =
-            SignatureHeaderBuilder::new().set_sha256_digest(&header_digest_sha256);
+        let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header_bytes.as_slice()));
+        let sig_header_builder = SignatureHeaderBuilder::new()
+            .set_sha256_digest(&header_digest_sha256)
+            .set_sha3_256_digest(&header_digest_sha3_256);
         self.metadata.signature = sig_header_builder.build()?;
 
         Ok(())
@@ -389,6 +391,10 @@ impl Package {
             .metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256);
+        let sha3_256_declared = self
+            .metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256);
 
         if let Ok(md5_declared) = md5_declared {
             let header_and_content_digest_md5 = {
@@ -413,6 +419,13 @@ impl Package {
         if let Ok(sha256) = sha256_declared {
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
             if sha256 != header_digest_sha256 {
+                return Err(Error::DigestMismatchError);
+            }
+        }
+
+        if let Ok(sha3_256) = sha3_256_declared {
+            let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header.as_slice()));
+            if sha3_256 != header_digest_sha3_256 {
                 return Err(Error::DigestMismatchError);
             }
         }
