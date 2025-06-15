@@ -492,27 +492,33 @@ impl Dependency {
 }
 
 /// A wrapper for calculating the sha256 checksum of the contents written to it
-pub struct Sha256Writer<W> {
+pub struct ChecksummingWriter<W> {
     writer: W,
-    hasher: sha2::Sha256,
+    sha256_hasher: sha2::Sha256,
+    sha3_256_hasher: sha3::Sha3_256,
 }
 
-impl<W> Sha256Writer<W> {
+impl<W> ChecksummingWriter<W> {
     pub fn new(writer: W) -> Self {
-        Sha256Writer {
+        Self {
             writer,
-            hasher: sha2::Sha256::new(),
+            sha256_hasher: sha2::Sha256::new(),
+            sha3_256_hasher: sha3::Sha3_256::new(),
         }
     }
 
-    pub fn into_digest(self) -> impl AsRef<[u8]> {
-        self.hasher.finalize()
+    pub fn into_digests(self) -> (Box<[u8]>, Box<[u8]>) {
+        (
+            self.sha256_hasher.finalize().as_slice().into(),
+            self.sha3_256_hasher.finalize().as_slice().into(),
+        )
     }
 }
 
-impl<W: std::io::Write> std::io::Write for Sha256Writer<W> {
+impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.hasher.update(buf);
+        self.sha256_hasher.update(buf);
+        self.sha3_256_hasher.update(buf);
         self.writer.write(buf)
     }
 

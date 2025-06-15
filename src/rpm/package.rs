@@ -430,36 +430,33 @@ impl Package {
             }
         }
 
-        let payload_digest_val = self
+        let payload_sha256 = self
             .metadata
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADDIGEST);
-        let payload_digest_algo = self
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256);
+        let payload_sha3_256 = self
             .metadata
             .header
-            .get_entry_data_as_u32(IndexTag::RPMTAG_PAYLOADDIGESTALGO);
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256);
 
-        if let (Ok(payload_digest_val), Ok(payload_digest_algo)) =
-            (payload_digest_val, payload_digest_algo)
-        {
-            let payload_digest_algo = DigestAlgorithm::from_u32(payload_digest_algo)
-                .expect("Completely unknown payload digest algorithm");
-
-            // @todo: UnsupportedDigestAlgorithm is awkward, if a number is outside the range of the expected
-            // variants to begin with, we can't even return it, as it carries a DigestAlgorithm. But also, in
-            // this case even when it is "supported" by the library in general it is not supported here in particular
-            // Not that that should happen here for a while to come.
-
-            let mut hasher = match payload_digest_algo {
-                DigestAlgorithm::Sha2_256 => sha2::Sha256::default(),
-                a => return Err(Error::UnsupportedDigestAlgorithm(a)),
-                // At the present moment even rpmbuild only supports sha256
-            };
+        if let Ok(payload_sha256) = payload_sha256 {
+            let mut hasher = sha2::Sha256::default();
             let payload_digest = {
                 hasher.update(self.content.as_slice());
                 hex::encode(hasher.finalize())
             };
-            if payload_digest != payload_digest_val[0] {
+            if payload_digest != payload_sha256[0] {
+                return Err(Error::DigestMismatchError);
+            }
+        }
+
+        if let Ok(payload_sha3_256) = payload_sha3_256 {
+            let mut hasher = sha3::Sha3_256::default();
+            let payload_digest = {
+                hasher.update(self.content.as_slice());
+                hex::encode(hasher.finalize())
+            };
+            if payload_digest != payload_sha3_256 {
                 return Err(Error::DigestMismatchError);
             }
         }

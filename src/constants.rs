@@ -342,12 +342,12 @@ pub enum IndexTag {
     RPMTAG_TRANSFILETRIGGERTYPE = 5089,
     RPMTAG_FILESIGNATURES = 5090,
     RPMTAG_FILESIGNATURELENGTH = 5091,
-    RPMTAG_PAYLOADDIGEST = 5092, // hex-encoded string representing the digest of the payload
+    RPMTAG_PAYLOADSHA256 = 5092, // hex-encoded string representing the sha256 digest of the payload
     RPMTAG_PAYLOADDIGESTALGO = 5093,
     RPMTAG_AUTOINSTALLED = 5094,
     RPMTAG_IDENTITY = 5095,
     RPMTAG_MODULARITYLABEL = 5096,
-    RPMTAG_PAYLOADDIGESTALT = 5097, // hex-encoded string representing the digest of the payload without compression
+    RPMTAG_PAYLOADSHA256ALT = 5097, // hex-encoded string representing the sha256 digest of the payload without compression
     RPMTAG_ARCHSUFFIX = 5098,
     RPMTAG_SPEC = 5099,
     RPMTAG_TRANSLATIONURL = 5100,
@@ -368,6 +368,11 @@ pub enum IndexTag {
     RPMTAG_FILEMIMEINDEX = 5115,
     RPMTAG_MIMEDICT = 5116,
     RPMTAG_FILEMIMES = 5117,
+    RPMTAG_PACKAGEDIGESTS = 5118,
+    RPMTAG_PACKAGEDIGESTALGOS = 5119,
+    RPMTAG_SOURCENEVR = 5120,
+    RPMTAG_PAYLOAD_SHA3_256 = 5123, // hex-encoded string representing the sha3-256 digest of the payload
+    RPMTAG_PAYLOAD_SHA3_256_ALT = 5124, // hex-encoded string representing the sha3-256 digest of the payload without compression
 }
 
 #[repr(u32)]
