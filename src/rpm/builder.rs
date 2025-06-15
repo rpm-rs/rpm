@@ -596,9 +596,11 @@ impl PackageBuilder {
 
         let sig_header = {
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
+            let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(&header));
 
             SignatureHeaderBuilder::new()
                 .set_sha256_digest(header_digest_sha256.as_str())
+                .set_sha3_256_digest(header_digest_sha3_256.as_str())
                 .build()?
         };
 

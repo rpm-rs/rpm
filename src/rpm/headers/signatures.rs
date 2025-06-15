@@ -17,6 +17,7 @@ use std::default::Default;
 pub struct SignatureHeaderBuilder {
     openpgp_signatures: Vec<Vec<u8>>,
     header_sha256: Option<String>,
+    header_sha3_256: Option<String>,
 }
 
 impl Default for SignatureHeaderBuilder {
@@ -46,6 +47,7 @@ impl SignatureHeaderBuilder {
         Self {
             openpgp_signatures: Vec::new(),
             header_sha256: None,
+            header_sha3_256: None,
         }
     }
 
@@ -100,6 +102,14 @@ impl SignatureHeaderBuilder {
             ));
         }
 
+        if let Some(digest) = self.header_sha3_256 {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_SHA3_256,
+                0i32,
+                IndexData::StringTag(digest),
+            ));
+        }
+
         let header = Header::<IndexSignatureTag>::from_entries(
             entries,
             IndexSignatureTag::HEADER_SIGNATURES,
@@ -108,19 +118,25 @@ impl SignatureHeaderBuilder {
         Ok(header)
     }
 
-    /// add a sha256 digest of the header bytes
+    /// Add a sha256 digest of the header bytes
     pub fn set_sha256_digest(mut self, digest_header_sha256: &str) -> Self {
         self.header_sha256 = Some(digest_header_sha256.to_owned());
         self
     }
 
-    // add an openpgp signature of the header bytes
+    /// Add a sha3-256 digest of the header bytes
+    pub fn set_sha3_256_digest(mut self, digest_header_sha3_256: &str) -> Self {
+        self.header_sha3_256 = Some(digest_header_sha3_256.to_owned());
+        self
+    }
+
+    // Add an openpgp signature of the header bytes
     pub fn add_openpgp_signature(mut self, signature: Vec<u8>) -> Self {
         self.openpgp_signatures.push(signature);
         self
     }
 
-    // clear all header signatures
+    // Clear all header signatures
     pub fn clear_signatures(mut self) -> Self {
         self.openpgp_signatures.clear();
         self

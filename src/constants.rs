@@ -60,6 +60,7 @@ pub enum IndexTag {
     RPMTAG_VERITYSIGNATURES = HEADER_SIGBASE + 20,
     RPMTAG_VERITYSIGNATUREALGO = HEADER_SIGBASE + 21,
     RPMTAG_OPENPGP = HEADER_SIGBASE + 22,
+    RPMTAG_SHA3_256_HEADER = HEADER_SIGBASE + 23,
 
     RPMTAG_NAME = 1000,
     RPMTAG_VERSION = 1001,
@@ -430,6 +431,10 @@ pub enum IndexSignatureTag {
     /// All OpenPGP signatures present in the header
     RPMSIGTAG_OPENPGP = IndexTag::RPMTAG_OPENPGP as u32,
 
+    /// This tag contains the SHA3-256 checksum of the entire Header Section, including the Header Record,
+    /// Index Records and Header store, stored as a hex-encoded string.
+    RPMSIGTAG_SHA3_256 = IndexTag::RPMTAG_SHA3_256_HEADER as u32,
+
     /// This tag specifies the RSA signature of the combined Header and Payload sections.
     /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_PGP = 1002,
@@ -438,7 +443,7 @@ pub enum IndexSignatureTag {
     /// The data is formatted as a Version 3 Signature Packet as specified in RFC 2440: OpenPGP Message Format.
     RPMSIGTAG_GPG = 1005,
 
-    /// This index contains the SHA256 checksum of the entire Header Section, including the Header Record,
+    /// This tag contains the SHA256 checksum of the entire Header Section, including the Header Record,
     /// Index Records and Header store, stored as a hex-encoded string.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
