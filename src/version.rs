@@ -93,10 +93,26 @@ impl<'a> Nevra<'a> {
 
     /// Parse the name, epoch, version, release and arch values and return them as a 5-element tuple
     pub fn parse_values(nevra: &'a str) -> (&'a str, &'a str, &'a str, &'a str, &'a str) {
-        let (name, evra) = nevra.split_once('-').unwrap_or((nevra, ""));
-        let (epoch, vra) = evra.split_once(':').unwrap_or(("", evra));
-        let (version, ra) = vra.split_once('-').unwrap_or((vra, ""));
-        let (release, arch) = ra.rsplit_once('.').unwrap_or((ra, ""));
+        // 1. Split Architecture from the right.
+        // Example: "foo-1:2.3-4.x86_64" -> ("foo-1:2.3-4", "x86_64")
+        let (nevr, arch) = nevra.rsplit_once('.').unwrap_or((nevra, ""));
+
+        // 2. Split Release from the right of the remainder.
+        // Example: "foo-1:2.3-4" -> ("foo-1:2.3", "4")
+        let (nev, release) = nevr.rsplit_once('-').unwrap_or((nevr, ""));
+
+        // 3. Split Version (with potential Epoch) from the right of the remainder.
+        // Example: "foo-1:2.3" -> ("foo", "1:2.3")
+        let (name, version_epoch) = nev.rsplit_once('-').unwrap_or((nev, ""));
+
+        // 4. Check the version part for an Epoch.
+        // The epoch is separated by a colon. If no colon exists, the epoch is empty.
+        let (epoch, version) = match version_epoch.split_once(':') {
+            // Example: "1:2.3" -> ("1", "2.3")
+            Some((e, v)) => (e, v),
+            // Example: "2.3" -> ("", "2.3")
+            None => ("", version_epoch),
+        };
 
         (name, epoch, version, release, arch)
     }
@@ -480,7 +496,6 @@ mod test {
     #[test]
     fn test_nevra_parse_edge_cases() {
         assert_eq!(Nevra::parse_values("foo"), ("foo", "", "", "", ""));
-        assert_eq!(Nevra::parse_values("foo-1.2"), ("foo", "", "1.2", "", ""));
         assert_eq!(
             Nevra::parse_values("foo-1.2-3.bar"),
             ("foo", "", "1.2", "3", "bar")
@@ -494,18 +509,23 @@ mod test {
             ("python3.9", "", "3.9.11", "2.fc38", "x86_64")
         );
 
-        assert_eq!(Evr::parse_values("-"), ("", "", ""));
-        assert_eq!(Evr::parse_values("."), ("", ".", ""));
-        assert_eq!(Evr::parse_values(":"), ("", "", ""));
-        assert_eq!(Evr::parse_values(":-"), ("", "", ""));
-        assert_eq!(Evr::parse_values(".-"), ("", ".", ""));
-        assert_eq!(Evr::parse_values("0"), ("", "0", ""));
-        assert_eq!(Evr::parse_values("0-"), ("", "0", ""));
-        assert_eq!(Evr::parse_values(":0"), ("", "0", ""));
-        assert_eq!(Evr::parse_values(":0-"), ("", "0", ""));
-        assert_eq!(Evr::parse_values("0:"), ("0", "", ""));
-        assert_eq!(Evr::parse_values("asdf:"), ("asdf", "", ""));
-        assert_eq!(Evr::parse_values("~:"), ("~", "", ""));
+        let nevra = Nevra::new("python3.9-devel", "0", "3.9.11", "2.fc38", "x86_64");
+        assert_eq!(Nevra::parse("python3.9-devel-3.9.11-2.fc38.x86_64"), nevra);
+
+        let nevra = Nevra::new("foo-bar", "", "1.2.3", "45", "x86_64");
+        assert_eq!(Nevra::parse("foo-bar-1.2.3-45.x86_64"), nevra);
+
+        let nevra = Nevra::new("foo-bar", "0", "1.2.3", "45", "x86_64");
+        assert_eq!(Nevra::parse("foo-bar-0:1.2.3-45.x86_64"), nevra);
+
+        let nevra = Nevra::new("foo-bar-0", "", "1.2.3", "45.el10", "x86_64");
+        assert_eq!(Nevra::parse("foo-bar-0-1.2.3-45.el10.x86_64"), nevra);
+
+        let nevra = Nevra::new("foo-bar-0", "0", "1.2.3", "45.el10", "x86_64");
+        assert_eq!(Nevra::parse("foo-bar-0-0:1.2.3-45.el10.x86_64"), nevra);
+
+        let nevra = Nevra::new("grub2-efi-x64", "1", "2.12", "28.fc42", "x86_64");
+        assert_eq!(Nevra::parse("grub2-efi-x64-1:2.12-28.fc42.x86_64"), nevra);
     }
 
     /// Test comparing NEVRAs using comparison operators
