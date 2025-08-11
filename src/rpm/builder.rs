@@ -38,8 +38,8 @@ fn file_mode(_file: &fs::File) -> Result<u32, Error> {
 
 #[derive(Default, PartialEq)]
 pub enum RpmFormat {
-    V4,
     #[default]
+    V4,
     V6,
 }
 
