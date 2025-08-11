@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.16.1
+
+### Fixed
+
+- RPM "NEVRA" parsing was incorrect in cases where the package name included hyphen ('-') characters.
+
 ## 0.16.0
 
 ### Added
