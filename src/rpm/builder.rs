@@ -36,9 +36,29 @@ fn file_mode(_file: &fs::File) -> Result<u32, Error> {
     Ok(0)
 }
 
+#[derive(Default, PartialEq)]
+pub enum RpmFormat {
+    V4,
+    #[default]
+    V6,
+}
+
+#[derive(Default)]
+pub struct BuildConfig {
+    format: RpmFormat,
+}
+
+impl From<RpmFormat> for BuildConfig {
+    fn from(value: RpmFormat) -> Self {
+        Self { format: value }
+    }
+}
+
 /// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
 pub struct PackageBuilder {
+    config: BuildConfig,
+
     name: String,
     epoch: u32,
     version: String,
@@ -122,6 +142,21 @@ impl PackageBuilder {
             release: "1".to_string(),
             ..Default::default()
         }
+    }
+
+    /// Use a particular common configuration when generating the packages
+    ///
+    /// /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .using_config(RpmFormat::V4)
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn using_config(mut self, config: impl Into<BuildConfig>) -> Self {
+        self.config = config.into();
+        self
     }
 
     /// Set the package epoch.
@@ -282,6 +317,7 @@ impl PackageBuilder {
         self.compression = comp.into();
         self
     }
+    // @todo: move compression() to the package config
 
     /// Add an entry to the package changelog.
     ///
@@ -685,7 +721,8 @@ impl PackageBuilder {
             combined_file_sizes += entry.size;
         }
 
-        let uses_large_files = combined_file_sizes > u32::MAX.into();
+        let uses_large_files =
+            combined_file_sizes > u32::MAX.into() || self.config.format != RpmFormat::V4;
 
         // @todo: sort entries by path?
         // @todo: normalize path?
@@ -759,14 +796,16 @@ impl PackageBuilder {
             self.version.clone(),
         ));
 
-        self.requires
-            .push(Dependency::rpmlib("CompressedFileNames", "3.0.4-1"));
+        if self.config.format == RpmFormat::V4 {
+            self.requires
+                .push(Dependency::rpmlib("CompressedFileNames", "3.0.4-1"));
 
-        self.requires
-            .push(Dependency::rpmlib("FileDigests", "4.6.0-1"));
+            self.requires
+                .push(Dependency::rpmlib("FileDigests", "4.6.0-1"));
 
-        self.requires
-            .push(Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"));
+            self.requires
+                .push(Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"));
+        }
 
         if self.compression.compression_type() == CompressionType::Zstd {
             self.requires
@@ -1170,17 +1209,22 @@ impl PackageBuilder {
                 offset,
                 IndexData::StringArray(vec![raw_archive_digest_sha256]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOAD_SHA3_256,
-                offset,
-                IndexData::StringTag(payload_digest_sha3_256),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
-                offset,
-                IndexData::StringTag(raw_archive_digest_sha3_256),
-            ),
         ]);
+
+        if self.config.format == RpmFormat::V6 {
+            actual_records.extend([
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOAD_SHA3_256,
+                    offset,
+                    IndexData::StringTag(payload_digest_sha3_256),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
+                    offset,
+                    IndexData::StringTag(raw_archive_digest_sha3_256),
+                ),
+            ]);
+        }
 
         let compression_details = match self.compression {
             CompressionWithLevel::None => None,

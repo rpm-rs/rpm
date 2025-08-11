@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   larger than 4gb) are now supported.
 - Added support for Sha3 checksums in headers and payloads - includes the addition of these checksums to
   newly-built packages.
+- Can now use `PackageBuilder::using_config()` to provide a configuration that may be common across many
+  package builds.
 
 ### Fixed
 

@@ -46,6 +46,7 @@ mod pgp {
 
         let bldr = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
             .compression(CompressionType::Gzip)
+            .using_config(RpmFormat::V4)
             .with_file(
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/foo.toml"),
