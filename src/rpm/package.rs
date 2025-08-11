@@ -80,7 +80,7 @@ impl Package {
     /// }
     /// # Ok(()) }
     /// ```
-    pub fn files(&self) -> Result<FileIterator, Error> {
+    pub fn files(&self) -> Result<FileIterator<'_>, Error> {
         let file_entries = self.metadata.get_file_entries()?;
         let archive = decompress_stream(
             self.metadata.get_payload_compressor()?,
