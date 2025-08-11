@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - RPM packages that use large files (>4gb) now correctly declare rpmlib() dependency and use the correct
   archive format.
+- RPM "NEVRA" parsing was incorrect in cases where the package name included hyphen ('-') characters.
 
 ### Changed
 
