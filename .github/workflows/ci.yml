@@ -51,8 +51,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - run: dnf install -y rpmbuild rpm-sign
-      - run: pushd tests/assets/; sh build_packages.sh; popd
+      - run: dnf install -y rpmbuild rpm-sign gcc
+      - run: pushd tests/assets/; sh import_keys.sh; sh build_packages.sh; popd
       - run: cargo test
 
   test-feature-matrix:
@@ -84,6 +84,7 @@ jobs:
   compat-tests:
     name: Compatibility Test Suite
     runs-on: ubuntu-latest
+    container: fedora:latest
     strategy:
       matrix:
         rust:
@@ -93,6 +94,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
+      - run: dnf install -y rpmbuild rpm-sign gcc
+      - run: pushd tests/assets/; sh import_keys.sh; sh build_packages.sh; popd
       - run: cargo test --features test-with-podman
 
   fmt:

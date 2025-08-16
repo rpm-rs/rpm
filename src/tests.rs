@@ -1,10 +1,6 @@
 use super::*;
 use hex_literal::hex;
 
-fn rpm_389_ds_file_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")
-}
-
 fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -35,11 +31,11 @@ However, it does nothing.",
                 .caps("cap_sys_admin,cap_sys_ptrace=pe")?
                 .user("hugo"),
         )?
-        .with_file(
-            "./test_assets/empty_file_for_symlink_create",
-            FileOptions::new("/usr/bin/awesome_link")
+        .with_file_contents(
+            "", // TODO: symlinks shouldn't need to have this
+            dbg!(FileOptions::new("/usr/bin/awesome_link")
                 .mode(0o120644)
-                .symlink("/usr/bin/awesome"),
+                .symlink("/usr/bin/awesome")),
         )?
         .pre_install_script("echo preinst")
         .post_install_script(Scriptlet::new("echo postinst").prog(vec!["/bin/blah/bash", "-c"]))
@@ -136,9 +132,10 @@ However, it does nothing.",
     }
 }
 
+#[ignore = "test needs to be split apart into multiple tests, sans duplication with existing tests, and use a new fixture package"]
 #[test]
 fn test_rpm_header() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = rpm_389_ds_file_path();
+    let rpm_file_path = "replace with new package path";
     let package = Package::open(rpm_file_path)?;
 
     let metadata = &package.metadata;

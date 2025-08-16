@@ -382,7 +382,7 @@ pub(crate) mod test {
         let packet_header = pgp::packet::PacketHeader::from_parts(
             pgp::types::PacketHeaderVersion::Old,
             pgp::types::Tag::Signature,
-            pgp::types::PacketLength::Fixed(284),
+            pgp::types::PacketLength::Fixed(540),
         )
         .unwrap();
         let wrapped = Signature::v4(

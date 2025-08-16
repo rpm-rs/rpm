@@ -45,6 +45,8 @@ rpmsign --addsign $IMA_SIGNED_RPM $"${EDDSA_KEY_OPTS[@]}"
 rpmsign --addsign $IMA_SIGNED_RPM $"${ECDSA_KEY_OPTS[@]}"
 rpmsign --addsign $IMA_SIGNED_RPM $"${RSA_KEY_OPTS[@]}" $"${IMA_SIGNING_OPTS[@]}"
 
+mkdir -p SRPMS/signed/
+
 # RSA Signed SRPM
 RSA_SIGNED_SRPM="SRPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm"
 cp $BASIC_SRPM $RSA_SIGNED_SRPM
