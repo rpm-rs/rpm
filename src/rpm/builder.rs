@@ -499,7 +499,7 @@ impl PackageBuilder {
         let sha256_checksum = {
             let mut hasher = sha2::Sha256::default();
             hasher.update(&content);
-            hex::encode( hasher.finalize()) // encode as string
+            hex::encode(hasher.finalize()) // encode as string
         };
 
         let entry = PackageFileEntry {
@@ -1240,27 +1240,24 @@ impl PackageBuilder {
             ),
         ]);
 
-        let (archive_sha256, archive_sha512, archive_sha3_256) = archive.into_digests();
         // digest of the uncompressed raw archive calculated on the inner writer
-        let raw_archive_digest_sha256 = hex::encode(&archive_sha256);
-        let raw_archive_digest_sha512 = hex::encode(&archive_sha512);
-        let raw_archive_digest_sha3_256 = hex::encode(&archive_sha3_256);
+        let (raw_archive_sha256, raw_archive_sha512, raw_archive_sha3_256) = archive.into_digests();
         let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
-        let payload_digest_sha256 = {
+        let payload_sha256 = {
             let mut hasher = sha2::Sha256::default();
             hasher.update(payload.as_slice());
             hex::encode(hasher.finalize())
         };
 
-        let payload_digest_sha512 = {
+        let payload_sha512 = {
             let mut hasher = sha2::Sha512::default();
             hasher.update(payload.as_slice());
             hex::encode(hasher.finalize())
         };
 
-        let payload_digest_sha3_256 = {
+        let payload_sha3_256 = {
             let mut hasher = sha3::Sha3_256::default();
             hasher.update(payload.as_slice());
             hex::encode(hasher.finalize())
@@ -1270,7 +1267,7 @@ impl PackageBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADSHA256,
                 offset,
-                IndexData::StringArray(vec![payload_digest_sha256]),
+                IndexData::StringArray(vec![payload_sha256]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADDIGESTALGO,
@@ -1280,7 +1277,7 @@ impl PackageBuilder {
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADSHA256ALT,
                 offset,
-                IndexData::StringArray(vec![raw_archive_digest_sha256]),
+                IndexData::StringArray(vec![raw_archive_sha256]),
             ),
         ]);
 
@@ -1289,22 +1286,22 @@ impl PackageBuilder {
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOAD_SHA3_256,
                     offset,
-                    IndexData::StringTag(payload_digest_sha3_256),
+                    IndexData::StringTag(payload_sha3_256),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
                     offset,
-                    IndexData::StringTag(raw_archive_digest_sha3_256),
+                    IndexData::StringTag(raw_archive_sha3_256),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOAD_SHA512,
                     offset,
-                    IndexData::StringTag(payload_digest_sha512),
+                    IndexData::StringTag(payload_sha512),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
                     offset,
-                    IndexData::StringTag(raw_archive_digest_sha512),
+                    IndexData::StringTag(raw_archive_sha512),
                 ),
             ]);
         }
