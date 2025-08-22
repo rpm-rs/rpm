@@ -496,10 +496,12 @@ impl PackageBuilder {
             )
         };
 
-        let mut hasher = sha2::Sha256::default();
-        hasher.update(&content);
-        let hash_result = hasher.finalize();
-        let sha256_checksum = hex::encode(hash_result); // encode as string
+        let sha256_checksum = {
+            let mut hasher = sha2::Sha256::default();
+            hasher.update(&content);
+            hex::encode( hasher.finalize()) // encode as string
+        };
+
         let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
@@ -1238,15 +1240,22 @@ impl PackageBuilder {
             ),
         ]);
 
-        let (archive_sha256, archive_sha3_256) = archive.into_digests();
+        let (archive_sha256, archive_sha512, archive_sha3_256) = archive.into_digests();
         // digest of the uncompressed raw archive calculated on the inner writer
         let raw_archive_digest_sha256 = hex::encode(&archive_sha256);
+        let raw_archive_digest_sha512 = hex::encode(&archive_sha512);
         let raw_archive_digest_sha3_256 = hex::encode(&archive_sha3_256);
         let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
         let payload_digest_sha256 = {
             let mut hasher = sha2::Sha256::default();
+            hasher.update(payload.as_slice());
+            hex::encode(hasher.finalize())
+        };
+
+        let payload_digest_sha512 = {
+            let mut hasher = sha2::Sha512::default();
             hasher.update(payload.as_slice());
             hex::encode(hasher.finalize())
         };
@@ -1286,6 +1295,16 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
                     offset,
                     IndexData::StringTag(raw_archive_digest_sha3_256),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOAD_SHA512,
+                    offset,
+                    IndexData::StringTag(payload_digest_sha512),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
+                    offset,
+                    IndexData::StringTag(raw_archive_digest_sha512),
                 ),
             ]);
         }
