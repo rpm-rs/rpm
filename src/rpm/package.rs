@@ -438,6 +438,10 @@ impl Package {
             .metadata
             .header
             .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256);
+        let payload_sha512 = self
+            .metadata
+            .header
+            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA512);
 
         if let Ok(payload_sha256) = payload_sha256 {
             let mut hasher = sha2::Sha256::default();
@@ -457,6 +461,17 @@ impl Package {
                 hex::encode(hasher.finalize())
             };
             if payload_digest != payload_sha3_256 {
+                return Err(Error::DigestMismatchError);
+            }
+        }
+
+        if let Ok(payload_sha512) = payload_sha512 {
+            let mut hasher = sha2::Sha512::default();
+            let payload_digest = {
+                hasher.update(self.content.as_slice());
+                hex::encode(hasher.finalize())
+            };
+            if payload_digest != payload_sha512 {
                 return Err(Error::DigestMismatchError);
             }
         }

@@ -371,6 +371,8 @@ pub enum IndexTag {
     RPMTAG_PACKAGEDIGESTS = 5118,
     RPMTAG_PACKAGEDIGESTALGOS = 5119,
     RPMTAG_SOURCENEVR = 5120,
+    RPMTAG_PAYLOAD_SHA512 = 5121, // hex-encoded string representing the sha2-512 digest of the payload
+    RPMTAG_PAYLOAD_SHA512_ALT = 5122, // hex-encoded string representing the sha2-512 digest of the payload without compression
     RPMTAG_PAYLOAD_SHA3_256 = 5123, // hex-encoded string representing the sha3-256 digest of the payload
     RPMTAG_PAYLOAD_SHA3_256_ALT = 5124, // hex-encoded string representing the sha3-256 digest of the payload without compression
 }
