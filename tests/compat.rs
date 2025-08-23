@@ -23,10 +23,9 @@ mod pgp {
             path.as_ref().display()
         );
         let rpm_sig_check = format!("rpm -vv --checksig {} 2>&1;", path.as_ref().display());
-        // TODO: check signatures on all distros?
         [
-            ("quay.io/fedora/fedora:41", &rpm_sig_check),
-            ("quay.io/fedora/fedora:41", &dnf_cmd),
+            ("quay.io/fedora/fedora:42", &rpm_sig_check),
+            ("quay.io/fedora/fedora:42", &dnf_cmd),
             ("quay.io/centos/centos:stream9", &rpm_sig_check),
             ("quay.io/centos/centos:stream9", &dnf_cmd),
             ("quay.io/centos/centos:centos8", &rpm_sig_check),
@@ -218,11 +217,8 @@ rpm -vv --checksig /out/{rpm_file} 2>&1
             rpm_file = out_file.file_name().unwrap().to_str().unwrap()
         );
 
-        podman_container_launcher(cmd.as_str(), "fedora:38", vec![])?;
-
-        let out_file = std::fs::File::open(&out_file).expect("should be able to open rpm file");
-        let mut buf_reader = std::io::BufReader::new(out_file);
-        let package = rpm::Package::parse(&mut buf_reader)?;
+        podman_container_launcher(cmd.as_str(), "fedora:42", vec![])?;
+        let package = rpm::Package::open(&out_file)?;
 
         package.verify_signature(verifier)?;
 
@@ -316,7 +312,7 @@ set -e
 # Common defaults for package management
 DNF=dnf
 REPOS="--disablerepo=* --enablerepo=fedora"
-PACKAGES="rpm-sign sd gpg"
+PACKAGES="rpm-sign gpg"
 
 # Mirrorlist no longer supported on centos, disable
 if grep -Eq "ID=.*(centos|almalinux)" /etc/os-release; then
