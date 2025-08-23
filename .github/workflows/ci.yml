@@ -75,6 +75,7 @@ jobs:
           components: clippy
 
       - run: cargo clippy ${{ matrix.flags }} -- -D warnings
+      - run: cargo check ${{ matrix.flags }}
       - run: cargo test ${{ matrix.flags }}
 
   compat-tests:

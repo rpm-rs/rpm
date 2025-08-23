@@ -199,7 +199,7 @@ pub enum IndexTag {
     RPMTAG_FILEDEPENDSX = 1143,
     RPMTAG_FILEDEPENDSN = 1144,
     RPMTAG_DEPENDSDICT = 1145,
-    RPMTAG_SOURCEPKGID = 1146,
+    RPMTAG_SOURCESIGMD5 = 1146,
     RPMTAG_FILECONTEXTS = 1147,
     RPMTAG_FSCONTEXTS = 1148,
     RPMTAG_RECONTEXTS = 1149,
@@ -342,12 +342,12 @@ pub enum IndexTag {
     RPMTAG_TRANSFILETRIGGERTYPE = 5089,
     RPMTAG_FILESIGNATURES = 5090,
     RPMTAG_FILESIGNATURELENGTH = 5091,
-    RPMTAG_PAYLOADSHA256 = 5092, // hex-encoded string representing the sha256 digest of the payload
-    RPMTAG_PAYLOADDIGESTALGO = 5093,
+    RPMTAG_PAYLOADSHA256 = 5092, // string-array: length-1 array with hex-encoded string representing the sha256 digest of the payload
+    RPMTAG_PAYLOADSHA256ALGO = 5093, // string-array: (obsolete) can only be sha256 in practice due to flubs with the existing implementation of rpmlib
     RPMTAG_AUTOINSTALLED = 5094,
     RPMTAG_IDENTITY = 5095,
     RPMTAG_MODULARITYLABEL = 5096,
-    RPMTAG_PAYLOADSHA256ALT = 5097, // hex-encoded string representing the sha256 digest of the payload without compression
+    RPMTAG_PAYLOADSHA256ALT = 5097, // string-array: length-1 array with hex-encoded string representing the sha256 digest of the payload without compression
     RPMTAG_ARCHSUFFIX = 5098,
     RPMTAG_SPEC = 5099,
     RPMTAG_TRANSLATIONURL = 5100,
@@ -371,10 +371,10 @@ pub enum IndexTag {
     RPMTAG_PACKAGEDIGESTS = 5118,
     RPMTAG_PACKAGEDIGESTALGOS = 5119,
     RPMTAG_SOURCENEVR = 5120,
-    RPMTAG_PAYLOAD_SHA512 = 5121, // hex-encoded string representing the sha2-512 digest of the payload
-    RPMTAG_PAYLOAD_SHA512_ALT = 5122, // hex-encoded string representing the sha2-512 digest of the payload without compression
-    RPMTAG_PAYLOAD_SHA3_256 = 5123, // hex-encoded string representing the sha3-256 digest of the payload
-    RPMTAG_PAYLOAD_SHA3_256_ALT = 5124, // hex-encoded string representing the sha3-256 digest of the payload without compression
+    RPMTAG_PAYLOAD_SHA512 = 5121, // string: hex-encoded string representing the sha512 digest of the payload
+    RPMTAG_PAYLOAD_SHA512_ALT = 5122, // string: hex-encoded string representing the sha512 digest of the payload without compression
+    RPMTAG_PAYLOAD_SHA3_256 = 5123, // string: hex-encoded string representing the sha3-256 digest of the payload
+    RPMTAG_PAYLOAD_SHA3_256_ALT = 5124, // string: hex-encoded string representing the sha3-256 digest of the payload without compression
 }
 
 #[repr(u32)]
