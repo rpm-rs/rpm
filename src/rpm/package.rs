@@ -9,7 +9,7 @@ use std::{
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::{CompressionType, constants::*, decompress_stream, errors::*};
+use crate::{CompressionType, Nevra, constants::*, decompress_stream, errors::*};
 
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
@@ -554,6 +554,20 @@ impl PackageMetadata {
     #[inline]
     pub fn get_arch(&self) -> Result<&str, Error> {
         self.header.get_entry_data_as_string(IndexTag::RPMTAG_ARCH)
+    }
+
+    /// Get the package Nevra
+    ///
+    /// See: [crate::Nevra]
+    #[inline]
+    pub fn get_nevra(&'_ self) -> Result<Nevra<'_>, Error> {
+        Ok(Nevra::new(
+            self.get_name()?.to_owned(),
+            self.get_epoch()?.to_string(),
+            self.get_version()?.to_owned(),
+            self.get_release()?.to_owned(),
+            self.get_arch()?.to_owned(),
+        ))
     }
 
     /// Get the package vendor - the organization that produced the package

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.18.0
+
 ### Added
 
 - Added support for multiple signatures on a package as supported by upstream RPM.
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for Sha512 checksums for payload verification, including addition to new packages.
 - Can now use `PackageBuilder::using_config()` to provide a configuration that may be common across many
   package builds.
+- `PackageMetadata::get_nevra()`, which is useful for sorting the packages or generating NEVRA strings.
 
 ### Fixed
 
