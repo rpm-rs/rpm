@@ -1,10 +1,12 @@
 use std::{
     fs,
     io::{self, Read, Write},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     str::FromStr,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use digest::Digest;
 use num_traits::FromPrimitive;
@@ -137,16 +139,27 @@ impl Package {
                     .unwrap_or(dest.as_ref()),
             );
 
-            let perms = fs::Permissions::from_mode(file.metadata.mode.permissions().into());
             match file.metadata.mode {
                 FileMode::Dir { .. } => {
                     fs::create_dir_all(&file_path)?;
-                    fs::set_permissions(&file_path, perms)?;
+
+                    #[cfg(unix)]
+                    {
+                        let perms =
+                            fs::Permissions::from_mode(file.metadata.mode.permissions().into());
+                        fs::set_permissions(&file_path, perms)?;
+                    }
                 }
                 FileMode::Regular { .. } => {
                     let mut f = fs::File::create(&file_path)?;
                     f.write_all(&file.content)?;
-                    fs::set_permissions(&file_path, perms)?;
+
+                    #[cfg(unix)]
+                    {
+                        let perms =
+                            fs::Permissions::from_mode(file.metadata.mode.permissions().into());
+                        f.set_permissions(perms)?;
+                    }
                 }
                 FileMode::SymbolicLink { .. } => {
                     // broken symlinks (common for debuginfo handling) are perceived as not existing by "exists()"

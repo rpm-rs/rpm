@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Only set verbatim permissions on unix allowing the crate to build on Windows
+  again.
+
 ## 0.18.0
 
 ### Added
