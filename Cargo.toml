@@ -63,6 +63,7 @@ serial_test = "3.2"
 pretty_assertions = "1.4"
 gethostname = "1.0"
 hex-literal = "1.0"
+tempfile = "3.21.0"
 
 [features]
 default = [
