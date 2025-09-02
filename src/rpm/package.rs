@@ -26,6 +26,36 @@ use super::Lead;
 use super::headers::*;
 use super::payload;
 
+#[cfg(unix)]
+fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Error> {
+    std::os::unix::fs::symlink(original, link)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Error> {
+    let original = original.as_ref();
+
+    let Ok(metadata) = original.metadata() else {
+        // If the target does not exist (or accurately we can't metadata it),
+        // don't create symlink on Windows since it will fail anyways.
+        return Ok(());
+    };
+
+    if metadata.is_dir() {
+        std::os::windows::fs::symlink_dir(original, link)?;
+    } else {
+        std::os::windows::fs::symlink_file(original, link)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn symlink(_original: &Path, _link: &Path) -> Result<(), Error> {
+    Err(Error::UnsupportedSymlink)
+}
+
 /// A complete rpm file.
 ///
 /// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
@@ -166,7 +196,8 @@ impl Package {
                     if file_path.exists() || file_path.symlink_metadata().is_ok() {
                         fs::remove_file(&file_path)?;
                     }
-                    std::os::unix::fs::symlink(&file.metadata.linkto, &file_path)?;
+
+                    symlink(file.metadata.linkto, &file_path)?;
                 }
                 _ => unreachable!("Encountered an unknown or invalid FileMode"),
             }
