@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use rpm::*;
@@ -13,10 +13,14 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::rpm_empty_path().as_ref())?;
     assert_boundaries(common::rpm_empty_source_path().as_ref())?;
 
+    let mut temp = tempfile::NamedTempFile::new()?;
+
     let constructed_pkg =
         rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "").build()?;
-    constructed_pkg.write(&mut File::create("/tmp/empty_pkg.rpm")?)?;
-    assert_boundaries(Path::new("/tmp/empty_pkg.rpm"))?;
+    constructed_pkg.write(&mut temp)?;
+    temp.flush()?;
+    assert_boundaries(temp.path())?;
+    temp.close()?;
 
     #[cfg(feature = "signature-meta")]
     {
@@ -26,8 +30,13 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
         let constructed_pkg_with_sig =
             rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "")
                 .build_and_sign(signer)?;
-        constructed_pkg_with_sig.write(&mut File::create("/tmp/empty_pkg_with_sig.rpm")?)?;
-        assert_boundaries(Path::new("/tmp/empty_pkg_with_sig.rpm"))?;
+
+        let mut temp = tempfile::NamedTempFile::new()?;
+
+        constructed_pkg_with_sig.write(&mut temp)?;
+        temp.flush()?;
+        assert_boundaries(temp.path())?;
+        temp.close()?;
     }
 
     fn assert_boundaries(path: &Path) -> Result<(), Box<dyn std::error::Error>> {

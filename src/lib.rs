@@ -20,7 +20,7 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # let _ = env_logger::Builder::new().filter_level(log::LevelFilter::Trace).is_test(true).try_init();
-//! # #[cfg(feature = "signature-pgp")]
+//! # #[cfg(all(unix, feature = "signature-pgp"))]
 //! # {
 //! let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
 //! let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
