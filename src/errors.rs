@@ -117,6 +117,9 @@ pub enum Error {
     #[error("timestamp conversion error: {0:?}")]
     TimestampConv(TimestampError),
 
+    #[error("symbolic links are not supported on this platform")]
+    UnsupportedSymlink,
+
     #[error("{0}")]
     InvalidFileCaps(String),
 }
