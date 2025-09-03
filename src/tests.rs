@@ -17,7 +17,7 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-#[cfg_attr(windows, ignore = "No idea why this doesn't work, please fix")]
+#[cfg_attr(windows, ignore = "TODO: No idea why this doesn't work, please fix")]
 #[test]
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg_attr(not(feature = "gzip-compression"), allow(unused_variables, unused_mut))]
