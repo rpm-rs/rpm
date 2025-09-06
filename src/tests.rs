@@ -17,7 +17,6 @@ fn cargo_manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-#[cfg_attr(windows, ignore = "TODO: No idea why this doesn't work, please fix")]
 #[test]
 fn test_rpm_builder() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg_attr(not(feature = "gzip-compression"), allow(unused_variables, unused_mut))]
@@ -102,7 +101,11 @@ However, it does nothing.",
                 assert_eq!(f.caps, Some("".to_string()));
                 assert_eq!(f.flags, FileFlags::CONFIG | FileFlags::NOREPLACE);
             } else if f.path.as_os_str() == "/usr/bin/awesome" {
+                // TODO: this is likely not the best way to express this test
+                #[cfg(unix)]
                 assert_eq!(f.mode, FileMode::from(0o100644));
+                #[cfg(windows)]
+                assert_eq!(f.mode, FileMode::from(0o100664)); // the default mode is different because on windows there are no file permissions to inherit from the source file
             } else if f.path.as_os_str() == "/usr/bin/awesome_link" {
                 assert_eq!(f.mode, FileMode::from(0o120644));
             }
