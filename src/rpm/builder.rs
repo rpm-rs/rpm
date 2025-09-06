@@ -26,16 +26,6 @@ use crate::PackageMetadata;
 
 use crate::{CompressionType, CompressionWithLevel};
 
-#[cfg(unix)]
-fn file_mode(file: &fs::File) -> Result<u32, Error> {
-    Ok(file.metadata()?.permissions().mode())
-}
-
-#[cfg(windows)]
-fn file_mode(_file: &fs::File) -> Result<u32, Error> {
-    Ok(0)
-}
-
 #[derive(Copy, Clone, PartialEq)]
 pub enum RpmFormat {
     V4,
@@ -416,9 +406,11 @@ impl PackageBuilder {
         let mut input = fs::File::open(source)?;
         let mut content = Vec::new();
         input.read_to_end(&mut content)?;
+        #[allow(unused_mut)]
         let mut options = options.into();
+        #[cfg(unix)]
         if options.inherit_permissions {
-            options.mode = (file_mode(&input)? as i32).into();
+            options.mode = FileMode::from(input.metadata()?.permissions().mode() as i32);
         }
 
         let modified_at = input.metadata()?.modified()?.try_into()?;
