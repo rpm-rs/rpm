@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.18.2
+
+### Changed
+
+- Made the fields of `FileDigest` public
+
 ## 0.18.1
 
 ### Fixed

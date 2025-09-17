@@ -393,8 +393,8 @@ pub struct FileOwnership {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FileDigest {
-    digest: String,
-    algo: DigestAlgorithm,
+    pub digest: String,
+    pub algo: DigestAlgorithm,
 }
 
 impl FileDigest {
