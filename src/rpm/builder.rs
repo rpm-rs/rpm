@@ -695,6 +695,7 @@ impl PackageBuilder {
             SignatureHeaderBuilder::new()
                 .set_sha256_digest(header_digest_sha256.as_str())
                 .set_sha3_256_digest(header_digest_sha3_256.as_str())
+                .set_content_length(header.len() as u64 + content.len() as u64)
                 .build()?
         };
 

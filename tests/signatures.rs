@@ -182,6 +182,10 @@ fn resign_and_verify_with_keys(
     pkg_out_path: impl AsRef<Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut package = rpm::Package::open(pkg_path)?;
+    let original_size = package
+        .metadata
+        .signature
+        .get_entry_data_as_u32(rpm::IndexSignatureTag::RPMSIGTAG_SIZE)?;
     let mut signer = Signer::load_from_asc_bytes(signing_key)?;
     if let Some(passphrase) = signing_key_passphrase {
         signer = signer.with_key_passphrase(passphrase);
@@ -192,6 +196,15 @@ fn resign_and_verify_with_keys(
     package.write_file(&out_file)?;
 
     let package = rpm::Package::open(&out_file)?;
+
+    let new_size = package
+        .metadata
+        .signature
+        .get_entry_data_as_u32(rpm::IndexSignatureTag::RPMSIGTAG_SIZE)?;
+
+    // Resigning the package should not change the size.
+    assert_eq!(original_size, new_size);
+
     let verifier = Verifier::load_from_asc_bytes(verification_key).unwrap();
     package
         .verify_signature(&verifier)

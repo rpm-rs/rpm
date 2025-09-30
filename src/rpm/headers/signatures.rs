@@ -18,6 +18,7 @@ pub struct SignatureHeaderBuilder {
     openpgp_signatures: Vec<Vec<u8>>,
     header_sha256: Option<String>,
     header_sha3_256: Option<String>,
+    content_length: Option<u64>,
 }
 
 impl Default for SignatureHeaderBuilder {
@@ -48,6 +49,7 @@ impl SignatureHeaderBuilder {
             openpgp_signatures: Vec::new(),
             header_sha256: None,
             header_sha3_256: None,
+            content_length: None,
         }
     }
 
@@ -110,6 +112,22 @@ impl SignatureHeaderBuilder {
             ));
         }
 
+        if let Some(len) = self.content_length {
+            if let Ok(len) = u32::try_from(len) {
+                entries.push(IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_SIZE,
+                    0,
+                    IndexData::Int32(vec![len]),
+                ));
+            } else {
+                entries.push(IndexEntry::new(
+                    IndexSignatureTag::RPMSIGTAG_LONGSIZE,
+                    0,
+                    IndexData::Int64(vec![len]),
+                ));
+            }
+        }
+
         let header = Header::<IndexSignatureTag>::from_entries(
             entries,
             IndexSignatureTag::HEADER_SIGNATURES,
@@ -127,6 +145,12 @@ impl SignatureHeaderBuilder {
     /// Add a sha3-256 digest of the header bytes
     pub fn set_sha3_256_digest(mut self, digest_header_sha3_256: &str) -> Self {
         self.header_sha3_256 = Some(digest_header_sha3_256.to_owned());
+        self
+    }
+
+    /// Set the content length (compressed payload + header size).
+    pub fn set_content_length(mut self, length: u64) -> Self {
+        self.content_length = Some(length);
         self
     }
 

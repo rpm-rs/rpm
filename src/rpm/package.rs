@@ -218,6 +218,7 @@ impl Package {
         let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header_bytes.as_slice()));
         let sig_header_builder = SignatureHeaderBuilder::new()
             .set_sha256_digest(&header_digest_sha256)
+            .set_content_length(header_bytes.len() as u64 + self.content.len() as u64)
             .set_sha3_256_digest(&header_digest_sha3_256);
         self.metadata.signature = sig_header_builder.build()?;
 
@@ -271,6 +272,7 @@ impl Package {
 
         let sig_header = SignatureHeaderBuilder::new()
             .set_sha256_digest(&header_digest_sha256)
+            .set_content_length(header_bytes.len() as u64 + self.content.len() as u64)
             .add_openpgp_signature(header_signature)
             .build()?;
 

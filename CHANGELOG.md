@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Add support for payload length tag in the signature header. Newly built RPMs will have this set automatically.
+
 ## 0.18.2
 
 ### Changed
