@@ -683,6 +683,7 @@ impl PackageBuilder {
 
     /// Build the package
     pub fn build(self) -> Result<Package, Error> {
+        let is_v4 = self.config.format == RpmFormat::V4;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
@@ -692,11 +693,16 @@ impl PackageBuilder {
             let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
             let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(&header));
 
-            SignatureHeaderBuilder::new()
+            let mut builder = SignatureHeaderBuilder::new()
                 .set_sha256_digest(header_digest_sha256.as_str())
-                .set_sha3_256_digest(header_digest_sha3_256.as_str())
-                .set_content_length(header.len() as u64 + content.len() as u64)
-                .build()?
+                .set_sha3_256_digest(header_digest_sha3_256.as_str());
+
+            // V6 packages shouldn't populate the content length header.
+            if is_v4 {
+                builder = builder.set_content_length(header.len() as u64 + content.len() as u64);
+            }
+
+            builder.build()?
         };
 
         let metadata = PackageMetadata {

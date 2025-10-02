@@ -292,6 +292,14 @@ where
     }
 }
 
+#[cfg(feature = "signature-meta")]
+impl Header<IndexSignatureTag> {
+    pub(crate) fn has_v4_size_header(&self) -> bool {
+        self.entry_is_present(IndexSignatureTag::RPMSIGTAG_SIZE)
+            || self.entry_is_present(IndexSignatureTag::RPMSIGTAG_LONGSIZE)
+    }
+}
+
 impl fmt::Display for Header<IndexSignatureTag> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let summary = format!(
