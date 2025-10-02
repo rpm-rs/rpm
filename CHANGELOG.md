@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- RPMv4 packages now populate payload length tags in the signature header. Newly built RPMs will have this set automatically.
+  If editing a pre-built RPM (e.g., for signing) the tag will be preserved if
+  already present. RPMv4 requires the presence of this tag.
+
 ## 0.18.2
 
 ### Changed
