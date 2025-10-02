@@ -1,6 +1,6 @@
 [package]
 name = "rpm"
-version = "0.18.2"
+version = "0.18.3"
 authors = [
   "René Richter <richterrettich@gmail.com>",
   "Bernhard Schuster <bernhard@ahoi.io>",
