@@ -28,8 +28,45 @@ This library does not build software like rpmbuild. It is meant for finished art
 
 ### Examples
 
+### Read package and access metadata
+
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
+
+let pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+
+let name = pkg.metadata.get_name()?;
+let version = pkg.metadata.get_version()?;
+let release = pkg.metadata.get_release()?;
+let arch = pkg.metadata.get_arch()?;
+
+println!("{}-{}-{}.{}", name, version, release, arch);
+
+for changelog in pkg.metadata.get_changelog_entries()? {
+    println!("{}\n{}\n", changelog.name, changelog.description);
+}
+```
+
+#### Sign existing package and verify package signature
+
+```rust
+use rpm::signature::pgp::{Signer, Verifier};
+
+let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
+let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
+
+let mut pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+pkg.sign(&raw_secret_key)?;
+pkg.write_file("./with_signature.rpm")?;
+
+let pkg = rpm::Package::open("./with_signature.rpm")?;
+pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
+```
+
+#### Build new package
+
+```rust
+use rpm::signature::pgp::Signer;
 
 let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
 
@@ -87,22 +124,4 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)?;
 
 pkg.write_file("./awesome.rpm")?;
-
-// reading
-let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
-let pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
-
-let name = pkg.metadata.get_name()?;
-let version = pkg.metadata.get_version()?;
-let release = pkg.metadata.get_release()?;
-let arch = pkg.metadata.get_arch()?;
-
-println!("{}-{}-{}.{}", name, version, release, arch);
-
-for changelog in pkg.metadata.get_changelog_entries()? {
-    println!("{}\n{}\n", changelog.name, changelog.description);
-}
-
-// verifying
-pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 ```
