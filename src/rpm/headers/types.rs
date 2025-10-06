@@ -497,6 +497,7 @@ pub struct ChecksummingWriter<W> {
     sha256_hasher: sha2::Sha256,
     sha512_hasher: sha2::Sha512,
     sha3_256_hasher: sha3::Sha3_256,
+    bytes_written: usize,
 }
 
 impl<W> ChecksummingWriter<W> {
@@ -506,14 +507,16 @@ impl<W> ChecksummingWriter<W> {
             sha256_hasher: sha2::Sha256::new(),
             sha512_hasher: sha2::Sha512::new(),
             sha3_256_hasher: sha3::Sha3_256::new(),
+            bytes_written: 0,
         }
     }
 
-    pub fn into_digests(self) -> (String, String, String) {
+    pub fn into_digests(self) -> (String, String, String, usize) {
         (
             hex::encode(self.sha256_hasher.finalize().as_slice()),
             hex::encode(self.sha512_hasher.finalize().as_slice()),
             hex::encode(self.sha3_256_hasher.finalize().as_slice()),
+            self.bytes_written,
         )
     }
 }
@@ -523,6 +526,7 @@ impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
         self.sha256_hasher.update(buf);
         self.sha512_hasher.update(buf);
         self.sha3_256_hasher.update(buf);
+        self.bytes_written += buf.len();
         self.writer.write(buf)
     }
 
@@ -787,7 +791,8 @@ echo `hello world`
         fn test_checksumming_writer_empty() {
             let mut buf: Vec<u8> = Vec::new();
             let writer = crate::ChecksummingWriter::new(&mut buf);
-            let (sha256, sha512, sha3_256) = writer.into_digests();
+            let (sha256, sha512, sha3_256, len) = writer.into_digests();
+            assert!(buf.is_empty());
             assert_eq!(
                 sha256,
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -800,7 +805,7 @@ echo `hello world`
                 sha3_256,
                 "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
             );
-            assert!(buf.is_empty());
+            assert_eq!(len, 0);
         }
 
         #[test]
@@ -810,7 +815,8 @@ echo `hello world`
             let mut buf: Vec<u8> = Vec::new();
             let mut writer = crate::ChecksummingWriter::new(&mut buf);
             writer.write_all(b"hello world!").unwrap();
-            let (sha256, sha512, sha3_256) = writer.into_digests();
+            let (sha256, sha512, sha3_256, len) = writer.into_digests();
+            assert_eq!(buf.as_slice(), b"hello world!");
             assert_eq!(
                 sha256,
                 "7509e5bda0c762d2bac7f90d758b5b2263fa01ccbc542ab5e3df163be08e6ca9"
@@ -823,7 +829,7 @@ echo `hello world`
                 sha3_256,
                 "9c24b06143c07224c897bac972e6e92b46cf18063f1a469ebe2f7a0966306105"
             );
-            assert_eq!(buf.as_slice(), b"hello world!");
+            assert_eq!(len, b"hello world!".len());
         }
     }
 }

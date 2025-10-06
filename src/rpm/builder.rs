@@ -1240,7 +1240,8 @@ impl PackageBuilder {
         ]);
 
         // digest of the uncompressed raw archive calculated on the inner writer
-        let (raw_archive_sha256, raw_archive_sha512, raw_archive_sha3_256) = archive.into_digests();
+        let (raw_archive_sha256, raw_archive_sha512, raw_archive_sha3_256, raw_archive_size) =
+            archive.into_digests();
         let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
@@ -1283,6 +1284,21 @@ impl PackageBuilder {
         if self.config.format == RpmFormat::V6 {
             actual_records.extend([
                 IndexEntry::new(
+                    IndexTag::RPMTAG_RPMFORMAT,
+                    offset,
+                    IndexData::Int32(vec![6]),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSIZE,
+                    offset,
+                    IndexData::Int64(vec![payload.len() as u64]),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSIZEALT,
+                    offset,
+                    IndexData::Int64(vec![raw_archive_size as u64]),
+                ),
+                IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOAD_SHA3_256,
                     offset,
                     IndexData::StringTag(payload_sha3_256),
@@ -1301,11 +1317,6 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
                     offset,
                     IndexData::StringTag(raw_archive_sha512),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_RPMFORMAT,
-                    offset,
-                    IndexData::Int32(vec![6]),
                 ),
             ]);
         }

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- v6 packages will set the `RPMFORMAT` tag
+- Built "v6" packages will set the `RPMFORMAT` tag
+- Built "v6" packages will set the `PAYLOADSIZE` and `PAYLOADSIZEALT` tags
 
 ## 0.18.3
 
