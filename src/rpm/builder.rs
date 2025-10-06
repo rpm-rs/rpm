@@ -1302,6 +1302,11 @@ impl PackageBuilder {
                     offset,
                     IndexData::StringTag(raw_archive_sha512),
                 ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_RPMFORMAT,
+                    offset,
+                    IndexData::Int32(vec![6]),
+                ),
             ]);
         }
 

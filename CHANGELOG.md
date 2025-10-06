@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- v6 packages will set the `RPMFORMAT` tag
+
 ## 0.18.3
 
 ### Fixed
