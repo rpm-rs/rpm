@@ -65,7 +65,7 @@ impl BuildConfig {
     /// Use "RPM v6" defaults for the RPM - may impact compatibility
     pub fn v6() -> Self {
         Self {
-            format: RpmFormat::V4,
+            format: RpmFormat::V6,
             compression: CompressionWithLevel::default(),
         }
     }
