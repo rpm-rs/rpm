@@ -1,17 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 
-use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::{fs, io};
 
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use digest::Digest;
 
-use super::Lead;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::payload;
@@ -403,19 +402,17 @@ impl PackageBuilder {
         source: impl AsRef<Path>,
         options: impl Into<FileOptions>,
     ) -> Result<Self, Error> {
-        let mut input = fs::File::open(source)?;
-        let mut content = Vec::new();
-        input.read_to_end(&mut content)?;
+        let input = fs::File::open(source)?;
         #[allow(unused_mut)]
         let mut options = options.into();
         #[cfg(unix)]
         if options.inherit_permissions {
             options.mode = FileMode::from(input.metadata()?.permissions().mode() as i32);
         }
-
         let modified_at = input.metadata()?.modified()?.try_into()?;
-
-        self.add_data(content, modified_at, options)?;
+        let content_size = input.metadata()?.len();
+        let buf_reader = BufReader::new(input);
+        self.add_data(buf_reader, modified_at, options, content_size)?;
         Ok(self)
     }
 
@@ -450,15 +447,23 @@ impl PackageBuilder {
         content: impl Into<Vec<u8>>,
         options: impl Into<FileOptions>,
     ) -> Result<Self, Error> {
-        self.add_data(content.into(), Timestamp::now(), options.into())?;
+        let data = content.into();
+        let data_size = data.len();
+        self.add_data(
+            io::Cursor::new(data),
+            Timestamp::now(),
+            options.into(),
+            data_size as u64,
+        )?;
         Ok(self)
     }
 
     fn add_data(
         &mut self,
-        content: Vec<u8>,
+        mut reader: impl BufRead + 'static,
         modified_at: Timestamp,
         options: FileOptions,
+        data_size: u64,
     ) -> Result<(), Error> {
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
@@ -490,15 +495,14 @@ impl PackageBuilder {
 
         let sha256_checksum = {
             let mut hasher = sha2::Sha256::default();
-            hasher.update(&content);
+            io::copy(&mut reader, &mut hasher)?;
             hex::encode(hasher.finalize()) // encode as string
         };
-
         let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
-            size: content.len() as u64,
-            content,
+            size: data_size,
+            reader: Box::new(reader),
             flags: options.flag,
             user: options.user,
             group: options.group,
@@ -793,7 +797,7 @@ impl PackageBuilder {
         // @todo: normalize path?
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
-        for (file_index, (cpio_path, entry)) in self.files.iter().enumerate() {
+        for (file_index, (cpio_path, entry)) in self.files.iter_mut().enumerate() {
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -832,21 +836,20 @@ impl PackageBuilder {
             base_names.push(entry.base_name.to_owned());
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(entry.verify_flags.bits());
-            let content = entry.content.to_owned();
             if !uses_large_files {
                 let mut writer = payload::Builder::new(cpio_path)
                     .mode(entry.mode.into())
                     .ino(ino_index)
                     .uid(self.uid.unwrap_or(0))
                     .gid(self.gid.unwrap_or(0))
-                    .write_cpio(&mut archive, content.len() as u32);
-                writer.write_all(&content)?;
+                    .write_cpio(&mut archive, entry.size as u32);
+                io::copy(&mut entry.reader, &mut writer)?;
                 writer.finish()?;
             } else {
                 // @todo: can we just use ino_index instead of file_index?
                 let header = payload::stripped_cpio_header(file_index as u32);
                 archive.write_all(&header)?;
-                archive.write_all(&content)?;
+                io::copy(&mut entry.reader, &mut archive)?;
                 archive.flush()?;
             };
 

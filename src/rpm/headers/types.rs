@@ -2,7 +2,7 @@
 use crate::{FileCaps, IndexData, IndexEntry, Timestamp, constants::*, errors};
 use digest::Digest;
 use itertools::Itertools;
-use std::str::FromStr;
+use std::{io::BufRead, str::FromStr};
 
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
 ///
@@ -29,7 +29,7 @@ pub struct PackageFileEntry {
     pub dir: String,
     pub caps: Option<FileCaps>,
     pub verify_flags: FileVerifyFlags,
-    pub(crate) content: Vec<u8>,
+    pub(crate) reader: Box<dyn BufRead>,
 }
 
 #[non_exhaustive]
