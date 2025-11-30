@@ -1,9 +1,14 @@
 //! A collection of types used in various header records.
 use crate::{FileCaps, IndexData, IndexEntry, Timestamp, constants::*, errors};
-use digest::Digest;
+use digest::DynDigest;
 use itertools::Itertools;
+use sha2::{Sha256, Sha512};
+use sha3::Sha3_256;
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader, Cursor};
+use std::path::PathBuf;
 use std::str::FromStr;
-
 /// Offsets into an RPM Package (from the start of the file) demarking locations of each section
 ///
 /// See: `Package::get_package_segment_offsets`
@@ -15,12 +20,32 @@ pub struct PackageSegmentOffsets {
     pub payload: u64,
 }
 
+/// Define rpm content type source, from file path or raw bytes data.
+pub enum ContentSource {
+    Path(PathBuf),
+    Raw(Vec<u8>),
+}
+
+impl ContentSource {
+    /// get type which impl BufRead
+    pub fn try_into_bufread(&self) -> io::Result<Box<dyn BufRead + '_>> {
+        match self {
+            Self::Path(p) => Ok(Box::new(BufReader::new(File::open(p)?))),
+            Self::Raw(v) => Ok(Box::new(Cursor::new(v))),
+        }
+    }
+
+    pub fn size(&self) -> io::Result<u64> {
+        match self {
+            Self::Path(p) => fs::metadata(p).map(|m| m.len()),
+            Self::Raw(v) => Ok(v.len() as u64),
+        }
+    }
+}
 /// Describes a file present in the rpm file.
 pub struct PackageFileEntry {
-    pub size: u64,
     pub mode: FileMode,
     pub modified_at: Timestamp,
-    pub sha_checksum: String,
     pub link: String,
     pub flags: FileFlags,
     pub user: String,
@@ -29,7 +54,7 @@ pub struct PackageFileEntry {
     pub dir: String,
     pub caps: Option<FileCaps>,
     pub verify_flags: FileVerifyFlags,
-    pub(crate) content: Vec<u8>,
+    pub source: ContentSource,
 }
 
 #[non_exhaustive]
@@ -491,41 +516,56 @@ impl Dependency {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum HashKind {
+    Sha256,
+    Sha512,
+    Sha3_256,
+}
+
+impl HashKind {
+    fn build(self) -> Box<dyn DynDigest> {
+        match self {
+            Self::Sha256 => Box::new(Sha256::default()),
+            Self::Sha512 => Box::new(Sha512::default()),
+            Self::Sha3_256 => Box::new(Sha3_256::default()),
+        }
+    }
+}
 /// A wrapper for calculating the sha256 checksum of the contents written to it
 pub struct ChecksummingWriter<W> {
     writer: W,
-    sha256_hasher: sha2::Sha256,
-    sha512_hasher: sha2::Sha512,
-    sha3_256_hasher: sha3::Sha3_256,
+    engines: HashMap<HashKind, Box<dyn DynDigest>>,
     bytes_written: usize,
 }
 
 impl<W> ChecksummingWriter<W> {
-    pub fn new(writer: W) -> Self {
+    pub fn new(writer: W, kinds: &[HashKind]) -> Self {
         Self {
             writer,
-            sha256_hasher: sha2::Sha256::new(),
-            sha512_hasher: sha2::Sha512::new(),
-            sha3_256_hasher: sha3::Sha3_256::new(),
+            engines: kinds
+                .iter()
+                .map(|&k| (k, k.build()))
+                .collect::<HashMap<_, _>>(),
             bytes_written: 0,
         }
     }
 
-    pub fn into_digests(self) -> (String, String, String, usize) {
-        (
-            hex::encode(self.sha256_hasher.finalize().as_slice()),
-            hex::encode(self.sha512_hasher.finalize().as_slice()),
-            hex::encode(self.sha3_256_hasher.finalize().as_slice()),
-            self.bytes_written,
-        )
+    pub fn into_digests(self) -> (HashMap<HashKind, String>, usize) {
+        let map = self
+            .engines
+            .into_iter()
+            .map(|(k, e)| (k, hex::encode(e.finalize())))
+            .collect();
+        (map, self.bytes_written)
     }
 }
 
 impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.sha256_hasher.update(buf);
-        self.sha512_hasher.update(buf);
-        self.sha3_256_hasher.update(buf);
+        for eng in self.engines.values_mut() {
+            eng.update(buf);
+        }
         self.bytes_written += buf.len();
         self.writer.write(buf)
     }
@@ -790,21 +830,38 @@ echo `hello world`
         #[test]
         fn test_checksumming_writer_empty() {
             let mut buf: Vec<u8> = Vec::new();
-            let writer = crate::ChecksummingWriter::new(&mut buf);
-            let (sha256, sha512, sha3_256, len) = writer.into_digests();
+            let writer = crate::ChecksummingWriter::new(
+                &mut buf,
+                &[
+                    crate::HashKind::Sha256,
+                    crate::HashKind::Sha512,
+                    crate::HashKind::Sha3_256,
+                ],
+            );
+            let (hash_values, len) = writer.into_digests();
             assert!(buf.is_empty());
-            assert_eq!(
-                sha256,
-                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-            );
-            assert_eq!(
-                sha512,
-                "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
-            );
-            assert_eq!(
-                sha3_256,
-                "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
-            );
+            for kind in [
+                crate::HashKind::Sha256,
+                crate::HashKind::Sha512,
+                crate::HashKind::Sha3_256,
+            ] {
+                if let Some(digest) = hash_values.get(&kind) {
+                    match kind {
+                        crate::HashKind::Sha256 => assert_eq!(
+                            digest,
+                            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        ),
+                        crate::HashKind::Sha512 => assert_eq!(
+                            digest,
+                            "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+                        ),
+                        crate::HashKind::Sha3_256 => assert_eq!(
+                            digest,
+                            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+                        ),
+                    }
+                }
+            }
             assert_eq!(len, 0);
         }
 
@@ -813,22 +870,39 @@ echo `hello world`
             use std::io::Write;
 
             let mut buf: Vec<u8> = Vec::new();
-            let mut writer = crate::ChecksummingWriter::new(&mut buf);
+            let mut writer = crate::ChecksummingWriter::new(
+                &mut buf,
+                &[
+                    crate::HashKind::Sha256,
+                    crate::HashKind::Sha512,
+                    crate::HashKind::Sha3_256,
+                ],
+            );
             writer.write_all(b"hello world!").unwrap();
-            let (sha256, sha512, sha3_256, len) = writer.into_digests();
+            let (hash_values, len) = writer.into_digests();
             assert_eq!(buf.as_slice(), b"hello world!");
-            assert_eq!(
-                sha256,
-                "7509e5bda0c762d2bac7f90d758b5b2263fa01ccbc542ab5e3df163be08e6ca9"
-            );
-            assert_eq!(
-                sha512,
-                "db9b1cd3262dee37756a09b9064973589847caa8e53d31a9d142ea2701b1b28abd97838bb9a27068ba305dc8d04a45a1fcf079de54d607666996b3cc54f6b67c"
-            );
-            assert_eq!(
-                sha3_256,
-                "9c24b06143c07224c897bac972e6e92b46cf18063f1a469ebe2f7a0966306105"
-            );
+            for kind in [
+                crate::HashKind::Sha256,
+                crate::HashKind::Sha512,
+                crate::HashKind::Sha3_256,
+            ] {
+                if let Some(digest) = hash_values.get(&kind) {
+                    match kind {
+                        crate::HashKind::Sha256 => assert_eq!(
+                            digest,
+                            "7509e5bda0c762d2bac7f90d758b5b2263fa01ccbc542ab5e3df163be08e6ca9"
+                        ),
+                        crate::HashKind::Sha512 => assert_eq!(
+                            digest,
+                            "db9b1cd3262dee37756a09b9064973589847caa8e53d31a9d142ea2701b1b28abd97838bb9a27068ba305dc8d04a45a1fcf079de54d607666996b3cc54f6b67c"
+                        ),
+                        crate::HashKind::Sha3_256 => assert_eq!(
+                            digest,
+                            "9c24b06143c07224c897bac972e6e92b46cf18063f1a469ebe2f7a0966306105",
+                        ),
+                    }
+                }
+            }
             assert_eq!(len, b"hello world!".len());
         }
     }
