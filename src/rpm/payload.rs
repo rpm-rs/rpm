@@ -636,11 +636,11 @@ impl<W: Write> Writer<W> {
     fn do_finish(&mut self) -> io::Result<()> {
         self.try_write_header()?;
 
-        if self.written == self.file_size {
-            if let Some(pad) = pad(self.header_size + self.file_size as usize) {
-                self.inner.write_all(&pad)?;
-                self.inner.flush()?;
-            }
+        if self.written == self.file_size
+            && let Some(pad) = pad(self.header_size + self.file_size as usize)
+        {
+            self.inner.write_all(&pad)?;
+            self.inner.flush()?;
         }
 
         Ok(())

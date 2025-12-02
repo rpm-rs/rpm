@@ -733,7 +733,7 @@ impl IndexData {
             IndexData::Int16(d) => {
                 // align to 2 bytes
 
-                let alignment = if store.len() % 2 != 0 {
+                let alignment = if !store.len().is_multiple_of(2) {
                     store.push(0);
                     1
                 } else {
@@ -748,7 +748,7 @@ impl IndexData {
             IndexData::Int32(d) => {
                 // align to 4 bytes
                 let mut alignment = 0;
-                while store.len() % 4 > 0 {
+                while !store.len().is_multiple_of(4) {
                     store.push(0);
                     alignment += 1;
                 }
@@ -761,7 +761,7 @@ impl IndexData {
             IndexData::Int64(d) => {
                 // align to 8 bytes
                 let mut alignment = 0;
-                while store.len() % 8 > 0 {
+                while !store.len().is_multiple_of(8) {
                     store.push(0);
                     alignment += 1;
                 }

@@ -10,7 +10,7 @@ mod common;
 #[cfg(target_os = "linux")]
 mod pgp {
     use super::*;
-    use rpm::signature::pgp::{Signer, Verifier};
+    use rpm::signature::pgp::Signer;
 
     #[track_caller]
     fn execute_against_supported_distros(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -122,7 +122,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         // TODO: currently only RSA-signed packages are accepted across the full range of supported distros
         // it would be nice to test others here as well, but that requires a bit more finesse
 
-        let mut cmd = String::new();
+        let cmd = String::new();
 
         //         for (pkg_path, pubkey) in &pkgs {
         //             let verifier = Verifier::load_from_asc_bytes(pubkey.as_ref())?;
