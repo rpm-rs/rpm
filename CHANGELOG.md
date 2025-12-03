@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Breaking Changes
+
+- Bump MSRV to 1.88
+
+### Changed
+
+- Bump `pgp` to `0.18.0`
+
 ## 0.18.4
 
 ### Added
