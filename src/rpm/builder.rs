@@ -1,17 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 
-use std::fs;
-use std::io::{Read, Write};
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::{fs, io};
 
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use digest::Digest;
 
-use super::Lead;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::payload;
@@ -403,19 +402,19 @@ impl PackageBuilder {
         source: impl AsRef<Path>,
         options: impl Into<FileOptions>,
     ) -> Result<Self, Error> {
-        let mut input = fs::File::open(source)?;
-        let mut content = Vec::new();
-        input.read_to_end(&mut content)?;
+        let metadata = fs::metadata(source.as_ref())?;
         #[allow(unused_mut)]
         let mut options = options.into();
         #[cfg(unix)]
         if options.inherit_permissions {
-            options.mode = FileMode::from(input.metadata()?.permissions().mode() as i32);
+            options.mode = FileMode::from(metadata.permissions().mode() as i32);
         }
-
-        let modified_at = input.metadata()?.modified()?.try_into()?;
-
-        self.add_data(content, modified_at, options)?;
+        let modified_at = metadata.modified()?.try_into()?;
+        self.add_data(
+            ContentSource::Path(source.as_ref().to_path_buf()),
+            modified_at,
+            options,
+        )?;
         Ok(self)
     }
 
@@ -450,13 +449,17 @@ impl PackageBuilder {
         content: impl Into<Vec<u8>>,
         options: impl Into<FileOptions>,
     ) -> Result<Self, Error> {
-        self.add_data(content.into(), Timestamp::now(), options.into())?;
+        self.add_data(
+            ContentSource::Raw(content.into()),
+            Timestamp::now(),
+            options.into(),
+        )?;
         Ok(self)
     }
 
     fn add_data(
         &mut self,
-        content: Vec<u8>,
+        content_source: ContentSource,
         modified_at: Timestamp,
         options: FileOptions,
     ) -> Result<(), Error> {
@@ -488,17 +491,10 @@ impl PackageBuilder {
             )
         };
 
-        let sha256_checksum = {
-            let mut hasher = sha2::Sha256::default();
-            hasher.update(&content);
-            hex::encode(hasher.finalize()) // encode as string
-        };
-
         let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
-            size: content.len() as u64,
-            content,
+            source: content_source,
             flags: options.flag,
             user: options.user,
             group: options.group,
@@ -510,7 +506,6 @@ impl PackageBuilder {
             // We do this so that it's possible to verify that caps are correct when provided
             // and then later check if any were set
             caps: options.caps,
-            sha_checksum: sha256_checksum,
             verify_flags: options.verify_flags,
         };
 
@@ -755,7 +750,10 @@ impl PackageBuilder {
         // Calculate the sha256 of the archive as we write it into the compressor, so that we don't
         // need to keep two copies in memory simultaneously.
         let mut compressor: Compressor = self.config.compression.try_into()?;
-        let mut archive = ChecksummingWriter::new(&mut compressor);
+        let mut archive = ChecksummingWriter::new(
+            &mut compressor,
+            &[HashKind::Sha256, HashKind::Sha512, HashKind::Sha3_256],
+        );
 
         let mut ino_index = 1;
 
@@ -783,7 +781,7 @@ impl PackageBuilder {
         let mut uses_file_capabilities = false;
 
         for (_, entry) in self.files.iter() {
-            combined_file_sizes += entry.size;
+            combined_file_sizes += entry.source.size()?;
         }
 
         let uses_large_files =
@@ -793,7 +791,7 @@ impl PackageBuilder {
         // @todo: normalize path?
         // @todo: remove duplicates?
         // if we remove duplicates, remember anything already pre-computed
-        for (file_index, (cpio_path, entry)) in self.files.iter().enumerate() {
+        for (file_index, (cpio_path, entry)) in self.files.iter_mut().enumerate() {
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
             }
@@ -803,7 +801,7 @@ impl PackageBuilder {
             if &entry.group != "root" {
                 groups_to_create.insert(entry.group.clone());
             }
-            file_sizes.push(entry.size);
+            file_sizes.push(entry.source.size()?);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
             // @todo: I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
@@ -814,7 +812,6 @@ impl PackageBuilder {
                 _ => entry.modified_at,
             };
             file_mtimes.push(mtime.into());
-            file_hashes.push(entry.sha_checksum.to_owned());
             file_linktos.push(entry.link.to_owned());
             file_flags.push(entry.flags.bits());
             file_usernames.push(entry.user.to_owned());
@@ -832,24 +829,34 @@ impl PackageBuilder {
             base_names.push(entry.base_name.to_owned());
             // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
             file_verify_flags.push(entry.verify_flags.bits());
-            let content = entry.content.to_owned();
-            if !uses_large_files {
-                let mut writer = payload::Builder::new(cpio_path)
-                    .mode(entry.mode.into())
-                    .ino(ino_index)
-                    .uid(self.uid.unwrap_or(0))
-                    .gid(self.gid.unwrap_or(0))
-                    .write_cpio(&mut archive, content.len() as u32);
-                writer.write_all(&content)?;
-                writer.finish()?;
-            } else {
-                // @todo: can we just use ino_index instead of file_index?
-                let header = payload::stripped_cpio_header(file_index as u32);
-                archive.write_all(&header)?;
-                archive.write_all(&content)?;
-                archive.flush()?;
+            let hash_value_m = {
+                if !uses_large_files {
+                    let mut writer = payload::Builder::new(cpio_path)
+                        .mode(entry.mode.into())
+                        .ino(ino_index)
+                        .uid(self.uid.unwrap_or(0))
+                        .gid(self.gid.unwrap_or(0))
+                        .write_cpio(&mut archive, entry.source.size()? as u32);
+                    let mut hash_writer = ChecksummingWriter::new(&mut writer, &[HashKind::Sha256]);
+                    io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
+                    let (hash_output, _) = hash_writer.into_digests();
+                    writer.finish()?;
+                    hash_output
+                } else {
+                    // @todo: can we just use ino_index instead of file_index?
+                    let header = payload::stripped_cpio_header(file_index as u32);
+                    archive.write_all(&header)?;
+                    let mut hash_writer =
+                        ChecksummingWriter::new(&mut archive, &[HashKind::Sha256]);
+                    io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
+                    let (hash_output, _) = hash_writer.into_digests();
+                    archive.flush()?;
+                    hash_output
+                }
             };
-
+            if let Some(hash_value) = hash_value_m.get(&HashKind::Sha256) {
+                file_hashes.push(hash_value.to_string());
+            }
             ino_index += 1;
         }
         payload::trailer(&mut archive)?;
@@ -1240,8 +1247,7 @@ impl PackageBuilder {
         ]);
 
         // digest of the uncompressed raw archive calculated on the inner writer
-        let (raw_archive_sha256, raw_archive_sha512, raw_archive_sha3_256, raw_archive_size) =
-            archive.into_digests();
+        let (hash_values, raw_archive_size) = archive.into_digests();
         let payload = compressor.finish_compression()?;
 
         // digest of the post-compression archive (payload)
@@ -1263,23 +1269,25 @@ impl PackageBuilder {
             hex::encode(hasher.finalize())
         };
 
-        actual_records.extend([
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADSHA256,
-                offset,
-                IndexData::StringArray(vec![payload_sha256]),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADDIGESTALGO,
-                offset,
-                IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADSHA256ALT,
-                offset,
-                IndexData::StringArray(vec![raw_archive_sha256]),
-            ),
-        ]);
+        if let Some(raw_archive_sha256) = hash_values.get(&HashKind::Sha256) {
+            actual_records.extend([
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSHA256,
+                    offset,
+                    IndexData::StringArray(vec![payload_sha256]),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADDIGESTALGO,
+                    offset,
+                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSHA256ALT,
+                    offset,
+                    IndexData::StringArray(vec![raw_archive_sha256.to_string()]),
+                ),
+            ]);
+        }
 
         if self.config.format == RpmFormat::V6 {
             actual_records.extend([
@@ -1298,27 +1306,35 @@ impl PackageBuilder {
                     offset,
                     IndexData::Int64(vec![raw_archive_size as u64]),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOAD_SHA3_256,
-                    offset,
-                    IndexData::StringTag(payload_sha3_256),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
-                    offset,
-                    IndexData::StringTag(raw_archive_sha3_256),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOAD_SHA512,
-                    offset,
-                    IndexData::StringTag(payload_sha512),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
-                    offset,
-                    IndexData::StringTag(raw_archive_sha512),
-                ),
             ]);
+            if let Some(raw_archive_sha3_256) = hash_values.get(&HashKind::Sha3_256) {
+                actual_records.extend([
+                    IndexEntry::new(
+                        IndexTag::RPMTAG_PAYLOAD_SHA3_256,
+                        offset,
+                        IndexData::StringTag(payload_sha3_256),
+                    ),
+                    IndexEntry::new(
+                        IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
+                        offset,
+                        IndexData::StringTag(raw_archive_sha3_256.to_string()),
+                    ),
+                ]);
+            }
+            if let Some(raw_archive_sha512) = hash_values.get(&HashKind::Sha512) {
+                actual_records.extend([
+                    IndexEntry::new(
+                        IndexTag::RPMTAG_PAYLOAD_SHA512,
+                        offset,
+                        IndexData::StringTag(payload_sha512),
+                    ),
+                    IndexEntry::new(
+                        IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
+                        offset,
+                        IndexData::StringTag(raw_archive_sha512.to_string()),
+                    ),
+                ]);
+            }
         }
 
         let compression_details = match self.config.compression {

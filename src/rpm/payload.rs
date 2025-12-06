@@ -42,7 +42,6 @@
 
 use super::FileEntry;
 use std::io::{self, Read, Write};
-
 const HEADER_LEN: usize = 110; // 6 byte magic + 104 bytes for metadata
 
 const STRIPPED_CPIO_HEADER_LEN: usize = 14; // 8 bytes metadata + 6 bytes magic
