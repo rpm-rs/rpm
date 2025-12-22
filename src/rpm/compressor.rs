@@ -205,10 +205,10 @@ impl std::fmt::Display for CompressionWithLevel {
     }
 }
 
-pub(crate) fn decompress_stream(
+pub(crate) fn decompress_stream<'a>(
     value: CompressionType,
-    reader: impl io::BufRead + 'static,
-) -> Result<Box<dyn io::Read>, Error> {
+    reader: impl io::BufRead + 'a,
+) -> Result<Box<dyn io::Read + 'a>, Error> {
     match value {
         CompressionType::None => Ok(Box::new(reader)),
         #[cfg(feature = "gzip-compression")]
