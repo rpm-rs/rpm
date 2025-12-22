@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Peak memory should be reduced when building packages as files are now read lazily when being added to the package archive.
+- Reduce memory by read file content to writer straight from the archive instead of reading each file entirely into memory before writing them when extract package.
 
 ## Unreleased
 

@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{self, Read, Write},
+    io::{self, Read},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -116,7 +116,7 @@ impl Package {
         let file_entries = self.metadata.get_file_entries()?;
         let archive = decompress_stream(
             self.metadata.get_payload_compressor()?,
-            io::Cursor::new(self.content.clone()),
+            io::Cursor::new(&self.content),
         )?;
 
         Ok(FileIterator {
@@ -158,36 +158,37 @@ impl Package {
             fs::create_dir_all(&dir_path)?;
         }
 
-        // TODO: reduce memory by replacing this with an impl that writes the files immediately after reading them from the archive
-        // instead of reading each file entirely into memory (while the archive is also entirely in memory) before writing them
-        for file in self.files()? {
-            let file = file?;
-            let file_path = dest.as_ref().join(
-                file.metadata
-                    .path
-                    .strip_prefix("/")
-                    .unwrap_or(dest.as_ref()),
-            );
+        let mut archive = decompress_stream(
+            self.metadata.get_payload_compressor()?,
+            io::Cursor::new(&self.content),
+        )?;
+        let file_entries = self.metadata.get_file_entries()?;
 
-            match file.metadata.mode {
+        for file_entry in file_entries.iter() {
+            let mut entry_reader = payload::Reader::new(&mut archive, &file_entries)?;
+            if entry_reader.is_trailer() {
+                return Ok(());
+            }
+            let file_path = dest
+                .as_ref()
+                .join(file_entry.path.strip_prefix("/").unwrap_or(dest.as_ref()));
+            match file_entry.mode {
                 FileMode::Dir { .. } => {
                     fs::create_dir_all(&file_path)?;
-
                     #[cfg(unix)]
                     {
                         let perms =
-                            fs::Permissions::from_mode(file.metadata.mode.permissions().into());
+                            fs::Permissions::from_mode(file_entry.mode.permissions().into());
                         fs::set_permissions(&file_path, perms)?;
                     }
                 }
                 FileMode::Regular { .. } => {
                     let mut f = fs::File::create(&file_path)?;
-                    f.write_all(&file.content)?;
-
+                    io::copy(&mut entry_reader, &mut f)?;
                     #[cfg(unix)]
                     {
                         let perms =
-                            fs::Permissions::from_mode(file.metadata.mode.permissions().into());
+                            fs::Permissions::from_mode(file_entry.mode.permissions().into());
                         f.set_permissions(perms)?;
                     }
                 }
@@ -196,11 +197,11 @@ impl Package {
                     if file_path.exists() || file_path.symlink_metadata().is_ok() {
                         fs::remove_file(&file_path)?;
                     }
-
-                    symlink(file.metadata.linkto, &file_path)?;
+                    symlink(&file_entry.linkto, &file_path)?;
                 }
                 _ => unreachable!("Encountered an unknown or invalid FileMode"),
             }
+            entry_reader.finish()?;
         }
 
         Ok(())
