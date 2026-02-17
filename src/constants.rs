@@ -437,7 +437,6 @@ pub enum IndexSignatureTag {
     //////////////////////////////////////////
     /* Various legacy tags - all deprecated */
     //////////////////////////////////////////
-
     /// This tag specifies the 128-bit MD5 checksum of the combined Header and Archive sections, stored as
     /// a binary representation.
     RPMSIGTAG_MD5 = 1004,
