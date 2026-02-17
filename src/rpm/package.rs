@@ -96,11 +96,11 @@ impl DigestStatus {
 #[derive(Debug, Clone)]
 pub struct DigestReport {
     /// SHA-1 of the header (signature header, v4 packages).
-    pub sha1_header: DigestStatus,
+    pub header_sha1: DigestStatus,
     /// SHA-256 of the header (signature header).
-    pub sha256_header: DigestStatus,
+    pub header_sha256: DigestStatus,
     /// SHA3-256 of the header (signature header, v6 packages).
-    pub sha3_256_header: DigestStatus,
+    pub header_sha3_256: DigestStatus,
     /// SHA-256 of the compressed payload.
     pub payload_sha256: DigestStatus,
     /// SHA-512 of the compressed payload (v6 packages).
@@ -112,9 +112,9 @@ pub struct DigestReport {
 impl DigestReport {
     /// Returns `true` if at least one header digest was present.
     pub fn has_header_digest(&self) -> bool {
-        !self.sha1_header.is_not_present()
-            || !self.sha256_header.is_not_present()
-            || !self.sha3_256_header.is_not_present()
+        !self.header_sha1.is_not_present()
+            || !self.header_sha256.is_not_present()
+            || !self.header_sha3_256.is_not_present()
     }
 
     /// Returns `true` if at least one payload digest was present.
@@ -131,9 +131,9 @@ impl DigestReport {
     /// considered failures, but at least one header digest must be present.
     pub fn result(&self) -> Result<(), Error> {
         let all = [
-            ("header SHA1", &self.sha1_header),
-            ("header SHA-256", &self.sha256_header),
-            ("header SHA3-256", &self.sha3_256_header),
+            ("header SHA1", &self.header_sha1),
+            ("header SHA-256", &self.header_sha256),
+            ("header SHA3-256", &self.header_sha3_256),
             ("payload SHA-256", &self.payload_sha256),
             ("payload SHA-512", &self.payload_sha512),
             ("payload SHA3-256", &self.payload_sha3_256),
@@ -228,7 +228,7 @@ pub struct Package {
     /// Contains the constant lead as well as the metadata store.
     pub metadata: PackageMetadata,
     /// The compressed or uncompressed files.
-    pub content: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 impl Package {
@@ -242,15 +242,15 @@ impl Package {
     /// Parse an RPM package from an existing buffer
     pub fn parse(input: &mut impl io::BufRead) -> Result<Self, Error> {
         let metadata = PackageMetadata::parse(input)?;
-        let mut content = Vec::new();
-        input.read_to_end(&mut content)?;
-        Ok(Package { metadata, content })
+        let mut payload = Vec::new();
+        input.read_to_end(&mut payload)?;
+        Ok(Package { metadata, payload })
     }
 
     /// Write the RPM package to a buffer
     pub fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
         self.metadata.write(out)?;
-        out.write_all(&self.content)?;
+        out.write_all(&self.payload)?;
         Ok(())
     }
 
@@ -604,10 +604,10 @@ impl Package {
     /// report.result()?;
     ///
     /// // Or inspect individual digests
-    /// if report.sha256_header.is_verified() {
+    /// if report.header_sha256.is_verified() {
     ///     println!("SHA-256 header digest: OK");
     /// }
-    /// match &report.sha3_256_header {
+    /// match &report.header_sha3_256 {
     ///     rpm::DigestStatus::Verified => println!("SHA3-256 header digest: OK"),
     ///     rpm::DigestStatus::NotPresent => println!("SHA3-256 header digest: not present"),
     ///     rpm::DigestStatus::NotChecked => println!("SHA3-256 header digest: not checked"),
@@ -629,21 +629,21 @@ impl Package {
             self.metadata
                 .header
                 .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADSHA256),
-            self.content.as_slice(),
+            self.payload.as_slice(),
         );
 
         report.payload_sha512 = DigestStatus::check_digest_against_tag::<sha2::Sha512>(
             self.metadata
                 .header
                 .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA512),
-            self.content.as_slice(),
+            self.payload.as_slice(),
         );
 
         report.payload_sha3_256 = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
             self.metadata
                 .header
                 .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256),
-            self.content.as_slice(),
+            self.payload.as_slice(),
         );
 
         Ok(report)
@@ -1534,28 +1534,28 @@ impl PackageMetadata {
 
         // --- Header digests (from sig header) ---
 
-        let sha1_header = DigestStatus::check_digest_against_tag::<sha1::Sha1>(
+        let header_sha1 = DigestStatus::check_digest_against_tag::<sha1::Sha1>(
             self.signature
                 .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1),
             header.as_slice(),
         );
 
-        let sha256_header = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
+        let header_sha256 = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
             self.signature
                 .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256),
             header.as_slice(),
         );
 
-        let sha3_256_header = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
+        let header_sha3_256 = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
             self.signature
                 .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256),
             header.as_slice(),
         );
 
         Ok(DigestReport {
-            sha1_header,
-            sha256_header,
-            sha3_256_header,
+            header_sha1,
+            header_sha256,
+            header_sha3_256,
             payload_sha256: DigestStatus::NotChecked,
             payload_sha512: DigestStatus::NotChecked,
             payload_sha3_256: DigestStatus::NotChecked,

@@ -62,7 +62,7 @@ impl Package {
         let file_entries = self.metadata.get_file_entries()?;
         let archive = decompress_stream(
             self.metadata.get_payload_compressor()?,
-            io::Cursor::new(&self.content),
+            io::Cursor::new(&self.payload),
         )?;
 
         Ok(FileIterator {
@@ -113,7 +113,7 @@ impl Package {
 
         let mut archive = decompress_stream(
             self.metadata.get_payload_compressor()?,
-            io::Cursor::new(&self.content),
+            io::Cursor::new(&self.payload),
         )?;
         let file_entries = self.metadata.get_file_entries()?;
 

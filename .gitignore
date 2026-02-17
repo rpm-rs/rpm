@@ -6,3 +6,6 @@ Cargo.lock
 !tests/assets/**
 dnf-cache
 .idea
+**/__pycache__/
+.venv/
+**/*.pyc

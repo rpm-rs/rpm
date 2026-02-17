@@ -1,12 +1,13 @@
 [![crates.io](https://img.shields.io/crates/v/rpm.svg)](https://crates.io/crates/rpm)
 [![docs.rs](https://docs.rs/rpm/badge.svg)](https://docs.rs/rpm)
 [![MSRV](https://img.shields.io/badge/rustc-1.88.0+-ab6000.svg)](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/)
+[![PyPI](https://img.shields.io/pypi/v/rpm-rs.svg)](https://pypi.org/project/rpm-rs/)
 
 ## RPM-RS
 
 A pure rust library for working with RPM files.
 
-This is **not**, nor is it intended to be, a full replacement for the original `rpm` library / tools.
+This is **not** a replacement for the original `rpm` library / tools, and is **not** an official effort by Red Hat or the rpm-software-management developers.
 
 ### Goals
 
@@ -24,12 +25,13 @@ RPM has a lot of features. I do not want to re-implement all of them.
 - Obsolete cryptography (md5, DSA) not supported
 - Legacy RPMv3 signatures not supported (e.g. `SIGPGP`, `SIGGPG`)
 
-### Status
+### Major Features
 
 - [x] RPM Creation
 - [x] RPM Signing and Signature Verification
 - [x] RPM signing using an external signing service or Hardware Signing Module (HSM)
 - [x] High-level APIs for parsing RPM files, reading RPM metadata, and extracting payloads
+- [x] Python bindings
 
 ### Examples
 
@@ -50,6 +52,18 @@ let arch = pkg.metadata.get_arch()?;
 println!("{}-{}-{}.{}", name, version, release, arch);
 
 for changelog in pkg.metadata.get_changelog_entries()? {
+    println!("{}\n{}\n", changelog.name, changelog.description);
+}
+
+// `PackageMetadata` provides direct access to Package metadata without reading the payload
+// as `Package` does. If you don't need the payload, it is more convenient and efficient to use.
+
+let metadata = rpm::PackageMetadata::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+
+assert_eq!(metadata.get_name()?, pkg.metadata.get_name()?);
+assert_eq!(metadata.get_version()?, pkg.metadata.get_version()?);
+
+for changelog in metadata.get_changelog_entries()? {
     println!("{}\n{}\n", changelog.name, changelog.description);
 }
 ```
@@ -88,6 +102,11 @@ for sig in pkg.signatures()? {
     if sig.version() == SignatureVersion::V6 {
         println!("This is a v6 signature");
     }
+}
+
+// Raw OpenPGP signature packets are also available
+for raw_sig in pkg.raw_signatures()? {
+    println!("Signature packet: {} bytes", raw_sig.len());
 }
 ```
 
@@ -153,10 +172,10 @@ let report = pkg.check_signatures(verifier)?;
 assert!(report.is_ok());
 
 // Or inspect individual digest results
-if report.digests.sha256_header.is_verified() {
+if report.digests.header_sha256.is_verified() {
     println!("SHA-256 header digest: OK");
 }
-match &report.digests.sha3_256_header {
+match &report.digests.header_sha3_256 {
     rpm::DigestStatus::Verified => println!("SHA3-256 header digest: OK"),
     rpm::DigestStatus::NotPresent => println!("SHA3-256 header digest: not present"),
     rpm::DigestStatus::NotChecked => println!("SHA3-256 header digest: not checked"),
@@ -310,6 +329,16 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
         rpm::FileOptions::new("/etc/awesome/config.toml")
             .config().noreplace(),
     )?
+    // add a file from in-memory content instead of reading from disk
+    .with_file_contents(
+        "hello world!",
+        rpm::FileOptions::new("/usr/share/awesome/greeting.txt"),
+    )?
+    // binary content works too
+    .with_file_contents(
+        b"\x00\x01\x02\x03".as_slice(),
+        rpm::FileOptions::new("/usr/share/awesome/data.bin").permissions(0o600),
+    )?
     // symlinks don't require a source file
     .with_symlink(
         rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
@@ -319,6 +348,9 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .with_dir_entry(
         rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
     )?
+    // recursively add all files from a directory on disk, using a closure to customize
+    // the file options for each entry (e.g. marking all files as documentation)
+    .with_dir("./build/share", "/usr/share/awesome", |o| o.doc())?
     // ghost files / directories are not included in the package payload, but their metadata
     // (ownership, permissions, etc.) is tracked by RPM. This is commonly used for files
     // created at runtime (e.g. log files, PID files).
