@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.0
+
+### Added
+
+- Added a new Python API - this package lives on PyPI at https://pypi.org/project/rpm-rs/
+- `Header::entry()` for fetching the an arbitrary tag or u32 (interpreted as a tag) from the header
+- Many new examples
+
+### Changed
+
+- Made an optional `payload` feature so that users who only need metadata parsing functions (no building, no file access or extraction) can avoid compression library dependencies.
+
+### Breaking Changes
+
+- `Package.content` renamed to `Package.payload`
+- Made `FileEntry.linkto` an `Option<String>` instead of a bare `String`, to be more similar to other fields such as `digest`.
+- Renamed `DigestReport.sha1_header` (etc.) to `DigestReport.header_sha1` (etc.) to match the payload digests.
+
 ## 0.22.0
 
 This should (hopefully) be the last majorly API-changing release. The changes should be minor until 1.0.

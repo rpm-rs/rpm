@@ -205,12 +205,12 @@ fn assert_packages_match(
     );
 
     assert_eq!(
-        parsed.content,
-        fixture.content,
+        parsed.payload,
+        fixture.payload,
         "===== Payload mismatch ({}) =====\nparsed {} bytes vs fixture {} bytes",
         label,
-        parsed.content.len(),
-        fixture.content.len(),
+        parsed.payload.len(),
+        fixture.payload.len(),
     );
 
     Ok(())

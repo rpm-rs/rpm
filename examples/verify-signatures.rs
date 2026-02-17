@@ -26,9 +26,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let report = pkg.check_signatures(verifier)?;
 
     println!("Digest verification:");
-    println!("  Header SHA1      : {:?}", report.digests.sha1_header);
-    println!("  Header SHA256    : {:?}", report.digests.sha256_header);
-    println!("  Header SHA3-256  : {:?}", report.digests.sha3_256_header);
+    println!("  Header SHA1      : {:?}", report.digests.header_sha1);
+    println!("  Header SHA256    : {:?}", report.digests.header_sha256);
+    println!("  Header SHA3-256  : {:?}", report.digests.header_sha3_256);
     println!("  Payload SHA256   : {:?}", report.digests.payload_sha256);
     println!("  Payload SHA512   : {:?}", report.digests.payload_sha512);
     println!("  Payload SHA3-256 : {:?}", report.digests.payload_sha3_256);

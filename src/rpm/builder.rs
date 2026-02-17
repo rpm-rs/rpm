@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 use std::io::Read;
@@ -1392,7 +1394,10 @@ impl PackageBuilder {
             header: header_idx_tag,
         };
 
-        let pkg = Package { metadata, content };
+        let pkg = Package {
+            metadata,
+            payload: content,
+        };
         Ok(pkg)
     }
 

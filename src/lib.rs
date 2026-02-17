@@ -32,6 +32,18 @@
 //! for changelog in pkg.metadata.get_changelog_entries()? {
 //!     println!("{}\n{}\n", changelog.name, changelog.description);
 //! }
+//!
+//! // `PackageMetadata` provides direct access to Package metadata without reading the payload
+//! // as `Package` does. If you don't need the payload, it is more convenient and efficient to use.
+//!
+//! let metadata = rpm::PackageMetadata::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+//!
+//! assert_eq!(metadata.get_name()?, pkg.metadata.get_name()?);
+//! assert_eq!(metadata.get_version()?, pkg.metadata.get_version()?);
+//!
+//! for changelog in metadata.get_changelog_entries()? {
+//!     println!("{}\n{}\n", changelog.name, changelog.description);
+//! }
 //! # Ok(())
 //! # }
 //! ```
@@ -75,6 +87,11 @@
 //!     if sig.version() == SignatureVersion::V6 {
 //!         println!("This is a v6 signature");
 //!     }
+//! }
+//!
+//! // Raw OpenPGP signature packets are also available
+//! for raw_sig in pkg.raw_signatures()? {
+//!     println!("Signature packet: {} bytes", raw_sig.len());
 //! }
 //! # Ok(())
 //! # }
@@ -164,10 +181,10 @@
 //! assert!(report.is_ok());
 //!
 //! // Or inspect individual digest results
-//! if report.digests.sha256_header.is_verified() {
+//! if report.digests.header_sha256.is_verified() {
 //!     println!("SHA-256 header digest: OK");
 //! }
-//! match &report.digests.sha3_256_header {
+//! match &report.digests.header_sha3_256 {
 //!     rpm::DigestStatus::Verified => println!("SHA3-256 header digest: OK"),
 //!     rpm::DigestStatus::NotPresent => println!("SHA3-256 header digest: not present"),
 //!     rpm::DigestStatus::NotChecked => println!("SHA3-256 header digest: not checked"),
@@ -361,6 +378,16 @@
 //!         rpm::FileOptions::new("/etc/awesome/config.toml")
 //!             .config().noreplace(),
 //!     )?
+//!     // add a file from in-memory content instead of reading from disk
+//!     .with_file_contents(
+//!         "hello world!",
+//!         rpm::FileOptions::new("/usr/share/awesome/greeting.txt"),
+//!     )?
+//!     // binary content works too
+//!     .with_file_contents(
+//!         b"\x00\x01\x02\x03".as_slice(),
+//!         rpm::FileOptions::new("/usr/share/awesome/data.bin").permissions(0o600),
+//!     )?
 //!     // symlinks don't require a source file
 //!     .with_symlink(
 //!         rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
@@ -370,6 +397,9 @@
 //!     .with_dir_entry(
 //!         rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
 //!     )?
+//!     // recursively add all files from a directory on disk, using a closure to customize
+//!     // the file options for each entry (e.g. marking all files as documentation)
+//!     .with_dir("./tests/assets/SOURCES", "/usr/share/awesome", |o| o.doc())?
 //!     // ghost files / directories are not included in the package payload, but their metadata
 //!     // (ownership, permissions, etc.) is tracked by RPM. This is commonly used for files
 //!     // created at runtime (e.g. log files, PID files).
@@ -427,3 +457,6 @@ pub use crate::version::*;
 
 mod rpm;
 pub use crate::rpm::*;
+
+#[cfg(feature = "python")]
+pub mod python;

@@ -487,10 +487,6 @@ where
         all_records.append(&mut actual_records);
         let store_size = store.len();
 
-        // TODO dunno if this is necessary yet.
-        // if store_size % 8 > 0 {
-        //     store_size += 8 - (store_size % 8);
-        // }
         let index_header = IndexHeader::new(all_records.len() as u32, store_size as u32);
         Header {
             index_entries: all_records,

@@ -667,9 +667,9 @@ fn test_verify_digests_standalone() -> Result<(), Box<dyn std::error::Error>> {
 
     // check_digests() on a v4 package: SHA-1 present, SHA3-256 not present
     let report = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?.check_digests()?;
-    assert!(report.sha1_header.is_verified());
-    assert!(report.sha256_header.is_verified());
-    assert!(report.sha3_256_header.is_not_present());
+    assert!(report.header_sha1.is_verified());
+    assert!(report.header_sha256.is_verified());
+    assert!(report.header_sha3_256.is_not_present());
     assert!(report.payload_sha256.is_verified());
     assert!(report.payload_sha512.is_not_present());
     assert!(report.payload_sha3_256.is_not_present());
@@ -677,9 +677,9 @@ fn test_verify_digests_standalone() -> Result<(), Box<dyn std::error::Error>> {
 
     // check_digests() on a v6 package: SHA3-256 present, SHA-1 not present
     let report = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?.check_digests()?;
-    assert!(report.sha256_header.is_verified());
-    assert!(report.sha3_256_header.is_verified());
-    assert!(report.sha1_header.is_not_present());
+    assert!(report.header_sha256.is_verified());
+    assert!(report.header_sha3_256.is_verified());
+    assert!(report.header_sha1.is_not_present());
     assert!(report.payload_sha256.is_verified());
     assert!(report.payload_sha512.is_verified());
     assert!(report.payload_sha3_256.is_verified());
@@ -1123,7 +1123,7 @@ mod tampering {
         pkg.verify_digests()?;
 
         // Tamper with the payload
-        if let Some(byte) = pkg.content.last_mut() {
+        if let Some(byte) = pkg.payload.last_mut() {
             *byte ^= 0xFF;
         }
 
@@ -1139,8 +1139,8 @@ mod tampering {
             "payload SHA-256 should mismatch"
         );
         // Header-only digests should still be fine
-        assert!(report.sha1_header.is_verified());
-        assert!(report.sha256_header.is_verified());
+        assert!(report.header_sha1.is_verified());
+        assert!(report.header_sha256.is_verified());
         // result() should return a descriptive error
         let err = report.result().unwrap_err();
         assert!(
@@ -1163,7 +1163,7 @@ mod tampering {
 
         pkg.verify_digests()?;
 
-        if let Some(byte) = pkg.content.last_mut() {
+        if let Some(byte) = pkg.payload.last_mut() {
             *byte ^= 0xFF;
         }
 
@@ -1176,8 +1176,8 @@ mod tampering {
         let report = pkg.check_digests()?;
         assert!(!report.is_ok());
         assert!(report.payload_sha256.is_mismatch());
-        assert!(report.sha256_header.is_verified());
-        assert!(report.sha3_256_header.is_verified());
+        assert!(report.header_sha256.is_verified());
+        assert!(report.header_sha3_256.is_verified());
 
         Ok(())
     }
