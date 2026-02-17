@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rpm-rs"
+version = "0.22.0"
+description = "Python bindings for rpm-rs: parse and inspect RPM packages"
+license = { text = "Apache-2.0 OR MIT" }
+readme = "PYTHON_README.md"
+requires-python = ">=3.10"
+keywords = ["rpm", "packaging"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Archiving :: Packaging",
+]
+
+[project.urls]
+Homepage = "https://github.com/rpm-rs/rpm"
+Repository = "https://github.com/rpm-rs/rpm"
+
+[tool.maturin]
+# Enable the `python` feature (includes pyo3/extension-module).
+# The default Cargo features (signature-pgp, gzip/zstd/xz compression) remain active.
+features = ["python"]
+# The Python module name — must match the #[pymodule] fn name in src/python.rs.
+module-name = "rpm_rs"

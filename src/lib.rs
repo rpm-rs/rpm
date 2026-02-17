@@ -427,3 +427,6 @@ pub use crate::version::*;
 
 mod rpm;
 pub use crate::rpm::*;
+
+#[cfg(feature = "python")]
+pub mod python;
