@@ -5,6 +5,7 @@
 use std::fmt::Display;
 
 use bitflags::bitflags;
+use num::FromPrimitive;
 
 use crate::{ScriptletIndexTags, TriggerIndexTags};
 
@@ -508,6 +509,17 @@ impl From<IndexTag> for u32 {
 impl From<IndexSignatureTag> for u32 {
     fn from(val: IndexSignatureTag) -> Self {
         val.to_u32()
+    }
+}
+
+/// Resolve a raw tag number to its name, falling back to the numeric value.
+pub fn format_tag_id(tag: u32) -> String {
+    if let Some(sig_tag) = IndexSignatureTag::from_u32(tag) {
+        format!("{} [{}]", sig_tag, tag)
+    } else if let Some(index_tag) = IndexTag::from_u32(tag) {
+        format!("{} [{}]", index_tag, tag)
+    } else {
+        format!("Unknown({})", tag)
     }
 }
 
