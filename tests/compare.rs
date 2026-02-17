@@ -60,8 +60,6 @@ impl HeaderComparison {
     }
 
     fn report(&self) -> String {
-        use num::FromPrimitive;
-
         fn item_count(data: &IndexData) -> usize {
             match data {
                 IndexData::Null => 0,
@@ -74,37 +72,26 @@ impl HeaderComparison {
             }
         }
 
-        fn format_tag(tag: u32) -> String {
-            // Try IndexTag first, then IndexSignatureTag
-            if let Some(sig_tag) = IndexSignatureTag::from_u32(tag) {
-                format!("{} [{}]", sig_tag, tag)
-            } else if let Some(index_tag) = IndexTag::from_u32(tag) {
-                format!("{} [{}]", index_tag, tag)
-            } else {
-                format!("Unknown({})", tag)
-            }
-        }
-
         let mut output = String::new();
 
         if !self.missing_in_built.is_empty() {
             output.push_str("\nMissing tags in built package:\n");
             for (tag, data) in &self.missing_in_built {
-                output.push_str(&format!("  {}: {:?}\n", format_tag(*tag), data));
+                output.push_str(&format!("  {}: {:?}\n", format_tag_id(*tag), data));
             }
         }
 
         if !self.extra_in_built.is_empty() {
             output.push_str("\nExtra tags in built package:\n");
             for (tag, data) in &self.extra_in_built {
-                output.push_str(&format!("  {}: {:?}\n", format_tag(*tag), data));
+                output.push_str(&format!("  {}: {:?}\n", format_tag_id(*tag), data));
             }
         }
 
         if !self.value_differences.is_empty() {
             output.push_str("\nValue differences:\n");
             for diff in &self.value_differences {
-                output.push_str(&format!("  {}:\n", format_tag(diff.tag)));
+                output.push_str(&format!("  {}:\n", format_tag_id(diff.tag)));
                 output.push_str(&format!(
                     "    Built:   {:?} len: {}\n",
                     diff.built_value,

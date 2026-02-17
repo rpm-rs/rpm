@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use clap::Parser;
-use rpm::{IndexData, PackageMetadata, display_tag_id};
+use rpm::{IndexData, PackageMetadata, format_tag_id};
 
 /// Compare the headers of two RPM packages and report differences.
 #[derive(Parser)]
@@ -56,21 +56,21 @@ fn diff_headers(label: &str, a_entries: Vec<(u32, IndexData)>, b_entries: Vec<(u
                     println!("\n{label}:");
                 }
                 diffs += 1;
-                println!("  - {} (only in first)", display_tag_id(*tag));
+                println!("  - {} (only in first)", format_tag_id(*tag));
             }
             (None, Some(_)) => {
                 if diffs == 0 {
                     println!("\n{label}:");
                 }
                 diffs += 1;
-                println!("  + {} (only in second)", display_tag_id(*tag));
+                println!("  + {} (only in second)", format_tag_id(*tag));
             }
             (Some(a_val), Some(b_val)) if a_val != b_val => {
                 if diffs == 0 {
                     println!("\n{label}:");
                 }
                 diffs += 1;
-                println!("  ~ {}:", display_tag_id(*tag));
+                println!("  ~ {}:", format_tag_id(*tag));
                 println!("    < {}", format_value(a_val));
                 println!("    > {}", format_value(b_val));
             }
