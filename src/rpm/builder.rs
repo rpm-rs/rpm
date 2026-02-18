@@ -85,6 +85,7 @@ impl BuildConfig {
     /// # Ok(())
     /// # }
     /// ```
+    ///
     /// If you would like to specify a custom compression level (for faster package builds, at the
     /// expense of package size), pass a `CompressionWithLevel` value instead.
     ///
@@ -203,10 +204,10 @@ impl PackageBuilder {
 
     /// Use a particular common configuration when generating the packages
     ///
-    /// /// ```
+    /// ```
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
-    ///     .using_config(BuildConfig::v4().compression(CompressionType::Gzip))
+    ///     .using_config(rpm::BuildConfig::v4().compression(rpm::CompressionType::Gzip))
     ///     .build();
     /// # Ok(())
     /// # }

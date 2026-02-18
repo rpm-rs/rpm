@@ -1,6 +1,4 @@
-use std::path::Path;
-
-use chrono::TimeZone;
+use std::{path::Path, time::SystemTime};
 
 use rpm::{
     self,
@@ -249,7 +247,7 @@ fn build_parse_sign_and_verify(
     )?
     .epoch(3)
     .pre_install_script("echo preinst")
-    .add_changelog_entry("you", "yada yada", chrono::Utc.timestamp_opt(1, 0).unwrap())
+    .add_changelog_entry("you", "yada yada", SystemTime::now())
     .requires(rpm::Dependency::any("rpm-sign".to_string()))
     .build()?;
 
