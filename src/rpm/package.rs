@@ -309,8 +309,11 @@ impl Package {
                 decoder.read_to_end(&mut signature)?;
                 let signature = Verifier::parse_signature(&signature)?;
 
-                let new_key_ids: Vec<String> =
-                    signature.issuer().iter().map(|x| format!("{x}")).collect();
+                let new_key_ids: Vec<String> = signature
+                    .issuer_key_id()
+                    .iter()
+                    .map(|x| format!("{x}"))
+                    .collect();
 
                 if key_ids.len() != 1 {
                     return Err(Error::UnexpectedIssuerCount(
@@ -349,7 +352,11 @@ impl Package {
                 signature = Verifier::parse_signature(rpm_v3_sig);
             }
 
-            let key_ids: Vec<String> = signature?.issuer().iter().map(|x| format!("{x}")).collect();
+            let key_ids: Vec<String> = signature?
+                .issuer_key_id()
+                .iter()
+                .map(|x| format!("{x}"))
+                .collect();
 
             if key_ids.len() != 1 {
                 return Err(Error::UnexpectedIssuerCount(

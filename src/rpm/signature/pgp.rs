@@ -1,5 +1,4 @@
 use super::{AlgorithmType, traits};
-use crate::Timestamp;
 use crate::errors::Error;
 
 use std::io;
@@ -9,7 +8,7 @@ use pgp::{
     composed::{Deserializable, SignedPublicKey, SignedSecretKey},
     crypto::{hash::HashAlgorithm, public_key::PublicKeyAlgorithm},
     packet::{PacketTrait, SecretKey, SignatureConfig, SignatureType, Subpacket, SubpacketData},
-    types::{KeyDetails, Password, SecretKeyTrait},
+    types::{KeyDetails, Password, SigningKey},
 };
 
 /// Signer implementation using the `pgp` crate.
@@ -36,20 +35,15 @@ impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorit
 
 impl<T> traits::Signing for Signer<T>
 where
-    T: SecretKeyTrait,
+    T: SigningKey,
 {
     type Signature = Vec<u8>;
 
     /// Despite the fact the API suggest zero copy pattern,
     /// it internally creates a copy until crate `pgp` provides
     /// a `Read` based implementation.
-    fn sign(&self, data: impl io::Read, t: Timestamp) -> Result<Self::Signature, Error> {
-        use ::chrono::offset::TimeZone;
-
-        let t = ::chrono::offset::Utc
-            .timestamp_opt(t.0.into(), 0)
-            // "shouldn't fail as we are using 0 nanoseconds"
-            .unwrap();
+    fn sign(&self, data: impl io::Read, t: crate::Timestamp) -> Result<Self::Signature, Error> {
+        let t = pgp::types::Timestamp::from_secs(t.0);
 
         let mut sig_cfg = SignatureConfig::v4(
             SignatureType::Binary,
@@ -61,8 +55,8 @@ where
             .push(Subpacket::regular(SubpacketData::SignatureCreationTime(t))?);
         sig_cfg
             .hashed_subpackets
-            .push(Subpacket::regular(SubpacketData::Issuer(
-                self.secret_key.key_id(),
+            .push(Subpacket::regular(SubpacketData::IssuerKeyId(
+                self.secret_key.legacy_key_id(),
             ))?);
         sig_cfg
             .hashed_subpackets
@@ -180,23 +174,23 @@ impl traits::Verifying for Verifier {
     fn verify(&self, mut data: impl io::Read, signature: &[u8]) -> Result<(), Error> {
         let signature = Self::parse_signature(signature)?;
 
-        let key_ids = signature.issuer();
+        let key_ids = signature.issuer_key_id();
         if key_ids.is_empty() {
             log::trace!(
                 "Signature has no issuer ref, attempting primary key: {:?}",
-                self.public_key.primary_key.key_id()
+                self.public_key.primary_key.legacy_key_id()
             );
             signature
                 .verify(&self.public_key, data)
                 .map_err(|source| Error::VerificationError {
                     source,
-                    key_ref: format!("{:?}", self.public_key.key_id()),
+                    key_ref: format!("{:?}", self.public_key.legacy_key_id()),
                 })
         } else {
             let mut result: Option<Error> = None;
             for key_id in key_ids {
                 log::trace!("Signature has issuer ref: {:?}", key_id);
-                if self.public_key.key_id() == *key_id {
+                if self.public_key.legacy_key_id() == *key_id {
                     return signature.verify(&self.public_key, data).map_err(|source| {
                         Error::VerificationError {
                             source,
@@ -207,24 +201,24 @@ impl traits::Verifying for Verifier {
                     log::trace!(
                         "Signature issuer key id {:?} does not match primary keys key id: {:?}",
                         key_id,
-                        self.public_key.key_id()
+                        self.public_key.legacy_key_id()
                     );
                 }
 
                 for sub_key in &self.public_key.public_subkeys {
-                    log::trace!("Trying subkey candidate {:?}", sub_key.key_id());
+                    log::trace!("Trying subkey candidate {:?}", sub_key.legacy_key_id());
 
-                    if sub_key.key_id().as_ref() == key_id.as_ref() {
+                    if sub_key.legacy_key_id().as_ref() == key_id.as_ref() {
                         log::trace!(
                             "Subkey key id {:?} matches signature key id",
-                            sub_key.key_id()
+                            sub_key.legacy_key_id()
                         );
 
                         match signature.verify(sub_key, &mut data) {
                             Ok(_) => {
                                 log::trace!(
                                     "Signature successfully verified with subkey {:?}",
-                                    sub_key.key_id()
+                                    sub_key.legacy_key_id()
                                 );
                                 return Ok(());
                             }
@@ -232,20 +226,20 @@ impl traits::Verifying for Verifier {
                                 log::trace!("Subkey verification failed");
                                 result = Some(Error::VerificationError {
                                     source,
-                                    key_ref: format!("{:?}", sub_key.key_id()),
+                                    key_ref: format!("{:?}", sub_key.legacy_key_id()),
                                 })
                             }
                         }
                     } else {
                         log::trace!(
                             "Subkey key id {:?} does not match signature",
-                            sub_key.key_id()
+                            sub_key.legacy_key_id()
                         );
                     }
                 }
             }
             let default_err = Error::KeyNotFoundError {
-                key_ref: format!("{:?}", self.public_key.key_id()),
+                key_ref: format!("{:?}", self.public_key.legacy_key_id()),
             };
 
             match result {
@@ -333,7 +327,8 @@ pub(crate) mod test {
 
         let (signer, verifier) = prep();
 
-        let t = Timestamp(1_600_000_000);
+        let t = crate::Timestamp(1_600_000_000);
+
         let signature = signer.sign(&mut cursor, t).expect("signed");
         let signature = signature.as_slice();
         {
@@ -352,9 +347,8 @@ pub(crate) mod test {
 
     #[test]
     fn verify_pgp_crate() {
-        use chrono::{TimeZone, Utc};
         use pgp::packet::Signature;
-        use pgp::types::{PublicKeyTrait, SecretKeyTrait};
+        use pgp::types::{SigningKey, VerifyingKey};
 
         const RPM_SHA2_256: [u8; 32] =
             hex!("d92bfe276e311a67fe128768c5df4d06fd461e043afdf872ba4c679d860db81e");
@@ -368,14 +362,14 @@ pub(crate) mod test {
 
         // stage 1: verify created signature is fine
         let signature = signing_key
-            .create_signature(&passwd, HashAlgorithm::Sha256, digest)
+            .sign(&passwd, HashAlgorithm::Sha256, digest)
             .expect("Failed to crate signature");
 
         verification_key
-            .verify_signature(HashAlgorithm::Sha256, digest, &signature)
+            .verify(HashAlgorithm::Sha256, digest, &signature)
             .expect("Failed to validate signature");
 
-        let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
+        let sig_time = pgp::types::Timestamp::from_secs(1_600_000_000);
         // stage 2: check parsing success
         //
         let packet_header = pgp::packet::PacketHeader::from_parts(
@@ -393,7 +387,8 @@ pub(crate) mod test {
             signature,
             vec![
                 Subpacket::regular(SubpacketData::SignatureCreationTime(sig_time)).unwrap(),
-                Subpacket::regular(SubpacketData::Issuer(signing_key.key_id())).unwrap(),
+                Subpacket::regular(SubpacketData::IssuerKeyId(signing_key.legacy_key_id()))
+                    .unwrap(),
                 //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
             ],
             vec![],
@@ -413,13 +408,12 @@ pub(crate) mod test {
         assert_eq!(signature, wrapped);
         let signature = signature.signature().unwrap();
         verification_key
-            .verify_signature(HashAlgorithm::Sha256, digest, &signature)
+            .verify(HashAlgorithm::Sha256, digest, &signature)
             .expect("Verify must succeed");
     }
 
     #[test]
     fn verify_pgp_crate2() {
-        use ::chrono::{TimeZone, Utc};
         let (signer, verifier) = prep();
 
         let data = [1u8; 322];
@@ -427,7 +421,7 @@ pub(crate) mod test {
 
         let passwd = Password::empty();
 
-        let sig_time = Utc.timestamp_opt(1_600_000_000, 0u32).unwrap();
+        let sig_time = pgp::types::Timestamp::from_secs(1_600_000_000);
 
         let mut sig_cfg = SignatureConfig::v4(
             SignatureType::Binary,
@@ -437,9 +431,12 @@ pub(crate) mod test {
         sig_cfg
             .hashed_subpackets
             .push(Subpacket::regular(SubpacketData::SignatureCreationTime(sig_time)).unwrap());
-        sig_cfg
-            .hashed_subpackets
-            .push(Subpacket::regular(SubpacketData::Issuer(signer.secret_key.key_id())).unwrap());
+        sig_cfg.hashed_subpackets.push(
+            Subpacket::regular(SubpacketData::IssuerKeyId(
+                signer.secret_key.legacy_key_id(),
+            ))
+            .unwrap(),
+        );
         //::pgp::packet::Subpacket::SignersUserID("rpm"), TODO this would be a nice addition
 
         let signature_packet = sig_cfg
