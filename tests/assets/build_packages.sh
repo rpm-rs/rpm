@@ -33,9 +33,15 @@ cp $BASIC_RPM $ECDSA_SIGNED_RPM
 rpmsign --addsign $ECDSA_SIGNED_RPM $"${ECDSA_KEY_OPTS[@]}"
 
 # EdDSA Signed
-EDDSA_SIGNED_RPM="RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm"
+EDDSA_SIGNED_RPM="RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rp
 cp $BASIC_RPM $EDDSA_SIGNED_RPM
 rpmsign --addsign $EDDSA_SIGNED_RPM $"${EDDSA_KEY_OPTS[@]}"
+
+# Package with multiple signatures
+MULTI_SIGNED_RPM="RPMS/signed/rpm-basic-multiple-signatures-2.3.4-5.el9.noarch.rpm"
+cp $BASIC_RPM $MULTI_SIGNED_RPM
+rpmsign --rpmv6 --addsign $MULTI_SIGNED_RPM $"${EDDSA_KEY_OPTS[@]}"
+rpmsign --rpmv6 --addsign $MULTI_SIGNED_RPM $"${RSA_KEY_OPTS[@]}"
 
 # Package signed with all possible signatures (rpm v6 feature) + IMA file signing
 # Building this only works with a sufficiently fresh version of RPM, otherwise you get only the latest signature

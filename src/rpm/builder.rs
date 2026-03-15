@@ -1278,7 +1278,7 @@ impl PackageBuilder {
                     IndexData::StringArray(vec![payload_sha256]),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOADDIGESTALGO,
+                    IndexTag::RPMTAG_PAYLOADSHA256ALGO,
                     offset,
                     IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
                 ),

@@ -9,14 +9,14 @@ mod common;
 
 #[test]
 fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
-    assert_boundaries(common::rpm_empty_path().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_path().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_path_eddsa_signed().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_path_ecdsa_signed().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_path_rsa_signed().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_path_ima_signed().as_ref())?;
-    assert_boundaries(common::rpm_empty_src_path().as_ref())?;
-    assert_boundaries(common::rpm_basic_pkg_src_path().as_ref())?;
+    assert_boundaries(common::pkgs::RPM_EMPTY.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC_EDDSA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC_ECDSA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC_RSA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC_IMA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_EMPTY_SRC.as_ref())?;
+    assert_boundaries(common::pkgs::RPM_BASIC_SRC.as_ref())?;
 
     let mut temp = tempfile::NamedTempFile::new()?;
 
@@ -30,7 +30,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "signature-meta")]
     {
         use rpm::signature::pgp::Signer;
-        let signing_key = common::rsa_private_key();
+        let signing_key = common::keys::v4::rsa_private();
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
         let constructed_pkg_with_sig =
             rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "")
@@ -92,7 +92,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = common::rpm_empty_path();
+    let rpm_file_path = common::pkgs::RPM_EMPTY;
     let package = Package::open(rpm_file_path)?;
 
     assert!(package.metadata.get_file_paths()?.is_empty());
