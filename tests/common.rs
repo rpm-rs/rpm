@@ -1,128 +1,129 @@
 #![allow(dead_code)]
 
-pub fn test_protected_private_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa3072_protected.asc")
+pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
+pub const CARGO_OUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target");
+
+pub mod pkgs {
+    pub const RPM_EMPTY: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/x86_64/rpm-empty-0-0.x86_64.rpm");
+
+    pub const RPM_EMPTY_SRC: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-empty-0-0.src.rpm");
+
+    pub const RPM_BASIC: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm");
+
+    pub const RPM_BASIC_SRC: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm");
+
+    pub const RPM_BASIC_IMA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm");
+
+    pub const RPM_BASIC_RSA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm");
+
+    pub const RPM_BASIC_ECDSA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ecdsa-2.3.4-5.el9.noarch.rpm");
+
+    pub const RPM_BASIC_EDDSA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm");
+
+    pub const RPM_BASIC_SOURCE: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm");
+
+    pub const RPM_BASIC_SOURCE_EDDSA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm");
+
+    pub const RPM_BASIC_SOURCE_RSA_SIGNED: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm");
+
+    pub const RPM_WITH_PATCH: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-with-patch-1.0-0.noarch.rpm");
+
+    pub const RPM_FILE_ATTRS: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-file-attrs-1.0-1.noarch.rpm");
 }
 
-pub fn test_protected_public_key_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/signing_keys/public_rsa3072_protected.asc")
-}
+pub mod keys {
+    pub mod v4 {
+        pub const RSA4096_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc");
+        pub const RSA4096_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret");
 
-pub fn test_protected_private_key_passphrase() -> String {
-    "thisisN0Tasecuredpassphrase".to_owned()
-}
+        pub const RSA3072_PROTECTED_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.asc");
+        pub const RSA3072_PROTECTED_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.secret");
+        pub const RSA3072_PROTECTED_PASSPHRASE: &str = "thisisN0Tasecuredpassphrase";
 
-pub fn rpm_empty_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/RPMS/x86_64/rpm-empty-0-0.x86_64.rpm")
-}
+        pub const ED25519_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-ed25519.asc");
+        pub const ED25519_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-ed25519.secret");
 
-pub fn rpm_empty_src_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/SRPMS/rpm-empty-0-0.src.rpm")
-}
+        pub const ECDSA_NISTP256_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-ecdsa-nistp256.asc");
+        pub const ECDSA_NISTP256_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-ecdsa-nistp256.secret");
 
-pub fn rpm_basic_pkg_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")
-}
+        pub fn load_rsa() -> (Vec<u8>, Vec<u8>) {
+            (rsa_private(), rsa_public())
+        }
 
-pub fn rpm_basic_pkg_src_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm")
-}
+        pub fn rsa_private() -> Vec<u8> {
+            std::fs::read(RSA4096_PRIVATE).unwrap()
+        }
 
-pub fn rpm_basic_pkg_path_ima_signed() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm")
-}
+        pub fn rsa_public() -> Vec<u8> {
+            std::fs::read(RSA4096_PUBLIC).unwrap()
+        }
 
-pub fn rpm_basic_pkg_path_rsa_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/RPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm")
-}
+        pub fn load_protected_rsa() -> (Vec<u8>, Vec<u8>) {
+            let signing_key = include_bytes!("assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.secret");
+            let verification_key = include_bytes!("assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.asc");
+            (signing_key.to_vec(), verification_key.to_vec())
+        }
 
-pub fn rpm_basic_pkg_path_ecdsa_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/RPMS/signed/rpm-basic-with-ecdsa-2.3.4-5.el9.noarch.rpm")
-}
+        pub fn eddsa_private() -> Vec<u8> {
+            std::fs::read(ED25519_PRIVATE).unwrap()
+        }
 
-pub fn rpm_basic_pkg_path_eddsa_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm")
-}
+        pub fn eddsa_public() -> Vec<u8> {
+            std::fs::read(ED25519_PUBLIC).unwrap()
+        }
 
-pub fn rpm_basic_source_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm")
-}
+        pub fn load_eddsa() -> (Vec<u8>, Vec<u8>) {
+            (eddsa_private(), eddsa_public())
+        }
 
-pub fn rpm_basic_source_path_eddsa_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/SRPMS/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm")
-}
+        pub fn ecdsa_private() -> Vec<u8> {
+            std::fs::read(ECDSA_NISTP256_PRIVATE).unwrap()
+        }
 
-pub fn rpm_basic_source_path_rsa_signed() -> std::path::PathBuf {
-    cargo_manifest_dir()
-        .join("tests/assets/SRPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm")
-}
+        pub fn ecdsa_public() -> Vec<u8> {
+            std::fs::read(ECDSA_NISTP256_PUBLIC).unwrap()
+        }
 
-pub fn rpm_with_patch_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-with-patch-1.0-0.noarch.rpm")
-}
+        pub fn load_ecdsa() -> (Vec<u8>, Vec<u8>) {
+            (ecdsa_private(), ecdsa_public())
+        }
+    }
 
-pub fn rpm_file_attrs_path() -> std::path::PathBuf {
-    cargo_manifest_dir().join("tests/assets/RPMS/noarch/rpm-file-attrs-1.0-1.noarch.rpm")
-}
+    pub mod v6 {
+        pub const RSA4K_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc");
+        pub const RSA4K_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret");
 
-pub fn cargo_manifest_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
+        pub const ED25519_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.asc");
+        pub const ED25519_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret");
 
-pub fn cargo_out_dir() -> std::path::PathBuf {
-    cargo_manifest_dir().join("target")
-}
-
-pub fn load_rsa_keys() -> (Vec<u8>, Vec<u8>) {
-    (rsa_private_key(), rsa_public_key())
-}
-
-pub fn rsa_private_key() -> Vec<u8> {
-    let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_rsa4096.asc");
-    std::fs::read(private_key).unwrap()
-}
-
-pub fn rsa_public_key() -> Vec<u8> {
-    let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_rsa4096.asc");
-    std::fs::read(public_key).unwrap()
-}
-
-pub fn load_protected_rsa_keys() -> (Vec<u8>, Vec<u8>) {
-    let signing_key = include_bytes!("assets/signing_keys/secret_rsa3072_protected.asc");
-    let verification_key = include_bytes!("assets/signing_keys/public_rsa3072_protected.asc");
-    (signing_key.to_vec(), verification_key.to_vec())
-}
-
-pub fn eddsa_private_key() -> Vec<u8> {
-    let private_key = cargo_manifest_dir().join("tests/assets/signing_keys/secret_ed25519.asc");
-    std::fs::read(private_key).unwrap()
-}
-
-pub fn eddsa_public_key() -> Vec<u8> {
-    let public_key = cargo_manifest_dir().join("tests/assets/signing_keys/public_ed25519.asc");
-    std::fs::read(public_key).unwrap()
-}
-
-pub fn load_eddsa_keys() -> (Vec<u8>, Vec<u8>) {
-    (eddsa_private_key(), eddsa_public_key())
-}
-
-pub fn ecdsa_private_key() -> Vec<u8> {
-    let private_key =
-        cargo_manifest_dir().join("tests/assets/signing_keys/secret_ecdsa_nistp256.asc");
-    std::fs::read(private_key).unwrap()
-}
-
-pub fn ecdsa_public_key() -> Vec<u8> {
-    let public_key =
-        cargo_manifest_dir().join("tests/assets/signing_keys/public_ecdsa_nistp256.asc");
-    std::fs::read(public_key).unwrap()
-}
-
-pub fn load_ecdsa_keys() -> (Vec<u8>, Vec<u8>) {
-    (ecdsa_private_key(), ecdsa_public_key())
+        pub const MLDSA65_ED25519_PUBLIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.asc");
+        pub const MLDSA65_ED25519_PRIVATE: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.secret");
+    }
 }

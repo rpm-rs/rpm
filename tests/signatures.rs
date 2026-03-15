@@ -10,10 +10,10 @@ mod common;
 /// Resign an already-signed package with new keys, and verify it with the new keys
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg_path = common::rpm_basic_pkg_path_rsa_signed();
+    let pkg_path = common::pkgs::RPM_BASIC_RSA_SIGNED;
 
     // test RSA
-    let (signing_key, verification_key) = common::load_rsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_rsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
@@ -23,17 +23,17 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // test RSA - with secret key protected by a passphrase
-    let (signing_key, verification_key) = common::load_protected_rsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_protected_rsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
-        Some(common::test_protected_private_key_passphrase()),
+        Some(common::keys::v4::RSA3072_PROTECTED_PASSPHRASE.to_string()),
         &verification_key,
         "rsa_resigned_pkg.rpm",
     )?;
 
     // test EdDSA
-    let (signing_key, verification_key) = common::load_eddsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_eddsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
@@ -43,7 +43,7 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // test ECDSA
-    let (signing_key, verification_key) = common::load_ecdsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_ecdsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
@@ -60,15 +60,15 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     let _ = env_logger::try_init();
 
     // test RSA
-    let (signing_key, verification_key) = common::load_rsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_rsa();
     build_parse_sign_and_verify(&signing_key, &verification_key, "rsa_signed_pkg.rpm")?;
 
     // test EdDSA
-    let (signing_key, verification_key) = common::load_eddsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_eddsa();
     build_parse_sign_and_verify(&signing_key, &verification_key, "eddsa_signed_pkg.rpm")?;
 
     // test ECDSA
-    let (signing_key, verification_key) = common::load_ecdsa_keys();
+    let (signing_key, verification_key) = common::keys::v4::load_ecdsa();
     build_parse_sign_and_verify(&signing_key, &verification_key, "ecdsa_signed_pkg.rpm")?;
 
     Ok(())
@@ -77,10 +77,10 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
 /// Test an attempt to verify the signature of a package that is not signed
 #[test]
 fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg = rpm::Package::open(common::rpm_empty_path())?;
+    let pkg = rpm::Package::open(common::pkgs::RPM_EMPTY)?;
 
     // test RSA
-    let verification_key = common::rsa_public_key();
+    let verification_key = common::keys::v4::rsa_public();
     let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
     assert!(matches!(
         pkg.verify_signature(verifier),
@@ -88,7 +88,7 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // test EdDSA
-    let verification_key = common::eddsa_public_key();
+    let verification_key = common::keys::v4::eddsa_public();
     let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
     assert!(matches!(
         pkg.verify_signature(verifier),
@@ -96,7 +96,7 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // test ECDSA
-    let verification_key = common::ecdsa_public_key();
+    let verification_key = common::keys::v4::ecdsa_public();
     let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
     assert!(matches!(
         pkg.verify_signature(verifier),
@@ -136,9 +136,9 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
-    sign_clear_and_verify(&common::eddsa_private_key())?;
-    sign_clear_and_verify(&common::ecdsa_private_key())?;
-    sign_clear_and_verify(&common::rsa_private_key())?;
+    sign_clear_and_verify(&common::keys::v4::eddsa_private())?;
+    sign_clear_and_verify(&common::keys::v4::ecdsa_private())?;
+    sign_clear_and_verify(&common::keys::v4::rsa_private())?;
 
     Ok(())
 }
@@ -146,13 +146,13 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
 /// Test an attempt to verify the signature of a package using the wrong key type
 #[test]
 fn test_verify_package_with_wrong_key_type() -> Result<(), Box<dyn std::error::Error>> {
-    let rsa_signer = Signer::load_from_asc_bytes(&common::rsa_private_key())?;
-    let rsa_verifier = Verifier::load_from_asc_bytes(&common::rsa_public_key())?;
+    let rsa_signer = Signer::load_from_asc_bytes(&common::keys::v4::rsa_private())?;
+    let rsa_verifier = Verifier::load_from_asc_bytes(&common::keys::v4::rsa_public())?;
     let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&rsa_signer)?;
 
-    let eddsa_signer = Signer::load_from_asc_bytes(&common::eddsa_private_key())?;
-    let eddsa_verifier = Verifier::load_from_asc_bytes(&common::eddsa_public_key())?;
+    let eddsa_signer = Signer::load_from_asc_bytes(&common::keys::v4::eddsa_private())?;
+    let eddsa_verifier = Verifier::load_from_asc_bytes(&common::keys::v4::eddsa_public())?;
     let eddsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&eddsa_signer)?;
 
@@ -190,7 +190,7 @@ fn resign_and_verify_with_keys(
     }
     package.sign_with_timestamp(&signer, 1_600_000_000)?;
 
-    let out_file = common::cargo_out_dir().join(pkg_out_path.as_ref());
+    let out_file = Path::new(common::CARGO_OUT_DIR).join(pkg_out_path.as_ref());
     package.write_file(&out_file)?;
 
     let package = rpm::Package::open(&out_file)?;
@@ -224,7 +224,7 @@ fn build_parse_sign_and_verify(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _ = env_logger::try_init();
 
-    let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
     let config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
 
     let mut pkg = rpm::PackageBuilder::new(
@@ -257,7 +257,7 @@ fn build_parse_sign_and_verify(
     let signer: Signer = Signer::load_from_asc_bytes(signing_key)?;
     pkg.sign(signer)?;
 
-    let out_file = common::cargo_out_dir().join(pkg_out_path.as_ref());
+    let out_file = Path::new(common::CARGO_OUT_DIR).join(pkg_out_path.as_ref());
     pkg.write_file(&out_file)?;
 
     // verify

@@ -293,9 +293,10 @@ pub(crate) mod test {
 
     fn prep() -> (Signer, Verifier) {
         let _ = env_logger::try_init();
-        let signing_key = include_bytes!("../../../tests/assets/signing_keys/public_rsa4096.asc");
+        let signing_key =
+            include_bytes!("../../../tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret");
         let verification_key =
-            include_bytes!("../../../tests/assets/signing_keys/secret_rsa4096.asc");
+            include_bytes!("../../../tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc");
         let verifier =
             Verifier::load_from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
         let signer =
@@ -358,7 +359,7 @@ pub(crate) mod test {
         let packet_header = pgp::packet::PacketHeader::from_parts(
             pgp::types::PacketHeaderVersion::Old,
             pgp::types::Tag::Signature,
-            pgp::types::PacketLength::Fixed(284),
+            pgp::types::PacketLength::Fixed(540),
         )
         .unwrap();
         let wrapped = Signature::v4(

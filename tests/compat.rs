@@ -43,7 +43,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     }
 
     fn build_full_rpm() -> Result<PackageBuilder, Box<dyn std::error::Error>> {
-        let cargo_file = common::cargo_manifest_dir().join("Cargo.toml");
+        let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
         let config = BuildConfig::default().compression(CompressionType::Gzip);
 
         let bldr = PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some package")
@@ -149,7 +149,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         let _ = env_logger::try_init();
         let pkg =
             PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package").build()?;
-        let out_file = common::cargo_out_dir().join("empty_rpm_nosig.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("empty_rpm_nosig.rpm");
         pkg.write_file(&out_file)?;
 
         try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
@@ -162,14 +162,14 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::rsa_private_key();
+        let signing_key = common::keys::v4::rsa_private();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
 
         let pkg = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
             .build_and_sign(&signer)?;
-        let out_file = common::cargo_out_dir().join("empty_rpm_nosig.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("empty_rpm_nosig.rpm");
         pkg.write_file(&out_file)?;
 
         try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
@@ -183,7 +183,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     fn test_install_full_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
         let pkg = build_full_rpm()?.build()?;
-        let out_file = common::cargo_out_dir().join("full_rpm_nosig.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_nosig.rpm");
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
@@ -197,12 +197,12 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::rsa_private_key();
+        let signing_key = common::keys::v4::rsa_private();
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key");
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
-        let out_file = common::cargo_out_dir().join("full_rpm_sig.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig.rpm");
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
@@ -216,14 +216,14 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::rsa_private_key();
+        let signing_key = common::keys::v4::rsa_private();
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key")
-            .with_key_passphrase(common::test_protected_private_key_passphrase());
+            .with_key_passphrase(common::keys::v4::RSA3072_PROTECTED_PASSPHRASE);
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
-        let out_file = common::cargo_out_dir().join("full_rpm_sig_protected.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig_protected.rpm");
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
@@ -278,13 +278,13 @@ fn podman_container_launcher(
     mut mappings: Vec<String>,
 ) -> std::io::Result<()> {
     // always mount assets and out directory into container
-    let var_cache = common::cargo_manifest_dir().join("dnf-cache");
+    let var_cache = Path::new(common::CARGO_MANIFEST_DIR).join("dnf-cache");
     let _ = std::fs::create_dir(var_cache.as_path());
     let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
-    let out = format!("{}:/out:z", common::cargo_out_dir().display());
+    let out = format!("{}:/out:z", common::CARGO_OUT_DIR);
     let assets = format!(
         "{}/tests/assets:/assets:z",
-        common::cargo_manifest_dir().display(),
+        common::CARGO_MANIFEST_DIR,
     );
     mappings.extend(vec![out, assets, var_cache]);
     let mut args = mappings
