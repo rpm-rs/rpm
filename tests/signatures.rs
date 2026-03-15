@@ -10,7 +10,7 @@ mod common;
 /// Resign an already-signed package with new keys, and verify it with the new keys
 #[test]
 fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg_path = common::pkgs::RPM_BASIC_RSA_SIGNED;
+    let pkg_path = common::pkgs::v4::RPM_BASIC_RSA_SIGNED;
 
     // test RSA
     let (signing_key, verification_key) = common::keys::v4::load_rsa();
@@ -77,7 +77,7 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
 /// Test an attempt to verify the signature of a package that is not signed
 #[test]
 fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg = rpm::Package::open(common::pkgs::RPM_EMPTY)?;
+    let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
 
     // test RSA
     let verification_key = common::keys::v4::rsa_public();
