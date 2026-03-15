@@ -291,9 +291,9 @@ impl Package {
         Ok(())
     }
 
-    /// Return the key ids (issuers) of the signature as a hexadecimal string
+    /// Parse all PGP signature packets from the package's signature header.
     #[cfg(feature = "signature-pgp")]
-    pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
+    fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
         let openpgp_sigs = &self
             .metadata
             .signature
@@ -301,71 +301,73 @@ impl Package {
 
         // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
         if let Ok(openpgp_sigs) = openpgp_sigs {
-            let mut key_ids: Vec<String> = Vec::new();
-
+            let mut packets = Vec::new();
             for base64_sig in openpgp_sigs.iter() {
                 let mut signature = Vec::new();
                 let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
                 decoder.read_to_end(&mut signature)?;
-                let signature = Verifier::parse_signature(&signature)?;
-
-                let new_key_ids: Vec<String> = signature
-                    .issuer_key_id()
-                    .iter()
-                    .map(|x| format!("{x}"))
-                    .collect();
-
-                if key_ids.len() != 1 {
-                    return Err(Error::UnexpectedIssuerCount(
-                        key_ids.len().try_into().unwrap(),
-                    ));
-                }
-
-                key_ids.extend(new_key_ids);
+                packets.push(Verifier::parse_signature(&signature)?);
             }
-
-            Ok(key_ids)
+            Ok(packets)
         } else {
-            let mut signature = Err(Error::NoSignatureFound);
-
-            let rsa_sig = &self
+            let rsa_sig = self
                 .metadata
                 .signature
                 .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
             if let Ok(rsa_sig) = rsa_sig {
-                signature = Verifier::parse_signature(rsa_sig);
+                return Ok(vec![Verifier::parse_signature(rsa_sig)?]);
             }
 
-            let eddsa_sig = &self
+            let eddsa_sig = self
                 .metadata
                 .signature
                 .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
             if let Ok(eddsa_sig) = eddsa_sig {
-                signature = Verifier::parse_signature(eddsa_sig);
+                return Ok(vec![Verifier::parse_signature(eddsa_sig)?]);
             }
 
-            let rpm_v3_sig = &self
+            let rpm_v3_sig = self
                 .metadata
                 .signature
                 .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
             if let Ok(rpm_v3_sig) = rpm_v3_sig {
-                signature = Verifier::parse_signature(rpm_v3_sig);
+                return Ok(vec![Verifier::parse_signature(rpm_v3_sig)?]);
             }
 
-            let key_ids: Vec<String> = signature?
-                .issuer_key_id()
-                .iter()
-                .map(|x| format!("{x}"))
-                .collect();
-
-            if key_ids.len() != 1 {
-                return Err(Error::UnexpectedIssuerCount(
-                    key_ids.len().try_into().unwrap(),
-                ));
-            }
-
-            Ok(key_ids)
+            Err(Error::NoSignatureFound)
         }
+    }
+
+    /// Return the key ids (issuers) of the signature as hexadecimal strings.
+    #[cfg(feature = "signature-pgp")]
+    pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
+        let mut key_ids = Vec::new();
+        for sig in self.parse_signature_packets()? {
+            let ids: Vec<String> = sig.issuer_key_id().iter().map(|x| format!("{x}")).collect();
+            if ids.len() != 1 {
+                return Err(Error::UnexpectedIssuerCount(ids.len().try_into().unwrap()));
+            }
+            key_ids.extend(ids);
+        }
+        Ok(key_ids)
+    }
+
+    /// Return the fingerprints (issuers) of the signature as hexadecimal strings.
+    #[cfg(feature = "signature-pgp")]
+    pub fn signature_fingerprints(&self) -> Result<Vec<String>, Error> {
+        let mut fingerprints = Vec::new();
+        for sig in self.parse_signature_packets()? {
+            let fps: Vec<String> = sig
+                .issuer_fingerprint()
+                .iter()
+                .map(|x| format!("{x:x}"))
+                .collect();
+            if fps.len() != 1 {
+                return Err(Error::UnexpectedIssuerCount(fps.len().try_into().unwrap()));
+            }
+            fingerprints.extend(fps);
+        }
+        Ok(fingerprints)
     }
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
