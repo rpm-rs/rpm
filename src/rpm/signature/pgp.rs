@@ -174,51 +174,51 @@ impl traits::Verifying for Verifier {
     fn verify(&self, mut data: impl io::Read, signature: &[u8]) -> Result<(), Error> {
         let signature = Self::parse_signature(signature)?;
 
-        let key_ids = signature.issuer_key_id();
-        if key_ids.is_empty() {
+        let fingerprints = signature.issuer_fingerprint();
+        if fingerprints.is_empty() {
             log::trace!(
                 "Signature has no issuer ref, attempting primary key: {:?}",
-                self.public_key.primary_key.legacy_key_id()
+                self.public_key.fingerprint()
             );
             signature
                 .verify(&self.public_key, data)
                 .map_err(|source| Error::VerificationError {
                     source,
-                    key_ref: format!("{:?}", self.public_key.legacy_key_id()),
+                    key_ref: format!("{:?}", self.public_key.fingerprint()),
                 })
         } else {
             let mut result: Option<Error> = None;
-            for key_id in key_ids {
-                log::trace!("Signature has issuer ref: {:?}", key_id);
-                if self.public_key.legacy_key_id() == *key_id {
+            for fingerprint in fingerprints {
+                log::trace!("Signature has issuer ref: {:?}", fingerprint);
+                if self.public_key.fingerprint() == *fingerprint {
                     return signature.verify(&self.public_key, data).map_err(|source| {
                         Error::VerificationError {
                             source,
-                            key_ref: format!("{:?}", key_id),
+                            key_ref: format!("{:?}", fingerprint),
                         }
                     });
                 } else {
                     log::trace!(
-                        "Signature issuer key id {:?} does not match primary keys key id: {:?}",
-                        key_id,
-                        self.public_key.legacy_key_id()
+                        "Signature issuer fingerprint {:?} does not match primary key fingerprint: {:?}",
+                        fingerprint,
+                        self.public_key.fingerprint()
                     );
                 }
 
                 for sub_key in &self.public_key.public_subkeys {
-                    log::trace!("Trying subkey candidate {:?}", sub_key.legacy_key_id());
+                    log::trace!("Trying subkey candidate {:?}", sub_key.fingerprint());
 
-                    if sub_key.legacy_key_id().as_ref() == key_id.as_ref() {
+                    if sub_key.fingerprint() == *fingerprint {
                         log::trace!(
-                            "Subkey key id {:?} matches signature key id",
-                            sub_key.legacy_key_id()
+                            "Subkey fingerprint {:?} matches signature fingerprint",
+                            sub_key.fingerprint()
                         );
 
                         match signature.verify(sub_key, &mut data) {
                             Ok(_) => {
                                 log::trace!(
                                     "Signature successfully verified with subkey {:?}",
-                                    sub_key.legacy_key_id()
+                                    sub_key.fingerprint()
                                 );
                                 return Ok(());
                             }
@@ -226,20 +226,20 @@ impl traits::Verifying for Verifier {
                                 log::trace!("Subkey verification failed");
                                 result = Some(Error::VerificationError {
                                     source,
-                                    key_ref: format!("{:?}", sub_key.legacy_key_id()),
+                                    key_ref: format!("{:?}", sub_key.fingerprint()),
                                 })
                             }
                         }
                     } else {
                         log::trace!(
-                            "Subkey key id {:?} does not match signature",
-                            sub_key.legacy_key_id()
+                            "Subkey fingerprint {:?} does not match signature",
+                            sub_key.fingerprint()
                         );
                     }
                 }
             }
             let default_err = Error::KeyNotFoundError {
-                key_ref: format!("{:?}", self.public_key.legacy_key_id()),
+                key_ref: format!("{:?}", self.public_key.fingerprint()),
             };
 
             match result {
