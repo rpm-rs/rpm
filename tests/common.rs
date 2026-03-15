@@ -4,47 +4,74 @@ pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 pub const CARGO_OUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target");
 
 pub mod pkgs {
-    pub const RPM_EMPTY: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/x86_64/rpm-empty-0-0.x86_64.rpm");
+    pub mod v4 {
+        pub const RPM_EMPTY: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/x86_64/rpm-empty-0-0.x86_64.rpm");
+        pub const RPM_EMPTY_SRC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v4/rpm-empty-0-0.src.rpm");
 
-    pub const RPM_EMPTY_SRC: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-empty-0-0.src.rpm");
+        pub const RPM_BASIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_SRC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v4/rpm-basic-2.3.4-5.el9.src.rpm");
 
-    pub const RPM_BASIC: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_WITH_PATCH: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/noarch/rpm-with-patch-1.0-0.noarch.rpm");
+        pub const RPM_FILE_ATTRS: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/noarch/rpm-file-attrs-1.0-1.noarch.rpm");
 
-    pub const RPM_BASIC_SRC: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm");
+        pub const RPM_BASIC_RSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_ECDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/signed/rpm-basic-with-ecdsa-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_EDDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_IMA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v4/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm");
 
-    pub const RPM_BASIC_IMA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ima-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_SRC_RSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm");
+        pub const RPM_BASIC_SRC_EDDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v4/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm");
+    }
 
-    pub const RPM_BASIC_RSA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm");
+    pub mod v6 {
+        pub const RPM_EMPTY: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/x86_64/rpm-empty-0-0.x86_64.rpm");
+        pub const RPM_EMPTY_SRC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v6/rpm-empty-0-0.src.rpm");
 
-    pub const RPM_BASIC_ECDSA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ecdsa-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_SRC: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v6/rpm-basic-2.3.4-5.el9.src.rpm");
 
-    pub const RPM_BASIC_EDDSA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_WITH_PATCH: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/noarch/rpm-with-patch-1.0-0.noarch.rpm");
+        pub const RPM_FILE_ATTRS: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/noarch/rpm-file-attrs-1.0-1.noarch.rpm");
 
-    pub const RPM_BASIC_SOURCE: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/rpm-basic-2.3.4-5.el9.src.rpm");
+        pub const RPM_BASIC_RSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_EDDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/signed/rpm-basic-with-ed25519-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_MLDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/signed/rpm-basic-with-mldsa65-ed25519-2.3.4-5.el9.noarch.rpm");
+        pub const RPM_BASIC_MULTI_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/v6/signed/rpm-basic-multiple-signatures-2.3.4-5.el9.noarch.rpm");
 
-    pub const RPM_BASIC_SOURCE_EDDSA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm");
-
-    pub const RPM_BASIC_SOURCE_RSA_SIGNED: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm");
-
-    pub const RPM_WITH_PATCH: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-with-patch-1.0-0.noarch.rpm");
-
-    pub const RPM_FILE_ATTRS: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/RPMS/noarch/rpm-file-attrs-1.0-1.noarch.rpm");
+        pub const RPM_BASIC_SRC_RSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.src.rpm");
+        pub const RPM_BASIC_SRC_EDDSA_SIGNED: &str =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/SRPMS/v6/signed/rpm-basic-with-ed25519-2.3.4-5.el9.src.rpm");
+    }
 }
 
 pub mod keys {
+    pub const IMA_SIGNING_KEY: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/ima_signing.pem");
+    pub const IMA_SIGNING_KEY_PASSPHRASE: &str = "i_am_a_ima_signing_key";
+
     pub mod v4 {
         pub const RSA4096_PUBLIC: &str =
             concat!(env!("CARGO_MANIFEST_DIR"), "/tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc");
