@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation to reject control characters in inputs to `PackageBuilder`.
 - Added validation to match RPM's treatment of characters allowed or disallowed in package names.
 - Detect and strip control characters when parsing packages.
+- Improved handling of file paths (normalization) to prevent duplicates and behave more like the OG `rpm`.
 
 ### Changed
 
