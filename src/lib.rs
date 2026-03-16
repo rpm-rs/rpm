@@ -23,7 +23,7 @@
 //! # #[cfg(all(unix, feature = "signature-pgp"))]
 //! # {
 //! let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
-//! let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_rsa4096.asc")?;
+//! let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret")?;
 //! // It's recommended to use timestamp of last commit in your VCS
 //! let source_date = 1_600_000_000;
 //! let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -70,7 +70,7 @@
 //! pkg.write(&mut f)?;
 //!
 //! // reading
-//! let raw_pub_key = std::fs::read("tests/assets/signing_keys/public_rsa4096.asc")?;
+//! let raw_pub_key = std::fs::read("tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc")?;
 //! let pkg = rpm::Package::open("/tmp/awesome.rpm")?;
 //! // verifying
 //! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;

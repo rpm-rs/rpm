@@ -33,7 +33,7 @@ This library does not build software like rpmbuild. It is meant for finished art
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
 
-let pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+let pkg = rpm::Package::open("tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
 
 let name = pkg.metadata.get_name()?;
 let version = pkg.metadata.get_version()?;
@@ -52,10 +52,10 @@ for changelog in pkg.metadata.get_changelog_entries()? {
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
 
-let raw_secret_key = std::fs::read("./test_assets/secret_key.asc")?;
-let raw_pub_key = std::fs::read("/path/to/gpg.key.pub")?;
+let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
+let raw_pub_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
 
-let mut pkg = rpm::Package::open("test_assets/389-ds-base-devel-1.3.8.4-15.el7.x86_64.rpm")?;
+let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
 pkg.sign(&raw_secret_key)?;
 pkg.write_file("./with_signature.rpm")?;
 
