@@ -60,7 +60,8 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/hugo/bazz.toml")
                     .permissions(0o777)
-                    .is_config_noreplace(),
+                    .config()
+                    .noreplace(),
             )?
             .with_file(
                 cargo_file.to_str().unwrap(),

@@ -243,7 +243,7 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
             cargo_file.to_str().unwrap(),
             FileOptions::new("/etc/test/config.toml")
                 .permissions(0o644)
-                .is_config(),
+                .config(),
         )?
         // Symlink via dedicated constructor and method
         .with_symlink(FileOptions::symlink(

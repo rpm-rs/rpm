@@ -30,7 +30,7 @@
 //!     .using_config(build_config)
 //!     .with_file(
 //!         "./tests/assets/SOURCES/example_config.toml",
-//!         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+//!         rpm::FileOptions::new("/etc/awesome/config.toml").config(),
 //!     )?
 //!     // file mode is inherited from source file
 //!     .with_file(

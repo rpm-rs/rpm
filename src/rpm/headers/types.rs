@@ -448,72 +448,87 @@ impl FileOptionsBuilder {
     /// Indicates that a file is documentation.
     ///
     /// See: `%doc` from specfile syntax
-    pub fn is_doc(mut self) -> Self {
+    pub fn doc(mut self) -> Self {
         self.inner.flag.insert(FileFlags::DOC);
         self
     }
 
-    /// Indicates that a file is a configuration file. When a package is updated, files marked as
+    /// Mark this file as a configuration file. When a package is updated, files marked as
     /// configuration files will be checked for modifications compared to their default state,
     /// and if any are present then the old configuration file will be saved with a `.rpmsave`
     /// extension.
     ///
     /// User intervention may be required to reconcile the changes between the new and old configs.
     ///
+    /// Can be combined with [`noreplace()`](Self::noreplace) or [`missingok()`](Self::missingok).
+    ///
     /// See: `%config` from specfile syntax
-    pub fn is_config(mut self) -> Self {
+    pub fn config(mut self) -> Self {
         self.inner.flag.insert(FileFlags::CONFIG);
         self
     }
 
-    /// Indicates that a file is a configuration file and that it should not be replaced if it has been
-    /// modified. When a package is updated, configuration files will be checked for modifications
-    /// compared to their default state, and if any are present then the new configuration file will
-    /// be installed with a `.rpmnew` extension.
+    /// Indicates that a configuration file should not be replaced if it has been modified.
+    /// When a package is updated, the new configuration file will be installed with a `.rpmnew`
+    /// extension instead.
     ///
     /// User intervention may be required to reconcile the changes between the new and old configs.
     ///
+    /// Only meaningful in combination with [`config()`](Self::config).
+    ///
     /// See: `%config(noreplace)` from specfile syntax
-    pub fn is_config_noreplace(mut self) -> Self {
-        self.inner
-            .flag
-            .insert(FileFlags::CONFIG | FileFlags::NOREPLACE);
+    pub fn noreplace(mut self) -> Self {
+        self.inner.flag.insert(FileFlags::NOREPLACE);
         self
     }
 
-    /// Indicates that the absence of a file is not an error during verification.
-    /// During verification (`rpm -V`), a missing file marked with `missingok` will not be
-    /// reported as a failure. During package removal, the file will be silently skipped if
-    /// it does not exist.
+    /// Indicates that the absence of this file is not an error. During verification (`rpm -V`),
+    /// a missing file marked with `missingok` will not be reported as a failure. During package
+    /// removal, the file will be silently skipped if it does not exist.
     ///
-    /// See: `%missingok` (or `%config(missingok)`) from specfile syntax
-    pub fn is_missingok(mut self) -> Self {
+    /// This is an independent attribute — it can be set on any file, not just config files.
+    /// However, it is commonly combined with [`config()`](Self::config).
+    ///
+    /// See: `%missingok` or `%config(missingok)` from specfile syntax
+    pub fn missingok(mut self) -> Self {
         self.inner.flag.insert(FileFlags::MISSINGOK);
         self
     }
 
     /// Indicates that a file ought not to actually be included in the package, but that it should
-    /// still be considered owned by a package (e.g. a log file).  Its attributes are still tracked.
+    /// still be considered owned by a package (e.g. a log file). Its attributes are still tracked.
+    ///
+    /// Note: prefer using [`FileOptions::ghost()`] / [`PackageBuilder::with_ghost()`] instead of
+    /// setting this flag manually, as those constructors handle the content source correctly.
     ///
     /// See: `%ghost` from specfile syntax
-    pub fn is_ghost(mut self) -> Self {
+    pub fn ghost(mut self) -> Self {
         self.inner.flag.insert(FileFlags::GHOST);
         self
     }
 
-    /// Indicates that a file is a software license. License files are always included - they are
+    /// Mark this file as a software license. License files are always included — they are
     /// never filtered out during installation.
     ///
     /// See: `%license` from specfile syntax
-    pub fn is_license(mut self) -> Self {
+    pub fn license(mut self) -> Self {
         self.inner.flag.insert(FileFlags::LICENSE);
         self
     }
 
-    /// Deprecated (use `is_doc()` instead). Marks a file as a README.
+    /// Mark this file as a build artifact.
+    ///
+    /// See: `%artifact` from specfile syntax
+    pub fn artifact(mut self) -> Self {
+        self.inner.flag.insert(FileFlags::ARTIFACT);
+        self
+    }
+
+    /// Deprecated: use [`doc()`](Self::doc) instead. Marks a file as a README.
     ///
     /// See: `%readme` from specfile syntax
-    pub fn is_readme(mut self) -> Self {
+    #[deprecated(since = "0.20.0", note = "use doc() instead")]
+    pub fn readme(mut self) -> Self {
         self.inner.flag.insert(FileFlags::README);
         self
     }
