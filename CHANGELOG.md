@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
 - `PackageBuilder::with_dir()` as a shortcut to adding a directory on the RPM (doesn't add contents).
+- `PackageBuilder::with_dir_contents()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir_contents()`.
 
 ### Fixed
 
