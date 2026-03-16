@@ -993,12 +993,16 @@ impl PackageBuilder {
             if &entry.group != "root" {
                 groups_to_create.insert(entry.group.clone());
             }
+            let is_ghost = entry.flags.contains(FileFlags::GHOST);
             file_sizes.push(entry.source.size()?);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
-            // @todo: I really do not know the difference. It seems like file_rdevice is always 0 and file_device number always 1.
+            // The device ID that this file *represents* (st_rdev).
+            // Only meaningful for block/character device special files; always 0 otherwise.
             file_rdevs.push(0);
-            file_devices.push(1);
+            // The device ID of the filesystem *containing* the file (st_dev), normalized to 1 or 0.
+            // Real files are always on a device (1), but ghost files have no backing file so their st_dev is 0.
+            file_devices.push(if is_ghost { 0 } else { 1 });
             let mtime = match self.source_date {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
