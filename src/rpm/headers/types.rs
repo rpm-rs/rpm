@@ -351,6 +351,17 @@ impl FileOptionsBuilder {
         self
     }
 
+    /// Indicates that the absence of a file is not an error during verification.
+    /// During verification (`rpm -V`), a missing file marked with `missingok` will not be
+    /// reported as a failure. During package removal, the file will be silently skipped if
+    /// it does not exist.
+    ///
+    /// See: `%missingok` (or `%config(missingok)`) from specfile syntax
+    pub fn is_missingok(mut self) -> Self {
+        self.inner.flag.insert(FileFlags::MISSINGOK);
+        self
+    }
+
     /// Indicates that a file ought not to actually be included in the package, but that it should
     /// still be considered owned by a package (e.g. a log file).  Its attributes are still tracked.
     ///
