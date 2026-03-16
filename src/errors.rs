@@ -118,6 +118,12 @@ pub enum Error {
     #[error("invalid file mode {raw_mode} - {reason}")]
     InvalidFileMode { raw_mode: i32, reason: &'static str },
 
+    #[error("invalid file options for {method}: {reason}")]
+    InvalidFileOptions {
+        method: &'static str,
+        reason: &'static str,
+    },
+
     #[error("timestamp conversion error: {0:?}")]
     TimestampConv(TimestampError),
 

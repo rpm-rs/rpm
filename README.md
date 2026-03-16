@@ -89,24 +89,41 @@ let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_ed25519.a
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .using_config(build_config)
-    .with_file(
-        "./tests/assets/SOURCES/example_config.toml",
-        rpm::FileOptions::new("/etc/awesome/config.toml")
-            .is_config()
-            .is_no_replace(),
-    )?
-    // file mode is inherited from source file
+    // add a file with no special options
+    // by default, files will be owned by the "root" user and group, and inherit their permissions
+    // from the on-disk file.
     .with_file(
         "./tests/assets/SOURCES/multiplication_tables.py",
         rpm::FileOptions::new("/usr/bin/awesome"),
     )?
+    // you can set permissions, capabilities and other metadata (user, group, etc.) manually
     .with_file(
         "./tests/assets/SOURCES/example_config.toml",
-        // you can set a custom mode and custom user too
         rpm::FileOptions::new("/etc/awesome/second.toml")
-            .mode(rpm::FileMode::regular(0o644))
+            .permissions(0o644)
             .caps("cap_sys_admin,cap_net_admin=pe")?
             .user("hugo"),
+    )?
+    // Add a file - setting flags on it equivalent to `%config(noreplace)`
+    .with_file(
+        "./tests/assets/SOURCES/example_config.toml",
+        rpm::FileOptions::new("/etc/awesome/config.toml")
+            .is_config_noreplace(),
+    )?
+    // symlinks don't require a source file
+    .with_symlink(
+        rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
+    )?
+    // directories can be created with explicit ownership and permissions
+    // this does not add any directory contents, just declares a directory
+    .with_dir(
+        rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
+    )?
+    // ghost files / directories are not included in the package payload, but their metadata
+    // (ownership, permissions, etc.) is tracked by RPM. This is commonly used for files
+    // created at runtime (e.g. log files, PID files).
+    .with_ghost(
+        rpm::FileOptions::ghost("/var/log/awesome/app.log"),
     )?
     .pre_install_script("echo preinst")
     // Alternatively, use scriptlet builder api to specify flags and interpreter/arguments
@@ -115,8 +132,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
             .flags(ScriptletFlags::EXPAND)
             .prog(vec!["/bin/blah/bash", "-c"])
     )
-    // If you don't need reproducible builds,
-    // you can remove the following line
+    // If you don't need reproducible builds, you can remove the following line
     .source_date(source_date)
     .build_host(gethostname::gethostname().to_str().unwrap_or("host"))
     .add_changelog_entry(

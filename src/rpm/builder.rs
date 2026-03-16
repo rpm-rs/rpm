@@ -390,8 +390,8 @@ impl PackageBuilder {
     ///     )?
     ///      .with_file(
     ///         "./awesome-config.toml",
-    ///         // you can set a custom mode, capabilities and custom user too
-    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe")?.user("hugo"),
+    ///         // you can set permissions, capabilities and custom user too
+    ///         rpm::FileOptions::new("/etc/awesome/second.toml").permissions(0o744).caps("cap_sys_admin=pe")?.user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -405,6 +405,20 @@ impl PackageBuilder {
         let metadata = fs::metadata(source.as_ref())?;
         #[allow(unused_mut)]
         let mut options = options.into();
+
+        if !matches!(options.mode, FileMode::Regular { .. }) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_file",
+                reason: "expected regular file mode (use FileOptions::new() or .mode() with a regular file mode); use with_dir() for directories or with_symlink() for symlinks",
+            });
+        }
+        if options.flag.contains(FileFlags::GHOST) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_file",
+                reason: "ghost files should not have content; use with_ghost() instead",
+            });
+        }
+
         #[cfg(unix)]
         if options.inherit_permissions {
             options.mode = FileMode::from(metadata.permissions().mode() as i32);
@@ -437,8 +451,8 @@ impl PackageBuilder {
     ///      .with_file_contents(
     ///         // the contents of the file is "hello world!". It doesn't need to be UTF-8, binary data works too.
     ///         "hello world!",
-    ///         // you can set a custom mode, capabilities and custom user too
-    ///         rpm::FileOptions::new("/etc/awesome/second.toml").mode(0o100744).caps("cap_sys_admin=pe")?.user("hugo"),
+    ///         // you can set permissions, capabilities and custom user too
+    ///         rpm::FileOptions::new("/etc/awesome/second.toml").permissions(0o744).caps("cap_sys_admin=pe")?.user("hugo"),
     ///     )?
     ///     .build()?;
     /// # Ok(())
@@ -449,10 +463,144 @@ impl PackageBuilder {
         content: impl Into<Vec<u8>>,
         options: impl Into<FileOptions>,
     ) -> Result<Self, Error> {
+        let options = options.into();
+
+        if !matches!(options.mode, FileMode::Regular { .. }) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_file_contents",
+                reason: "expected regular file mode (use FileOptions::new()); use with_dir() for directories or with_symlink() for symlinks",
+            });
+        }
+        if options.flag.contains(FileFlags::GHOST) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_file_contents",
+                reason: "ghost files should not have content; use with_ghost() instead",
+            });
+        }
+
         self.add_data(
             ContentSource::Raw(content.into()),
-            Timestamp::now(),
-            options.into(),
+            self.source_date.unwrap_or(Timestamp::now()),
+            options,
+        )?;
+        Ok(self)
+    }
+
+    /// Add a directory entry to the package.
+    ///
+    /// Unlike files added via [`with_file()`](Self::with_file), directory entries do not
+    /// require a content source. This allows you to create empty directories and set
+    /// their ownership and permissions.
+    ///
+    /// This method does NOT add any files to the directory.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .with_dir(
+    ///         rpm::FileOptions::dir("/var/log/myapp").user("myuser").permissions(0o750),
+    ///     )?
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_dir(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+        let options = options.into();
+
+        if !matches!(options.mode, FileMode::Dir { .. }) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_dir",
+                reason: "expected directory file mode (use FileOptions::dir())",
+            });
+        }
+
+        self.add_data(
+            ContentSource::None,
+            self.source_date.unwrap_or(Timestamp::now()),
+            options,
+        )?;
+        Ok(self)
+    }
+
+    /// Add a symbolic link entry to the package.
+    ///
+    /// Unlike files added via [`with_file()`](Self::with_file), symlinks do not require
+    /// a content source. The symlink target should be specified via
+    /// [`FileOptions::symlink()`].
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .with_symlink(
+    ///         rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
+    ///     )?
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_symlink(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+        let options = options.into();
+
+        if !matches!(options.mode, FileMode::SymbolicLink { .. }) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_symlink",
+                reason: "expected symbolic link file mode (use FileOptions::symlink())",
+            });
+        }
+        if options.symlink.is_empty() {
+            return Err(Error::InvalidFileOptions {
+                method: "with_symlink",
+                reason: "symlink target must not be empty (use FileOptions::symlink(dest, target))",
+            });
+        }
+
+        self.add_data(
+            ContentSource::None,
+            self.source_date.unwrap_or(Timestamp::now()),
+            options,
+        )?;
+        Ok(self)
+    }
+
+    /// Add a ghost file or directory entry to the package.
+    ///
+    /// Ghost entries are not included in the package payload, but their metadata
+    /// (ownership, permissions, etc.) is tracked by RPM. This is commonly used for
+    /// files created at runtime (e.g. log files, PID files).
+    ///
+    /// Use [`FileOptions::ghost()`] for ghost files or [`FileOptions::ghost_dir()`]
+    /// for ghost directories.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
+    ///     .with_ghost(
+    ///         rpm::FileOptions::ghost("/var/log/myapp/app.log").user("myuser"),
+    ///     )?
+    ///     .with_ghost(
+    ///         rpm::FileOptions::ghost_dir("/var/run/myapp").permissions(0o755),
+    ///     )?
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_ghost(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+        let options = options.into();
+
+        if !options.flag.contains(FileFlags::GHOST) {
+            return Err(Error::InvalidFileOptions {
+                method: "with_ghost",
+                reason: "expected ghost flag to be set (use FileOptions::ghost() or FileOptions::ghost_dir())",
+            });
+        }
+
+        self.add_data(
+            ContentSource::None,
+            self.source_date.unwrap_or(Timestamp::now()),
+            options,
         )?;
         Ok(self)
     }
@@ -893,7 +1041,10 @@ impl PackageBuilder {
                 groups_to_create.insert(entry.group.clone());
             }
             let is_ghost = entry.flags.contains(FileFlags::GHOST);
-            file_sizes.push(entry.source.size()?);
+            let is_regular = matches!(entry.mode, FileMode::Regular { .. });
+            // Ghost files should report size 0 in headers since they have no payload content
+            let file_size = entry.source.size()?;
+            file_sizes.push(file_size);
             file_modes.push(entry.mode.into());
             file_caps.push(entry.caps.to_owned());
             // The device ID that this file *represents* (st_rdev).
@@ -964,7 +1115,7 @@ impl PackageBuilder {
                 payload::write_stripped_cpio(&mut archive, file_index as u32, entry.source.size()?)
             };
             // Only regular files have digests; dirs and symlinks get empty strings
-            if matches!(entry.mode, FileMode::Regular { .. }) {
+            if is_regular {
                 let mut hash_writer = ChecksummingWriter::new(&mut writer, &[HashKind::Sha256]);
                 io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
                 let hash_value_map = hash_writer.into_digests().0;

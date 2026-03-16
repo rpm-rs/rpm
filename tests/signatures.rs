@@ -240,7 +240,7 @@ fn build_parse_sign_and_verify(
     .with_file(
         cargo_file.to_str().unwrap(),
         rpm::FileOptions::new("/etc/foobar/hugo/bazz.toml")
-            .mode(rpm::FileMode::regular(0o777))
+            .permissions(0o777)
             .is_config(),
     )?
     .with_file(

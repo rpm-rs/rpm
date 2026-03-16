@@ -24,6 +24,8 @@ pub struct PackageSegmentOffsets {
 pub enum ContentSource {
     Path(PathBuf),
     Raw(Vec<u8>),
+    /// No content - used for directories, symlinks, and ghost files
+    None,
 }
 
 impl ContentSource {
@@ -32,6 +34,7 @@ impl ContentSource {
         match self {
             Self::Path(p) => Ok(Box::new(BufReader::new(File::open(p)?))),
             Self::Raw(v) => Ok(Box::new(Cursor::new(v))),
+            Self::None => Ok(Box::new(Cursor::new(&[] as &[u8]))),
         }
     }
 
@@ -39,6 +42,7 @@ impl ContentSource {
         match self {
             Self::Path(p) => fs::metadata(p).map(|m| m.len()),
             Self::Raw(v) => Ok(v.len() as u64),
+            Self::None => Ok(0),
         }
     }
 }
@@ -224,7 +228,7 @@ pub struct FileOptions {
 }
 
 impl FileOptions {
-    /// Create a new FileOptions for a file which will be placed at the provided path.
+    /// Create a new FileOptions for a regular file which will be placed at the provided path.
     ///
     /// By default, files will be owned by the "root" user and group, and inherit their permissions
     /// from the on-disk file.
@@ -239,6 +243,101 @@ impl FileOptions {
                 mode: FileMode::regular(0o664),
                 flag: FileFlags::empty(),
                 inherit_permissions: true,
+                caps: None,
+                verify_flags: FileVerifyFlags::all(),
+            },
+        }
+    }
+
+    /// Create a new FileOptions for a directory at the provided path.
+    ///
+    /// Directories do not require any content source. Use with
+    /// [`PackageBuilder::with_dir()`] to add a directory entry.
+    ///
+    /// Default permissions are 0o755.
+    pub fn dir(dest: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: "".to_string(),
+                mode: FileMode::dir(0o755),
+                flag: FileFlags::empty(),
+                inherit_permissions: false,
+                caps: None,
+                verify_flags: FileVerifyFlags::all(),
+            },
+        }
+    }
+
+    /// Create a new FileOptions for a symbolic link.
+    ///
+    /// `dest` is the path where the symlink will be created.
+    /// `target` is the path the symlink points to.
+    ///
+    /// Symlinks do not require any content source. Use with
+    /// [`PackageBuilder::with_file_contents()`] (passing empty content) or
+    /// [`PackageBuilder::with_symlink()`].
+    pub fn symlink(dest: impl Into<String>, target: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: target.into(),
+                mode: FileMode::symbolic_link(0o777),
+                flag: FileFlags::empty(),
+                inherit_permissions: false,
+                caps: None,
+                verify_flags: FileVerifyFlags::all(),
+            },
+        }
+    }
+
+    /// Create a new FileOptions for a ghost file at the provided path.
+    ///
+    /// Ghost files are not included in the package payload, but their metadata
+    /// (ownership, permissions, etc.) is tracked by RPM. This is commonly used
+    /// for files that are created at runtime, such as log files or PID files.
+    ///
+    /// Use with [`PackageBuilder::with_ghost()`].
+    ///
+    /// Default permissions are 0o644.
+    pub fn ghost(dest: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: "".to_string(),
+                mode: FileMode::regular(0o644),
+                flag: FileFlags::GHOST,
+                inherit_permissions: false,
+                caps: None,
+                verify_flags: FileVerifyFlags::all(),
+            },
+        }
+    }
+
+    /// Create a new FileOptions for a ghost directory at the provided path.
+    ///
+    /// Like ghost files, ghost directories are not included in the package payload,
+    /// but their metadata is tracked by RPM.
+    ///
+    /// Use with [`PackageBuilder::with_ghost()`].
+    ///
+    /// Default permissions are 0o755.
+    pub fn ghost_dir(dest: impl Into<String>) -> FileOptionsBuilder {
+        FileOptionsBuilder {
+            inner: FileOptions {
+                destination: dest.into(),
+                user: "root".to_string(),
+                group: "root".to_string(),
+                symlink: "".to_string(),
+                mode: FileMode::dir(0o755),
+                flag: FileFlags::GHOST,
+                inherit_permissions: false,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -282,9 +381,40 @@ impl FileOptionsBuilder {
 
     /// Set the FileMode - type of file (or directory, or symlink) and permissions.
     ///
+    /// Note: prefer using [`permissions()`](Self::permissions) instead, which sets only the
+    /// permission bits without requiring the file type prefix. This method requires the caller
+    /// to include the file type in the mode value (e.g. `0o100755` for a regular file with
+    /// `rwxr-xr-x` permissions).
+    ///
     /// See: `%attr` from specfile syntax
     pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
+        self.inner.inherit_permissions = false;
+        self
+    }
+
+    /// Set the permission bits for the file without changing the file type.
+    ///
+    /// This is the preferred way to set permissions. Unlike [`mode()`](Self::mode), you only
+    /// need to provide the permission bits (e.g. `0o755`) without the file type prefix.
+    ///
+    /// Values greater than `0o7777` will be masked to fit.
+    ///
+    /// See: `%attr` from specfile syntax
+    pub fn permissions(mut self, permissions: u16) -> Self {
+        let masked = permissions & PERMISSIONS_BIT_MASK;
+        self.inner.mode = match self.inner.mode {
+            FileMode::Dir { .. } => FileMode::Dir {
+                permissions: masked,
+            },
+            FileMode::Regular { .. } => FileMode::Regular {
+                permissions: masked,
+            },
+            FileMode::SymbolicLink { .. } => FileMode::SymbolicLink {
+                permissions: masked,
+            },
+            other => other,
+        };
         self.inner.inherit_permissions = false;
         self
     }
