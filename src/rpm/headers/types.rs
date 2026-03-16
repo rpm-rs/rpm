@@ -59,6 +59,9 @@ pub struct PackageFileEntry {
     pub caps: Option<FileCaps>,
     pub verify_flags: FileVerifyFlags,
     pub source: ContentSource,
+    /// Whether this entry was added by a bulk operation (e.g. `with_dir_contents`).
+    /// Bulk-added entries can be replaced by explicit methods like `with_file`.
+    pub(crate) bulk_added: bool,
 }
 
 #[non_exhaustive]

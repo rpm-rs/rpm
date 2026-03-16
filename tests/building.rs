@@ -171,7 +171,7 @@ fn test_reject_control_chars_in_file_metadata() {
     assert!(result.is_err(), "should reject control chars in file user");
 }
 
-
+/// Verify that each `with_*` method rejects mismatched `FileOptions` variants.
 #[test]
 fn test_file_options_validation() {
     let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
@@ -233,6 +233,7 @@ fn test_file_options_validation() {
     );
 }
 
+/// Round-trip a package using all `with_*` entry types and verify their metadata is preserved.
 #[test]
 fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
@@ -305,6 +306,191 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         }
     }
+
+    Ok(())
+}
+
+/// Verify that `with_dir_contents` recursively adds directory entries and files.
+#[test]
+fn test_with_dir_contents_basic() -> Result<(), Box<dyn std::error::Error>> {
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+
+    let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+    let paths: Vec<_> = entries.iter().map(|e| e.path.as_path()).collect();
+
+    // Should have directory entry + 2 files
+    assert_eq!(
+        paths,
+        vec![
+            Path::new("/usr/lib/mymodule"),
+            Path::new("/usr/lib/mymodule/__init__.py"),
+            Path::new("/usr/lib/mymodule/hello.py"),
+        ]
+    );
+
+    // Directory entry
+    assert!(matches!(entries[0].mode, FileMode::Dir { .. }));
+    assert_eq!(entries[0].size, 0);
+
+    // Files should be regular
+    assert!(matches!(entries[1].mode, FileMode::Regular { .. }));
+    assert!(matches!(entries[2].mode, FileMode::Regular { .. }));
+
+    Ok(())
+}
+
+/// An explicit `with_file` added before `with_dir_contents` should take priority over the bulk add.
+#[test]
+fn test_with_dir_contents_explicit_override_before_bulk() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+    let init_file = source_dir.join("__init__.py");
+
+    // Add __init__.py explicitly with config flag, then bulk-add the directory.
+    // The explicit entry should win (bulk skips existing).
+    let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .with_file(
+            &init_file,
+            FileOptions::new("/usr/lib/mymodule/__init__.py").config(),
+        )?
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let init_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule/__init__.py"))
+        .expect("__init__.py should be present");
+
+    // The explicitly-added CONFIG flag should be preserved (not overwritten by bulk)
+    assert!(init_entry.flags.contains(FileFlags::CONFIG));
+
+    Ok(())
+}
+
+/// An explicit `with_file` added after `with_dir_contents` should replace the bulk-added entry.
+#[test]
+fn test_with_dir_contents_explicit_override_after_bulk() -> Result<(), Box<dyn std::error::Error>> {
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+    let init_file = source_dir.join("__init__.py");
+
+    // Bulk-add first, then override __init__.py explicitly.
+    // The explicit entry should replace the bulk-added one.
+    let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .with_file(
+            &init_file,
+            FileOptions::new("/usr/lib/mymodule/__init__.py").config(),
+        )?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let init_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule/__init__.py"))
+        .expect("__init__.py should be present");
+
+    // The explicit CONFIG flag should be present (replaced the bulk entry)
+    assert!(init_entry.flags.contains(FileFlags::CONFIG));
+
+    Ok(())
+}
+
+/// When two `with_dir_contents` calls cover the same path, the first bulk add wins.
+#[test]
+fn test_with_dir_contents_overlapping_bulk_first_wins() -> Result<(), Box<dyn std::error::Error>> {
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+
+    // Two bulk adds of the same directory — first one wins
+    let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.config())?
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.doc())?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let init_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule/__init__.py"))
+        .expect("__init__.py should be present");
+
+    // First bulk add used config(), second used doc(). First should win.
+    assert!(init_entry.flags.contains(FileFlags::CONFIG));
+    assert!(!init_entry.flags.contains(FileFlags::DOC));
+
+    Ok(())
+}
+
+/// Adding the same path explicitly twice should produce an error.
+#[test]
+fn test_duplicate_explicit_add_still_errors() {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let result = PackageBuilder::new("test-dup", "1.0.0", "MIT", "x86_64", "test")
+        .with_file(&cargo_file, FileOptions::new("/etc/test.toml"))
+        .unwrap()
+        .with_file(&cargo_file, FileOptions::new("/etc/test.toml"));
+
+    assert!(result.is_err(), "duplicate explicit add should error");
+}
+
+/// File-only flags like CONFIG applied via the `customize` callback should be stripped from directory entries.
+#[test]
+fn test_with_dir_contents_strips_flags_from_dirs() -> Result<(), Box<dyn std::error::Error>> {
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+
+    // Customize callback adds CONFIG — should be stripped from the directory entry
+    // but preserved on the file entries
+    let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.config())?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let dir_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule"))
+        .expect("directory entry should be present");
+    assert!(matches!(dir_entry.mode, FileMode::Dir { .. }));
+    assert!(
+        !dir_entry.flags.contains(FileFlags::CONFIG),
+        "CONFIG should be stripped from directory entries"
+    );
+
+    let file_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule/hello.py"))
+        .expect("hello.py should be present");
+    assert!(
+        file_entry.flags.contains(FileFlags::CONFIG),
+        "CONFIG should be preserved on file entries"
+    );
 
     Ok(())
 }

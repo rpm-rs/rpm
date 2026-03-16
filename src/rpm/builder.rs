@@ -428,6 +428,7 @@ impl PackageBuilder {
             ContentSource::Path(source.as_ref().to_path_buf()),
             modified_at,
             options,
+            false,
         )?;
         Ok(self)
     }
@@ -482,6 +483,7 @@ impl PackageBuilder {
             ContentSource::Raw(content.into()),
             self.source_date.unwrap_or(Timestamp::now()),
             options,
+            false,
         )?;
         Ok(self)
     }
@@ -519,6 +521,7 @@ impl PackageBuilder {
             ContentSource::None,
             self.source_date.unwrap_or(Timestamp::now()),
             options,
+            false,
         )?;
         Ok(self)
     }
@@ -560,6 +563,7 @@ impl PackageBuilder {
             ContentSource::None,
             self.source_date.unwrap_or(Timestamp::now()),
             options,
+            false,
         )?;
         Ok(self)
     }
@@ -601,7 +605,122 @@ impl PackageBuilder {
             ContentSource::None,
             self.source_date.unwrap_or(Timestamp::now()),
             options,
+            false,
         )?;
+        Ok(self)
+    }
+
+    /// Recursively add all files from a source directory into the package.
+    ///
+    /// Each file under `source_dir` is mapped to the corresponding path under
+    /// `dest_prefix`. For example, if `source_dir` is `"./build/output"` and
+    /// `dest_prefix` is `"/usr/share/myapp"`, then `./build/output/data/foo.txt`
+    /// becomes `/usr/share/myapp/data/foo.txt`.
+    ///
+    /// Directory entries are automatically created for each subdirectory encountered.
+    /// Symlinks are added as symlink entries (not followed).
+    ///
+    /// The `customize` callback receives a [`FileOptionsBuilder`] for each entry (file,
+    /// directory, or symlink) and must return the modified builder. Use it to apply
+    /// uniform metadata to every entry — e.g. marking all files as `%doc` or `%config`.
+    ///
+    /// Entries added by this method are considered "bulk-added" and can be overridden
+    /// by explicit methods like [`with_file()`](Self::with_file) regardless of call order.
+    /// If the same path was already added (explicitly or by a previous bulk operation),
+    /// it is silently skipped.
+    ///
+    /// ```no_run
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some package")
+    ///     // Override a specific file before the bulk add
+    ///     .with_file(
+    ///         "./build/etc/special.conf",
+    ///         rpm::FileOptions::new("/etc/myapp/special.conf").config().noreplace(),
+    ///     )?
+    ///     // Bulk-add everything; special.conf is skipped since it was already added
+    ///     .with_dir_contents("./build/etc", "/etc/myapp", |o| o.config())?
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_dir_contents<P, D, F>(
+        self,
+        source_dir: P,
+        dest_prefix: D,
+        customize: F,
+    ) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        D: AsRef<str>,
+        F: Fn(FileOptionsBuilder) -> FileOptionsBuilder,
+    {
+        self.add_dir_recursive(source_dir.as_ref(), dest_prefix.as_ref(), &customize)
+    }
+
+    fn add_dir_recursive<F>(
+        mut self,
+        source_dir: &Path,
+        dest_prefix: &str,
+        customize: &F,
+    ) -> Result<Self, Error>
+    where
+        F: Fn(FileOptionsBuilder) -> FileOptionsBuilder,
+    {
+        // Add the directory entry itself
+        #[allow(unused_mut)]
+        let mut dir_options: FileOptions = customize(FileOptions::dir(dest_prefix)).into();
+        #[cfg(unix)]
+        if dir_options.inherit_permissions {
+            let dir_metadata = source_dir.symlink_metadata()?;
+            dir_options.mode = FileMode::from(dir_metadata.permissions().mode() as i32);
+        }
+        self.add_data(
+            ContentSource::None,
+            self.source_date.unwrap_or(Timestamp::now()),
+            dir_options,
+            true,
+        )?;
+
+        for entry in fs::read_dir(source_dir)? {
+            let entry = entry?;
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_string_lossy();
+            let dest = format!("{}/{}", dest_prefix, file_name_str);
+            // Use symlink_metadata (lstat) so we don't follow symlinks
+            let metadata = entry.path().symlink_metadata()?;
+            let file_type = metadata.file_type();
+
+            if file_type.is_dir() {
+                self = self.add_dir_recursive(&entry.path(), &dest, customize)?;
+            } else if file_type.is_symlink() {
+                let link_target = fs::read_link(entry.path())?;
+                let options = customize(FileOptions::symlink(&dest, link_target.to_string_lossy()));
+                self.add_data(
+                    ContentSource::None,
+                    self.source_date.unwrap_or(Timestamp::now()),
+                    options.into(),
+                    true,
+                )?;
+            } else {
+                let modified_at: Timestamp = metadata.modified()?.try_into()?;
+                #[allow(unused_mut)]
+                let mut options: FileOptions = customize(FileOptions::new(&dest)).into();
+
+                #[cfg(unix)]
+                if options.inherit_permissions {
+                    options.mode = FileMode::from(metadata.permissions().mode() as i32);
+                }
+
+                self.add_data(
+                    ContentSource::Path(entry.path()),
+                    modified_at,
+                    options,
+                    true,
+                )?;
+            }
+        }
+
         Ok(self)
     }
 
@@ -610,6 +729,7 @@ impl PackageBuilder {
         content_source: ContentSource,
         modified_at: Timestamp,
         mut options: FileOptions,
+        bulk: bool,
     ) -> Result<(), Error> {
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
@@ -659,11 +779,27 @@ impl PackageBuilder {
                 .remove(FileFlags::CONFIG | FileFlags::DOC | FileFlags::LICENSE);
         }
 
-        if self.files.contains_key(&cpio_path) {
-            return Err(Error::InvalidDestinationPath {
-                path: normalized,
-                desc: "duplicate file entry; the same path was added to the package twice",
-            });
+        if let Some(existing) = self.files.get(&cpio_path) {
+            if bulk {
+                // Bulk operations skip entries that were already added (either explicitly
+                // or by a previous bulk operation). This allows explicit with_file() calls
+                // to take precedence regardless of ordering.
+                //
+                // NOTE: when two bulk operations overlap (e.g. with_dir_contents for "/etc"
+                // then with_dir_contents for "/etc/myapp" with different options), the first
+                // bulk add wins. If we need more sophisticated merging (e.g. a more-specific
+                // bulk operation overriding a less-specific one), that would require tracking
+                // additional provenance such as the depth or specificity of the bulk source.
+                return Ok(());
+            }
+            if !existing.bulk_added {
+                // Two explicit adds of the same path is an error.
+                return Err(Error::InvalidDestinationPath {
+                    path: normalized,
+                    desc: "duplicate file entry; the same path was added to the package twice",
+                });
+            }
+            // An explicit add replaces a bulk-added entry (fall through to insert below).
         }
 
         let entry = PackageFileEntry {
@@ -679,6 +815,7 @@ impl PackageBuilder {
             dir: dir.clone(),
             caps: options.caps,
             verify_flags: options.verify_flags,
+            bulk_added: bulk,
         };
 
         self.directories.insert(dir);
