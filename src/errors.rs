@@ -120,6 +120,16 @@ pub enum Error {
     #[error("symbolic links are not supported on this platform")]
     UnsupportedSymlink,
 
+    #[error("invalid {field}: control characters are not allowed, got {value:?}")]
+    InvalidControlChar { field: &'static str, value: String },
+
+    #[error("invalid {field} {value:?}: {reason}")]
+    InvalidCharacters {
+        field: &'static str,
+        value: String,
+        reason: &'static str,
+    },
+
     #[error("{0}")]
     InvalidFileCaps(String),
 }

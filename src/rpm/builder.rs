@@ -740,8 +740,157 @@ impl PackageBuilder {
 
     /// prepare all rpm headers including content
     ///
+    /// Validate all user-provided metadata before building. Control characters
+    /// in metadata cause problems in downstream consumers like XML repository metadata.
+    fn pre_build_validation(&self) -> Result<(), Error> {
+        /// Reject strings containing ASCII control characters (except tab and newline).
+        /// These characters cause problems in downstream consumers like XML repository metadata.
+        fn reject_control_chars(field: &'static str, value: &str) -> Result<(), Error> {
+            if value
+                .bytes()
+                .any(|b| b.is_ascii_control() && b != b'\t' && b != b'\n')
+            {
+                return Err(Error::InvalidControlChar {
+                    field,
+                    value: value.to_string(),
+                });
+            }
+            Ok(())
+        }
+
+        /// Allowed special characters in RPM package names (matching RPM's ALLOWED_CHARS_NAME).
+        const ALLOWED_CHARS_NAME: &[u8] = b".-_+%{}";
+
+        /// Allowed first characters in RPM package names (matching RPM's ALLOWED_FIRSTCHARS_NAME),
+        /// in addition to alphanumeric characters.
+        const ALLOWED_FIRSTCHARS_NAME: &[u8] = b"_%";
+
+        /// Allowed special characters in RPM version/release strings (matching RPM's ALLOWED_CHARS_VERREL).
+        const ALLOWED_CHARS_VERSION_RELEASE: &[u8] = b"._+%{}~^";
+
+        /// Validate an RPM package name. Names must start with an alphanumeric character, `_`, or `%`,
+        /// and may only contain alphanumeric characters plus `.-_+%{}`.
+        fn validate_name(value: &str) -> Result<(), Error> {
+            if value.is_empty() {
+                return Err(Error::InvalidCharacters {
+                    field: "name",
+                    value: value.to_string(),
+                    reason: "must not be empty",
+                });
+            }
+            let first = value.as_bytes()[0];
+            if !first.is_ascii_alphanumeric() && !ALLOWED_FIRSTCHARS_NAME.contains(&first) {
+                return Err(Error::InvalidCharacters {
+                    field: "name",
+                    value: value.to_string(),
+                    reason: "must start with an alphanumeric character, '_', or '%'",
+                });
+            }
+            if let Some(bad) = value
+                .bytes()
+                .find(|b| !b.is_ascii_alphanumeric() && !ALLOWED_CHARS_NAME.contains(b))
+            {
+                return Err(Error::InvalidCharacters {
+                    field: "name",
+                    value: value.to_string(),
+                    reason: if bad.is_ascii_whitespace() {
+                        "must not contain whitespace"
+                    } else {
+                        "contains invalid character (allowed: alphanumeric, '.', '-', '_', '+', '%', '{', '}')"
+                    },
+                });
+            }
+            Ok(())
+        }
+
+        /// Validate an RPM version or release string. May only contain alphanumeric characters
+        /// plus `._+%{}~^`.
+        fn validate_version(field: &'static str, value: &str) -> Result<(), Error> {
+            if value.is_empty() {
+                return Err(Error::InvalidCharacters {
+                    field,
+                    value: value.to_string(),
+                    reason: "must not be empty",
+                });
+            }
+            if value
+                .bytes()
+                .any(|b| !b.is_ascii_alphanumeric() && !ALLOWED_CHARS_VERSION_RELEASE.contains(&b))
+            {
+                return Err(Error::InvalidCharacters {
+                    field,
+                    value: value.to_string(),
+                    reason: "contains invalid character (allowed: alphanumeric, '.', '_', '+', '%', '{', '}', '~', '^')",
+                });
+            }
+            Ok(())
+        }
+
+        validate_name(&self.name)?;
+        validate_version("version", &self.version)?;
+        validate_version("release", &self.release)?;
+        reject_control_chars("license", &self.license)?;
+        reject_control_chars("arch", &self.arch)?;
+        reject_control_chars("summary", &self.summary)?;
+        if let Some(ref desc) = self.desc {
+            reject_control_chars("description", desc)?;
+        }
+        if let Some(ref url) = self.url {
+            reject_control_chars("url", url)?;
+        }
+        if let Some(ref vcs) = self.vcs {
+            reject_control_chars("vcs", vcs)?;
+        }
+        if let Some(ref vendor) = self.vendor {
+            reject_control_chars("vendor", vendor)?;
+        }
+        if let Some(ref build_host) = self.build_host {
+            reject_control_chars("build_host", build_host)?;
+        }
+        if let Some(ref cookie) = self.cookie {
+            reject_control_chars("cookie", cookie)?;
+        }
+        if let Some(ref packager) = self.packager {
+            reject_control_chars("packager", packager)?;
+        }
+        if let Some(ref group) = self.group {
+            reject_control_chars("group", group)?;
+        }
+        for (path, entry) in &self.files {
+            reject_control_chars("file path", path)?;
+            reject_control_chars("file user", &entry.user)?;
+            reject_control_chars("file group", &entry.group)?;
+            reject_control_chars("file symlink target", &entry.link)?;
+        }
+        for name in &self.changelog_names {
+            reject_control_chars("changelog name", name)?;
+        }
+        for entry in &self.changelog_entries {
+            reject_control_chars("changelog entry", entry)?;
+        }
+        let all_deps = [
+            &self.requires,
+            &self.provides,
+            &self.conflicts,
+            &self.obsoletes,
+            &self.recommends,
+            &self.suggests,
+            &self.enhances,
+            &self.supplements,
+        ];
+        for deps in all_deps {
+            for dep in deps {
+                reject_control_chars("dependency name", &dep.name)?;
+                reject_control_chars("dependency version", &dep.version)?;
+            }
+        }
+        Ok(())
+    }
+
     /// @todo split this into multiple `fn`s, one per `IndexTag`-group.
     fn prepare_data(mut self) -> Result<(Lead, Header<IndexTag>, Vec<u8>), Error> {
+        self.pre_build_validation()?;
+
         // signature depends on header and payload. So we build these two first.
         // then the signature. Then we stitch all together.
         // Lead is not important. just build it here
