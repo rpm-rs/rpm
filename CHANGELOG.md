@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `pgp` to `0.19.0`
 
+### Fixed
+
+- A number of issues / discrepancies in package payload writing.
+- A number of issues / discrepancies in the treatment of ghost files.
+
 ## 0.19.0
 
 ### Changed

@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 
-use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{fs, io};
@@ -923,35 +922,60 @@ impl PackageBuilder {
                 .unwrap();
             dir_indixes.push(index as u32);
             base_names.push(entry.base_name.to_owned());
-            // @todo: is there a use case for not performing all verifications? and are we performing those verifications currently anyway?
-            file_verify_flags.push(entry.verify_flags.bits());
-            let hash_value_m = {
-                if !uses_large_files {
-                    let mut writer = payload::Builder::new(cpio_path)
-                        .mode(entry.mode.into())
-                        .ino(ino_index)
-                        .uid(self.uid.unwrap_or(0))
-                        .gid(self.gid.unwrap_or(0))
-                        .write_cpio(&mut archive, entry.source.size()? as u32);
-                    let mut hash_writer = ChecksummingWriter::new(&mut writer, &[HashKind::Sha256]);
-                    io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
-                    let (hash_output, _) = hash_writer.into_digests();
-                    writer.finish()?;
-                    hash_output
-                } else {
-                    // @todo: can we just use ino_index instead of file_index?
-                    let header = payload::stripped_cpio_header(file_index as u32);
-                    archive.write_all(&header)?;
-                    let mut hash_writer =
-                        ChecksummingWriter::new(&mut archive, &[HashKind::Sha256]);
-                    io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
-                    let (hash_output, _) = hash_writer.into_digests();
-                    archive.flush()?;
-                    hash_output
-                }
+            // Ghost files have certain verify flags cleared
+            let verify = if is_ghost {
+                entry.verify_flags
+                    & !(FileVerifyFlags::FILEDIGEST
+                        | FileVerifyFlags::FILESIZE
+                        | FileVerifyFlags::LINKTO
+                        | FileVerifyFlags::MTIME)
+            } else {
+                entry.verify_flags
             };
-            if let Some(hash_value) = hash_value_m.get(&HashKind::Sha256) {
-                file_hashes.push(hash_value.to_string());
+            file_verify_flags.push(verify.bits());
+
+            // Ghost files are not included in the CPIO payload and have no digest.
+            // Non-regular files (dirs, symlinks) also have empty digests per RPM convention.
+            if is_ghost {
+                file_hashes.push(String::new());
+                ino_index += 1;
+                continue;
+            }
+
+            // On a real filesystem, directories always have at least 2 hard links:
+            // one from the parent and one from their own "." self-reference.
+            // RPM follows this convention in the nlink field.
+            let nlink: u32 = if matches!(entry.mode, FileMode::Dir { .. }) {
+                2
+            } else {
+                1
+            };
+
+            let mut writer = if !uses_large_files {
+                payload::Builder::new(cpio_path)
+                    .mode(entry.mode.into())
+                    .ino(ino_index)
+                    .nlink(nlink)
+                    .mtime(mtime.into())
+                    .uid(self.uid.unwrap_or(0))
+                    .gid(self.gid.unwrap_or(0))
+                    .write_cpio(&mut archive, entry.source.size()? as u32)
+            } else {
+                payload::write_stripped_cpio(&mut archive, file_index as u32, entry.source.size()?)
+            };
+            // Only regular files have digests; dirs and symlinks get empty strings
+            if matches!(entry.mode, FileMode::Regular { .. }) {
+                let mut hash_writer = ChecksummingWriter::new(&mut writer, &[HashKind::Sha256]);
+                io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
+                let hash_value_map = hash_writer.into_digests().0;
+                writer.finish()?;
+                if let Some(hash_value) = hash_value_map.get(&HashKind::Sha256) {
+                    file_hashes.push(hash_value.to_string());
+                }
+            } else {
+                io::copy(&mut entry.source.try_into_bufread()?, &mut writer)?;
+                writer.finish()?;
+                file_hashes.push(String::new());
             }
             ino_index += 1;
         }
