@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rpm::*;
 
@@ -169,4 +169,142 @@ fn test_reject_control_chars_in_file_metadata() {
         .unwrap()
         .build();
     assert!(result.is_err(), "should reject control chars in file user");
+}
+
+
+#[test]
+fn test_file_options_validation() {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    // with_dir rejects non-Dir mode
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_dir(FileOptions::new("/var/log/foo"));
+    assert!(err.is_err(), "with_dir should reject regular file options");
+
+    // with_symlink rejects non-SymbolicLink mode
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_symlink(FileOptions::new("/usr/bin/link"));
+    assert!(
+        err.is_err(),
+        "with_symlink should reject regular file options"
+    );
+
+    // with_symlink rejects empty target
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_symlink(FileOptions::new("/usr/bin/link").mode(FileMode::symbolic_link(0o777)));
+    assert!(
+        err.is_err(),
+        "with_symlink should reject empty symlink target"
+    );
+
+    // with_ghost rejects non-ghost options
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_ghost(FileOptions::new("/var/log/foo"));
+    assert!(err.is_err(), "with_ghost should reject non-ghost options");
+
+    // with_file rejects Dir mode
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+        cargo_file.to_str().unwrap(),
+        FileOptions::dir("/var/log/foo"),
+    );
+    assert!(err.is_err(), "with_file should reject directory options");
+
+    // with_file rejects ghost flag
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+        cargo_file.to_str().unwrap(),
+        FileOptions::ghost("/var/log/foo"),
+    );
+    assert!(err.is_err(), "with_file should reject ghost options");
+
+    // with_file_contents rejects Dir mode
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_file_contents("content", FileOptions::dir("/var/log/foo"));
+    assert!(
+        err.is_err(),
+        "with_file_contents should reject directory options"
+    );
+
+    // with_file_contents rejects ghost flag
+    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+        .with_file_contents("content", FileOptions::ghost("/var/log/foo"));
+    assert!(
+        err.is_err(),
+        "with_file_contents should reject ghost options"
+    );
+}
+
+#[test]
+fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-new-api", "1.0.0", "MIT", "x86_64", "test package")
+        // Regular file with the new permissions() method
+        .with_file(
+            cargo_file.to_str().unwrap(),
+            FileOptions::new("/etc/test/config.toml")
+                .permissions(0o644)
+                .is_config(),
+        )?
+        // Symlink via dedicated constructor and method
+        .with_symlink(FileOptions::symlink(
+            "/usr/bin/test_link",
+            "/usr/bin/test_target",
+        ))?
+        // Explicit directory entry
+        .with_dir(
+            FileOptions::dir("/var/log/testapp")
+                .permissions(0o750)
+                .user("testuser"),
+        )?
+        // Ghost file
+        .with_ghost(FileOptions::ghost("/var/log/testapp/app.log").permissions(0o644))?
+        // Ghost directory
+        .with_ghost(FileOptions::ghost_dir("/var/run/testapp"))?
+        .build()?;
+
+    // Write and re-read the package
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let metadata = &parsed.metadata;
+
+    let file_paths = metadata.get_file_paths()?;
+    let file_entries = metadata.get_file_entries()?;
+
+    // Verify all entries are present
+    assert!(file_paths.contains(&PathBuf::from("/etc/test/config.toml")));
+    assert!(file_paths.contains(&PathBuf::from("/usr/bin/test_link")));
+    assert!(file_paths.contains(&PathBuf::from("/var/log/testapp")));
+    assert!(file_paths.contains(&PathBuf::from("/var/log/testapp/app.log")));
+    assert!(file_paths.contains(&PathBuf::from("/var/run/testapp")));
+
+    // Verify file entry metadata
+    for entry in &file_entries {
+        match entry.path.to_str().unwrap() {
+            "/etc/test/config.toml" => {
+                assert!(entry.flags.contains(FileFlags::CONFIG));
+                assert!(matches!(entry.mode, FileMode::Regular { .. }));
+                assert_eq!(entry.mode.permissions(), 0o644);
+            }
+            "/usr/bin/test_link" => {
+                assert!(matches!(entry.mode, FileMode::SymbolicLink { .. }));
+                assert_eq!(&entry.linkto, "/usr/bin/test_target");
+            }
+            "/var/log/testapp" => {
+                assert!(matches!(entry.mode, FileMode::Dir { .. }));
+                assert_eq!(entry.mode.permissions(), 0o750);
+            }
+            "/var/log/testapp/app.log" => {
+                assert!(entry.flags.contains(FileFlags::GHOST));
+                assert!(matches!(entry.mode, FileMode::Regular { .. }));
+            }
+            "/var/run/testapp" => {
+                assert!(entry.flags.contains(FileFlags::GHOST));
+                assert!(matches!(entry.mode, FileMode::Dir { .. }));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
 }

@@ -59,7 +59,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
             .with_file(
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/hugo/bazz.toml")
-                    .mode(0o100_777)
+                    .permissions(0o777)
                     .is_config_noreplace(),
             )?
             .with_file(
@@ -78,12 +78,17 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
                 cargo_file.to_str().unwrap(),
                 FileOptions::new("/etc/Cargo.toml"),
             )?
-            .with_file(
-                cargo_file.to_str().unwrap(),
-                FileOptions::new("/usr/bin/awesome_link")
-                    .mode(0o120644)
-                    .symlink("/usr/bin/awesome"),
+            .with_symlink(FileOptions::symlink(
+                "/usr/bin/awesome_link",
+                "/usr/bin/awesome",
+            ))?
+            .with_dir(
+                FileOptions::dir("/var/log/foobar")
+                    .user("root")
+                    .permissions(0o750),
             )?
+            .with_ghost(FileOptions::ghost("/var/log/foobar/app.log"))?
+            .with_ghost(FileOptions::ghost_dir("/var/run/foobar"))?
             .epoch(1)
             .pre_install_script("echo preinst")
             .add_changelog_entry(

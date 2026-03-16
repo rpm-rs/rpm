@@ -14,12 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
+- `PackageBuilder::with_dir()` as a shortcut to adding a directory on the RPM (doesn't add contents).
 
 ### Fixed
 
 - Added validation to reject control characters in inputs to `PackageBuilder`.
 - Added validation to match RPM's treatment of characters allowed or disallowed in package names.
-- Improved handling of file paths (normalization) to prevent duplicates and behave more like the OG `rpm`.
+- Improved handling of file paths (normalization) to prevent duplicates and behave more like the original `rpm`.
+- Improved how file digests are created in built packages to behave more like the original `rpm`.
+- `PackageBuilder::with_file_contents()` was not respecting `source_date`.
 - A number of issues / discrepancies in package payload writing.
 - A number of issues / discrepancies in the treatment of ghost files.
 
@@ -32,11 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead.
+- `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead or else use `HsmSigner<SecretKey>` which exposes a similar API to the original `Signer<SecretKey>` for users who were using custom `SecretKey` implementations with hardware security modules.
 - `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
 - `Signer` fields are no longer public; use the provided constructor methods instead.
 - Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
 
+
+- Refactored the `FileOptions` functions. Use `FileOptions::new()`, `FileOptions::dir()`, `FileOptions::symlink()`, `FileOptions::ghost()` for a regular file, directory, symbolic link, or "ghost" file, respectively.
 
 ## 0.19.0
 

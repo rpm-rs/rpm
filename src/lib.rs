@@ -39,10 +39,22 @@
 //!     )?
 //!     .with_file(
 //!         "./tests/assets/SOURCES/example_config.toml",
-//!         // you can set a custom mode and custom user too
+//!         // you can set permissions without needing the file type prefix
 //!         rpm::FileOptions::new("/etc/awesome/second.toml")
-//!             .mode(rpm::FileMode::regular(0o644))
+//!             .permissions(0o644)
 //!             .user("hugo"),
+//!     )?
+//!     // symlinks don't require a source file
+//!     .with_symlink(
+//!         rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
+//!     )?
+//!     // directories can be created with explicit ownership and permissions
+//!     .with_dir(
+//!         rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
+//!     )?
+//!     // ghost files track metadata without including content
+//!     .with_ghost(
+//!         rpm::FileOptions::ghost("/var/log/awesome/app.log"),
 //!     )?
 //!     .pre_install_script("echo preinst")
 //!     // If you don't need reproducible builds,
