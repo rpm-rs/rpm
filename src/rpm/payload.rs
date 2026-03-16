@@ -1,4 +1,27 @@
-//! Read/write `newc` (SVR4) format archives.
+//! Read/write RPM package payload archives.
+//!
+//! RPM package payloads come in two different flavors, CPIO and "stripped" CPIO.
+//!
+//! ## CPIO Format Details
+//!
+//! The newc (SVR4 "new ASCII") CPIO format uses a fixed 110-byte header followed by a
+//! variable-length filename and file data. Two variants share the same structure:
+//!
+//! - **070701** ("new ASCII" / newc): no per-file checksum
+//! - **070702** ("new CRC"): includes a per-file checksum (sum of all data bytes, mod 2^32)
+//!
+//! RPM generally uses the "newc" variant - without file checksums.
+//!
+//! ## Stripped CPIO Format (RPM-specific, magic 07070X)
+//!
+//! RPM v4.12+ uses a stripped-down CPIO variant for packages containing files > 4 GB.
+//! The stripped header is only 14 bytes: 6-byte magic ("07070X") + 8-byte hex file index.
+//! All file metadata is stored in the RPM header instead.
+//!
+//! ## Alignment / Padding
+//!
+//! All headers and file data are padded to 4-byte boundaries regardless of the header format.
+//! Padding must be written after every entry's data, including the last entry before the trailer.
 
 // The code in this file is partially copied from the `cpio` crate by Jonathan Creekmore
 // (https://github.com/jcreekmore/cpio-rs) under the MIT license.
@@ -37,6 +60,8 @@
 //   * Reader::entry() removed, tests use a helper function
 //   * Reader::new() now takes a slice of FileEntry, so that knows how large the files are for the purpose of reading them
 //   * Seekable implementation and accompanying tests were deleted - we don't need it
+//   * Reader and Writer modified to handle both standard CPIO and RPM-flavored stripped CPIO
+//   * Return library-specific errors
 
 #![allow(dead_code)]
 
@@ -92,7 +117,7 @@ pub struct Reader<R: Read> {
     inner: R,
     entry: RpmPayloadEntry,
     file_size: u64,
-    bytes_read: u32,
+    bytes_read: u64,
 }
 
 /// Builds metadata for one entry to be written into an archive.
@@ -114,14 +139,16 @@ pub struct Builder {
 /// Writes one entry header/data into an archive.
 pub struct Writer<W: Write> {
     inner: W,
-    written: u32,
-    file_size: u32,
+    written: u64,
+    file_size: u64,
     header_size: usize,
     header: Vec<u8>,
 }
 
-fn pad(len: usize) -> Option<Vec<u8>> {
-    // pad out to a multiple of 4 bytes
+/// Compute NUL padding bytes needed to align `len` to a 4-byte boundary.
+///
+/// Returns `None` if `len` is already aligned.
+fn align_to_4(len: usize) -> Option<Vec<u8>> {
     let overhang = len % 4;
     if overhang != 0 {
         let repeat = 4 - overhang;
@@ -336,7 +363,7 @@ impl<R: Read> Reader<R> {
                 })?;
 
                 // Pad out to a multiple of 4 bytes.
-                if let Some(mut padding) = pad(HEADER_LEN + name_len) {
+                if let Some(mut padding) = align_to_4(HEADER_LEN + name_len) {
                     inner.read_exact(&mut padding)?;
                 }
                 let entry = CpioEntry {
@@ -359,8 +386,13 @@ impl<R: Read> Reader<R> {
                 RpmPayloadEntry::Cpio(entry)
             }
             STRIPPED_CPIO_MAGIC_NUMBER => {
-                // char    fx[8];
                 let file_index = read_hex_u32(&mut inner)?;
+
+                // The stripped header is 14 bytes (6 magic + 8 index), padded to 16.
+                if let Some(mut padding) = align_to_4(STRIPPED_CPIO_HEADER_LEN) {
+                    inner.read_exact(&mut padding)?;
+                }
+
                 RpmPayloadEntry::Stripped(file_index)
             }
             _ => {
@@ -373,7 +405,22 @@ impl<R: Read> Reader<R> {
 
         let file_size: u64 = match entry {
             RpmPayloadEntry::Cpio(ref c) => c.file_size as u64,
-            RpmPayloadEntry::Stripped(idx) => file_entries[idx as usize].size as u64,
+            RpmPayloadEntry::Stripped(idx) => {
+                let idx = idx as usize;
+                file_entries
+                    .get(idx)
+                    .map(|e| e.size as u64)
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "stripped CPIO file index {} out of range ({}  entries)",
+                                idx,
+                                file_entries.len()
+                            ),
+                        )
+                    })?
+            }
         };
 
         Ok(Reader {
@@ -384,10 +431,12 @@ impl<R: Read> Reader<R> {
         })
     }
 
-    /// Returns the metadata for this entry.
+    /// Returns true if this is a trailer entry.
     pub fn is_trailer(&self) -> bool {
         match &self.entry {
             RpmPayloadEntry::Cpio(c) => c.is_trailer(),
+            // This should never actually happen. In practice RPM always uses the CPIO
+            // trailer, but, no reason not to be defensive I suppose.
             RpmPayloadEntry::Stripped(idx) => *idx == u32::MAX,
         }
     }
@@ -395,11 +444,11 @@ impl<R: Read> Reader<R> {
     /// Finishes reading this entry and returns the underlying reader in a
     /// position ready to read the next entry (if any).
     pub fn finish(mut self) -> io::Result<R> {
-        let remaining = self.file_size - self.bytes_read as u64;
+        let remaining = self.file_size - self.bytes_read;
         if remaining > 0 {
             io::copy(&mut self.inner.by_ref().take(remaining), &mut io::sink())?;
         }
-        if let Some(mut padding) = pad(self.file_size as usize) {
+        if let Some(mut padding) = align_to_4(self.file_size as usize) {
             self.inner.read_exact(&mut padding)?;
         }
         Ok(self.inner)
@@ -408,11 +457,11 @@ impl<R: Read> Reader<R> {
 
 impl<R: Read> Read for Reader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let remaining = self.file_size as usize - self.bytes_read as usize;
-        let limit = buf.len().min(remaining);
+        let remaining = self.file_size - self.bytes_read;
+        let limit = buf.len().min(remaining as usize);
         if limit > 0 {
             let num_bytes = self.inner.read(&mut buf[..limit])?;
-            self.bytes_read += num_bytes as u32;
+            self.bytes_read += num_bytes as u64;
             Ok(num_bytes)
         } else {
             Ok(0)
@@ -530,7 +579,7 @@ impl Builder {
         Writer {
             inner: w,
             written: 0,
-            file_size,
+            file_size: file_size as u64,
             header_size: header.len(),
             header,
         }
@@ -543,7 +592,7 @@ impl Builder {
         Writer {
             inner: w,
             written: 0,
-            file_size,
+            file_size: file_size as u64,
             header_size: header.len(),
             header,
         }
@@ -592,7 +641,7 @@ impl Builder {
         header.push(0u8);
 
         // pad out to a multiple of 4 bytes
-        if let Some(pad) = pad(HEADER_LEN + name_len) {
+        if let Some(pad) = align_to_4(HEADER_LEN + name_len) {
             header.extend(pad);
         }
 
@@ -600,22 +649,33 @@ impl Builder {
     }
 }
 
-/// Build a stripped archive header
-pub fn stripped_cpio_header(file_index: u32) -> Vec<u8> {
+/// Write a stripped CPIO entry header and return a `Writer` for the file data.
+///
+/// The returned `Writer` enforces that exactly `file_size` bytes are written,
+/// and handles 4-byte alignment padding automatically on `finish()`.
+///
+/// `file_index` is the 0-based index into the RPM header tag arrays.
+pub fn write_stripped_cpio<W: Write>(w: W, file_index: u32, file_size: u64) -> Writer<W> {
     let mut header = Vec::with_capacity(STRIPPED_CPIO_HEADER_LEN);
 
-    // char    c_magic[6];
+    // magic: 6 bytes
     header.extend(STRIPPED_CPIO_MAGIC_NUMBER);
 
-    // char    fx[8];  (file index)
+    // file index: 8 bytes
     header.extend(format!("{:08x}", file_index).as_bytes());
 
-    // pad out to a multiple of 4 bytes
-    if let Some(pad) = pad(STRIPPED_CPIO_HEADER_LEN) {
+    // pad out to a multiple of 4 bytes (14 + 2)
+    if let Some(pad) = align_to_4(STRIPPED_CPIO_HEADER_LEN) {
         header.extend(pad);
     }
 
-    header
+    Writer {
+        inner: w,
+        written: 0,
+        file_size,
+        header_size: header.len(),
+        header,
+    }
 }
 
 impl<W: Write> Writer<W> {
@@ -635,12 +695,23 @@ impl<W: Write> Writer<W> {
     fn do_finish(&mut self) -> io::Result<()> {
         self.try_write_header()?;
 
-        if self.written == self.file_size
-            && let Some(pad) = pad(self.header_size + self.file_size as usize)
-        {
-            self.inner.write_all(&pad)?;
-            self.inner.flush()?;
+        if self.written != self.file_size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "CPIO entry expected {} bytes but only {} were written",
+                    self.file_size, self.written
+                ),
+            ));
         }
+
+        // Pad file data to a 4-byte boundary. The padding is based on the combined
+        // header+name+data length because header+name is already padded to 4 bytes,
+        // and data starts at that boundary.
+        if let Some(pad) = align_to_4(self.header_size + self.file_size as usize) {
+            self.inner.write_all(&pad)?;
+        }
+        self.inner.flush()?;
 
         Ok(())
     }
@@ -648,11 +719,11 @@ impl<W: Write> Writer<W> {
 
 impl<W: Write> Write for Writer<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if self.written + buf.len() as u32 <= self.file_size {
+        if self.written + buf.len() as u64 <= self.file_size {
             self.try_write_header()?;
 
             let n = self.inner.write(buf)?;
-            self.written += n as u32;
+            self.written += n as u64;
             Ok(n)
         } else {
             Err(io::Error::new(
@@ -675,7 +746,7 @@ pub fn trailer<W: Write>(w: W) -> io::Result<W> {
 }
 
 #[cfg(test)]
-mod tests {
+mod cpio_tests {
     use super::*;
     use std::io::{Cursor, copy};
 
@@ -686,39 +757,64 @@ mod tests {
         }
     }
 
+    /// Write a zero-size directory entry and verify its metadata (name, mode, nlink)
+    /// survives the roundtrip.
     #[test]
-    fn test_single_file() {
-        // Set up our input file
-        let data: &[u8] = b"Hello, World";
+    fn test_empty_file() {
+        let output = vec![];
+
+        let b = Builder::new("./empty_dir").mode(0o040755).nlink(2);
+        let writer = b.write_cpio(output, 0);
+        let output = writer.finish().unwrap();
+
+        let output = trailer(output).unwrap();
+
+        let reader = Reader::new(output.as_slice(), &[]).unwrap();
+        assert_eq!(entry(&reader).name(), "./empty_dir");
+        assert_eq!(entry(&reader).file_size(), 0);
+        assert_eq!(entry(&reader).mode(), 0o040755);
+        assert_eq!(entry(&reader).nlink(), 2);
+        let reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
+        assert!(reader.is_trailer());
+    }
+
+    /// Verify that all CPIO header metadata fields (ino, mode, uid, gid, nlink,
+    /// mtime, file_size) and file content survive a write-then-read roundtrip.
+    #[test]
+    fn test_cpio_roundtrip() {
+        let data: &[u8] = b"content";
         let length = data.len() as u32;
         let mut input = Cursor::new(data);
 
-        // Set up our output file
-        let output = vec![];
-
-        // Set up the descriptor of our input file
-        let b = Builder::new("./hello_world");
-        // and get a writer for that input file
-        let mut writer = b.write_cpio(output, length);
-
-        // Copy the input file into our CPIO archive
+        let b = Builder::new("./myfile")
+            .ino(42)
+            .mode(0o100755)
+            .uid(500)
+            .gid(500)
+            .nlink(1)
+            .mtime(1_600_000_000);
+        let mut writer = b.write_cpio(vec![], length);
         copy(&mut input, &mut writer).unwrap();
-        let output = writer.finish().unwrap();
+        let output = trailer(writer.finish().unwrap()).unwrap();
 
-        // Finish up by writing the trailer for the archive
-        let output = trailer(output).unwrap();
-
-        // Now read the archive back in and make sure we get the same data.
         let mut reader = Reader::new(output.as_slice(), &[]).unwrap();
-        assert_eq!(entry(&reader).name(), "./hello_world");
+        assert_eq!(entry(&reader).name(), "./myfile");
+        assert_eq!(entry(&reader).ino(), 42);
+        assert_eq!(entry(&reader).mode(), 0o100755);
+        assert_eq!(entry(&reader).uid(), 500);
+        assert_eq!(entry(&reader).gid(), 500);
+        assert_eq!(entry(&reader).nlink(), 1);
+        assert_eq!(entry(&reader).mtime(), 1_600_000_000);
         assert_eq!(entry(&reader).file_size(), length);
         let mut contents = vec![];
         copy(&mut reader, &mut contents).unwrap();
         assert_eq!(contents, data);
         let reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
-        assert!(entry(&reader).is_trailer());
+        assert!(reader.is_trailer());
     }
 
+    /// Write two files into a CPIO archive and read them back, verifying
+    /// filenames, sizes, metadata (ino, uid, gid, mode), and contents.
     #[test]
     fn test_multi_file() {
         // Set up our input files
@@ -784,5 +880,220 @@ mod tests {
 
         let reader = Reader::new(reader.finish().unwrap(), &[]).unwrap();
         assert!(reader.is_trailer());
+    }
+
+    /// Verify that finishing a writer before writing the declared number of bytes
+    /// returns an `InvalidInput` error.
+    #[test]
+    fn test_finish_with_short_write() {
+        let data: &[u8] = b"short";
+        let mut input = Cursor::new(data);
+
+        // Declare 100 bytes but only write 5
+        let b = Builder::new("./file");
+        let mut writer = b.write_cpio(vec![], 100);
+        copy(&mut input, &mut writer).unwrap();
+        let err = writer.finish().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    /// Verify that writing more bytes than the declared file size returns an
+    /// `UnexpectedEof` error.
+    #[test]
+    fn test_write_beyond_file_size() {
+        let data: &[u8] = b"this is way too much data";
+        let mut input = Cursor::new(data);
+
+        // Declare 5 bytes but try to write 25
+        let b = Builder::new("./file");
+        let mut writer = b.write_cpio(vec![], 5);
+        let err = copy(&mut input, &mut writer).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    /// Write multiple files with sizes 1, 2, 3, 5, and 7 bytes to exercise all
+    /// possible 4-byte alignment padding amounts (3, 2, 1, 3, 1), then read them
+    /// all back and verify contents.
+    #[test]
+    fn test_odd_size_padding() {
+        let sizes: Vec<usize> = vec![1, 2, 3, 5, 7];
+        let output = vec![];
+        let mut out = output;
+
+        for (i, &size) in sizes.iter().enumerate() {
+            let data = vec![b'A' + i as u8; size];
+            let b = Builder::new(&format!("./file{}", i))
+                .ino(i as u32 + 1)
+                .mode(0o100644);
+            let mut writer = b.write_cpio(out, size as u32);
+            copy(&mut Cursor::new(&data), &mut writer).unwrap();
+            out = writer.finish().unwrap();
+        }
+        out = trailer(out).unwrap();
+
+        // Read them all back and verify contents
+        let mut slice = out.as_slice();
+        for (i, &size) in sizes.iter().enumerate() {
+            let expected = vec![b'A' + i as u8; size];
+            let mut reader = Reader::new(slice, &[]).unwrap();
+            assert_eq!(entry(&reader).name(), format!("./file{}", i));
+            assert_eq!(entry(&reader).file_size(), size as u32);
+            let mut contents = vec![];
+            copy(&mut reader, &mut contents).unwrap();
+            assert_eq!(contents, expected);
+            slice = reader.finish().unwrap();
+        }
+        let reader = Reader::new(slice, &[]).unwrap();
+        assert!(reader.is_trailer());
+    }
+}
+
+#[cfg(test)]
+mod stripped_cpio_tests {
+    use super::*;
+    use std::io::{Cursor, copy};
+
+    fn make_file_entry(path: &str, size: usize) -> super::super::FileEntry {
+        super::super::FileEntry {
+            path: path.into(),
+            size,
+            mode: crate::FileMode::regular(0o644),
+            ownership: crate::rpm::headers::FileOwnership {
+                user: "root".to_string(),
+                group: "root".to_string(),
+            },
+            modified_at: crate::Timestamp(0),
+            flags: crate::FileFlags::empty(),
+            digest: None,
+            caps: None,
+            linkto: String::new(),
+            ima_signature: None,
+        }
+    }
+
+    /// Write a zero-size stripped CPIO entry and verify it roundtrips correctly.
+    #[test]
+    fn test_empty_file() {
+        let file_entries = vec![make_file_entry("empty", 0)];
+
+        let writer = write_stripped_cpio(vec![], 0, 0);
+        let output = writer.finish().unwrap();
+        let output = trailer(output).unwrap();
+
+        let reader = Reader::new(output.as_slice(), &file_entries).unwrap();
+        match &reader.entry {
+            RpmPayloadEntry::Stripped(idx) => assert_eq!(*idx, 0),
+            _ => panic!("expected stripped entry"),
+        }
+        let reader = Reader::new(reader.finish().unwrap(), &file_entries).unwrap();
+        assert!(reader.is_trailer());
+    }
+
+    /// Write two stripped CPIO entries and a trailer, then read them back,
+    /// verifying file indices and contents survive the roundtrip.
+    #[test]
+    fn test_stripped_cpio_roundtrip() {
+        let data1: &[u8] = b"file one";
+        let len1 = data1.len() as u64;
+        let data2: &[u8] = b"file two content";
+        let len2 = data2.len() as u64;
+
+        let file_entries = vec![
+            make_file_entry("file1", len1 as usize),
+            make_file_entry("file2", len2 as usize),
+        ];
+
+        // Write two stripped entries
+        let output = vec![];
+        let mut writer = write_stripped_cpio(output, 0, len1);
+        copy(&mut Cursor::new(data1), &mut writer).unwrap();
+        let output = writer.finish().unwrap();
+
+        let mut writer = write_stripped_cpio(output, 1, len2);
+        copy(&mut Cursor::new(data2), &mut writer).unwrap();
+        let output = writer.finish().unwrap();
+
+        // Write a standard newc trailer (same as regular CPIO archives)
+        let output = trailer(output).unwrap();
+
+        // Read them back
+        let mut reader = Reader::new(output.as_slice(), &file_entries).unwrap();
+        match &reader.entry {
+            RpmPayloadEntry::Stripped(idx) => assert_eq!(*idx, 0),
+            _ => panic!("expected stripped entry"),
+        }
+        let mut contents = vec![];
+        copy(&mut reader, &mut contents).unwrap();
+        assert_eq!(contents, data1);
+
+        let mut reader = Reader::new(reader.finish().unwrap(), &file_entries).unwrap();
+        match &reader.entry {
+            RpmPayloadEntry::Stripped(idx) => assert_eq!(*idx, 1),
+            _ => panic!("expected stripped entry"),
+        }
+        let mut contents = vec![];
+        copy(&mut reader, &mut contents).unwrap();
+        assert_eq!(contents, data2);
+
+        // Verify the trailer is read correctly
+        let reader = Reader::new(reader.finish().unwrap(), &file_entries).unwrap();
+        assert!(reader.is_trailer());
+    }
+
+    /// Write multiple stripped entries with sizes 1, 2, 3, 5, and 7 bytes to
+    /// exercise all possible 4-byte alignment padding amounts (3, 2, 1, 3, 1),
+    /// then read them all back and verify contents.
+    #[test]
+    fn test_odd_size_padding() {
+        let sizes: Vec<usize> = vec![1, 2, 3, 5, 7];
+        let file_entries: Vec<_> = sizes
+            .iter()
+            .enumerate()
+            .map(|(i, &size)| make_file_entry(&format!("file{}", i), size))
+            .collect();
+
+        let mut out = vec![];
+        for (i, &size) in sizes.iter().enumerate() {
+            let data = vec![b'A' + i as u8; size];
+            let mut writer = write_stripped_cpio(out, i as u32, size as u64);
+            copy(&mut Cursor::new(&data), &mut writer).unwrap();
+            out = writer.finish().unwrap();
+        }
+        out = trailer(out).unwrap();
+
+        // Read them all back and verify contents
+        let mut slice = out.as_slice();
+        for (i, &size) in sizes.iter().enumerate() {
+            let expected = vec![b'A' + i as u8; size];
+            let mut reader = Reader::new(slice, &file_entries).unwrap();
+            match &reader.entry {
+                RpmPayloadEntry::Stripped(idx) => assert_eq!(*idx, i as u32),
+                _ => panic!("expected stripped entry"),
+            }
+            let mut contents = vec![];
+            copy(&mut reader, &mut contents).unwrap();
+            assert_eq!(contents, expected);
+            slice = reader.finish().unwrap();
+        }
+        let reader = Reader::new(slice, &file_entries).unwrap();
+        assert!(reader.is_trailer());
+    }
+
+    /// Verify that reading a stripped CPIO entry whose file index exceeds the
+    /// length of the file_entries slice returns an `InvalidData` error.
+    #[test]
+    fn test_out_of_range_file_index() {
+        let file_entries = vec![make_file_entry("only_file", 10)];
+
+        // Write a stripped entry with index 5, but file_entries only has 1 element
+        let data: &[u8] = b"irrelevant";
+        let mut writer = write_stripped_cpio(vec![], 5, data.len() as u64);
+        copy(&mut Cursor::new(data), &mut writer).unwrap();
+        let output = writer.finish().unwrap();
+
+        match Reader::new(output.as_slice(), &file_entries) {
+            Err(err) => assert_eq!(err.kind(), io::ErrorKind::InvalidData),
+            Ok(_) => panic!("expected error for out-of-range file index"),
+        }
     }
 }
