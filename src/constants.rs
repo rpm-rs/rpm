@@ -598,7 +598,7 @@ bitflags! {
         const CONFIG = 1;  // %%config
         const DOC = 1 << 1;  // %%doc
         const DONOTUSE = 1 << 2;  // %%donotuse
-        const MISSINGOK = 1 << 3;  // %%config(missingok)
+        const MISSINGOK = 1 << 3;  // %%missingok (also valid as %%config(missingok))
         const NOREPLACE = 1 << 4;  // %%config(noreplace)
         const SPECFILE = 1 << 5;  // specfile, which is the first file in a source RPM
         const GHOST = 1 << 6;  // %%ghost

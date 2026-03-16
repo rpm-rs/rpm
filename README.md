@@ -108,7 +108,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .with_file(
         "./tests/assets/SOURCES/example_config.toml",
         rpm::FileOptions::new("/etc/awesome/config.toml")
-            .is_config_noreplace(),
+            .config().noreplace(),
     )?
     // symlinks don't require a source file
     .with_symlink(

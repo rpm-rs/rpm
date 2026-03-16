@@ -381,7 +381,7 @@ impl PackageBuilder {
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
     ///     .with_file(
     ///         "./awesome-config.toml",
-    ///         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+    ///         rpm::FileOptions::new("/etc/awesome/config.toml").config(),
     ///     )?
     ///     // file mode is inherited from source file
     ///     .with_file(
@@ -446,7 +446,7 @@ impl PackageBuilder {
     /// date = true
     /// time = true
     /// ",
-    ///         rpm::FileOptions::new("/etc/awesome/config.toml").is_config(),
+    ///         rpm::FileOptions::new("/etc/awesome/config.toml").config(),
     ///     )?
     ///      .with_file_contents(
     ///         // the contents of the file is "hello world!". It doesn't need to be UTF-8, binary data works too.

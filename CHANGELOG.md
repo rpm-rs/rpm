@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Refactored the `FileOptions` functions. Use `FileOptions::new()`, `FileOptions::dir()`, `FileOptions::symlink()`, `FileOptions::ghost()` for a regular file, directory, symbolic link, or "ghost" file, respectively.
+- Renamed file attribute methods on `FileOptionsBuilder` to drop the `is_` prefix:
+  `is_config()` → `config()`, `is_license()` → `license()`, `is_readme()` → `readme()` (deprecated).
+  `is_config_noreplace()` is replaced by chaining `config().noreplace()`.
+  `missingok()` is now a standalone method (it is an independent RPM attribute, not
+  just a sub-attribute of `%config`). New methods: `doc()`, `artifact()`, `noreplace()`.
 
 ## 0.19.0
 
