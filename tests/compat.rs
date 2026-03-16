@@ -79,7 +79,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
                 FileOptions::new("/etc/Cargo.toml"),
             )?
             .with_file(
-                "./test_assets/empty_file_for_symlink_create",
+                cargo_file.to_str().unwrap(),
                 FileOptions::new("/usr/bin/awesome_link")
                     .mode(0o120644)
                     .symlink("/usr/bin/awesome"),
