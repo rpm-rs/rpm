@@ -282,10 +282,7 @@ fn podman_container_launcher(
     let _ = std::fs::create_dir(var_cache.as_path());
     let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
     let out = format!("{}:/out:z", common::CARGO_OUT_DIR);
-    let assets = format!(
-        "{}/tests/assets:/assets:z",
-        common::CARGO_MANIFEST_DIR,
-    );
+    let assets = format!("{}/tests/assets:/assets:z", common::CARGO_MANIFEST_DIR,);
     mappings.extend(vec![out, assets, var_cache]);
     let mut args = mappings
         .iter()
