@@ -1349,3 +1349,9 @@ impl Iterator for FileIterator<'_> {
         }
     }
 }
+
+impl ExactSizeIterator for FileIterator<'_> {
+    fn len(&self) -> usize {
+        self.file_entries.len() - self.count
+    }
+}

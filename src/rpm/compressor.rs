@@ -3,9 +3,8 @@ use std::io;
 use crate::errors::*;
 
 /// Supported payload compression types.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompressionType {
-    #[default]
     None,
     Gzip,
     Zstd,
@@ -106,6 +105,7 @@ impl io::Write for Compressor {
             Compressor::Bzip2(encoder) => encoder.write(content),
         }
     }
+
     fn flush(&mut self) -> Result<(), std::io::Error> {
         match self {
             Compressor::None(data) => data.flush(),

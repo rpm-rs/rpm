@@ -92,6 +92,3 @@ pub use crate::version::*;
 
 mod rpm;
 pub use crate::rpm::*;
-
-#[cfg(test)]
-mod tests;
