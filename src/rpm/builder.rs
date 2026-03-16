@@ -462,7 +462,7 @@ impl PackageBuilder {
         &mut self,
         content_source: ContentSource,
         modified_at: Timestamp,
-        options: FileOptions,
+        mut options: FileOptions,
     ) -> Result<(), Error> {
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
@@ -471,26 +471,72 @@ impl PackageBuilder {
                 desc: "invalid start, expected / or ./",
             });
         }
+        if dest == "/" || dest == "./" {
+            return Err(Error::InvalidDestinationPath {
+                path: dest,
+                desc: "cannot package the root directory itself",
+            });
+        }
 
-        let pb = PathBuf::from(dest.clone());
+        // Normalize the path: collapse repeated slashes and remove trailing slashes.
+        // This prevents entries like "/usr//bin/foo" and "/usr/bin/foo" from being
+        // treated as distinct, and "/var/log/myapp/" from failing to split into
+        // dir + basename correctly.
+        let normalized: String = {
+            let mut result = String::with_capacity(dest.len());
+            let mut prev_slash = false;
+            for ch in dest.chars() {
+                if ch == '/' {
+                    if !prev_slash {
+                        result.push(ch);
+                    }
+                    prev_slash = true;
+                } else {
+                    result.push(ch);
+                    prev_slash = false;
+                }
+            }
+            // Remove trailing slash ("/" and "./" are rejected above)
+            if result.len() > 1 && result.ends_with('/') {
+                result.pop();
+            }
+            result
+        };
+
+        let pb = PathBuf::from(normalized.clone());
 
         let parent = pb.parent().ok_or_else(|| Error::InvalidDestinationPath {
-            path: dest.clone(),
+            path: normalized.clone(),
             desc: "no parent directory found",
         })?;
 
-        let (cpio_path, dir) = if dest.starts_with('.') {
+        let (cpio_path, dir) = if normalized.starts_with('.') {
             (
-                dest.to_string(),
+                normalized.to_string(),
                 // strip_prefix() should never fail because we've checked the special cases already
                 format!("/{}/", parent.strip_prefix(".").unwrap().to_string_lossy()),
             )
         } else {
             (
-                format!(".{}", dest),
+                format!(".{}", normalized),
                 format!("{}/", parent.to_string_lossy()),
             )
         };
+
+        // Directories cannot carry %config, %doc, or %license attributes in RPM.
+        // These flags are silently stripped rather than rejected, as this matches RPM behavior.
+        if matches!(options.mode, FileMode::Dir { .. }) {
+            options
+                .flag
+                .remove(FileFlags::CONFIG | FileFlags::DOC | FileFlags::LICENSE);
+        }
+
+        if self.files.contains_key(&cpio_path) {
+            return Err(Error::InvalidDestinationPath {
+                path: normalized,
+                desc: "duplicate file entry; the same path was added to the package twice",
+            });
+        }
 
         let entry = PackageFileEntry {
             // file_name() should never fail because we've checked the special cases already
@@ -503,15 +549,12 @@ impl PackageBuilder {
             link: options.symlink,
             modified_at,
             dir: dir.clone(),
-            // Convert the caps to a string, so that we can store it in the header.
-            // We do this so that it's possible to verify that caps are correct when provided
-            // and then later check if any were set
             caps: options.caps,
             verify_flags: options.verify_flags,
         };
 
         self.directories.insert(dir);
-        self.files.entry(cpio_path).or_insert(entry);
+        self.files.insert(cpio_path, entry);
         Ok(())
     }
 
@@ -937,10 +980,9 @@ impl PackageBuilder {
         let uses_large_files =
             combined_file_sizes > u32::MAX.into() || self.config.format != RpmFormat::V4;
 
-        // @todo: sort entries by path?
-        // @todo: normalize path?
-        // @todo: remove duplicates?
-        // if we remove duplicates, remember anything already pre-computed
+        // Entries are sorted by path (BTreeMap iteration order) and duplicates are rejected
+        // in add_data(). Paths are also normalized there (collapsing slashes, stripping trailing
+        // slashes) to ensure deduplication works correctly.
         for (file_index, (cpio_path, entry)) in self.files.iter_mut().enumerate() {
             if entry.caps.is_some() {
                 uses_file_capabilities = true;
