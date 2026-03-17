@@ -5,6 +5,7 @@ mod headers;
 mod package;
 mod payload;
 mod timestamp;
+mod util;
 
 pub mod signature;
 

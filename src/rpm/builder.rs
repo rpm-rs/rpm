@@ -482,26 +482,7 @@ impl PackageBuilder {
         // This prevents entries like "/usr//bin/foo" and "/usr/bin/foo" from being
         // treated as distinct, and "/var/log/myapp/" from failing to split into
         // dir + basename correctly.
-        let normalized: String = {
-            let mut result = String::with_capacity(dest.len());
-            let mut prev_slash = false;
-            for ch in dest.chars() {
-                if ch == '/' {
-                    if !prev_slash {
-                        result.push(ch);
-                    }
-                    prev_slash = true;
-                } else {
-                    result.push(ch);
-                    prev_slash = false;
-                }
-            }
-            // Remove trailing slash ("/" and "./" are rejected above)
-            if result.len() > 1 && result.ends_with('/') {
-                result.pop();
-            }
-            result
-        };
+        let normalized = super::util::normalize_path(&dest);
 
         let pb = PathBuf::from(normalized.clone());
 
@@ -786,88 +767,7 @@ impl PackageBuilder {
     /// Validate all user-provided metadata before building. Control characters
     /// in metadata cause problems in downstream consumers like XML repository metadata.
     fn pre_build_validation(&self) -> Result<(), Error> {
-        /// Reject strings containing ASCII control characters (except tab and newline).
-        /// These characters cause problems in downstream consumers like XML repository metadata.
-        fn reject_control_chars(field: &'static str, value: &str) -> Result<(), Error> {
-            if value
-                .bytes()
-                .any(|b| b.is_ascii_control() && b != b'\t' && b != b'\n')
-            {
-                return Err(Error::InvalidControlChar {
-                    field,
-                    value: value.to_string(),
-                });
-            }
-            Ok(())
-        }
-
-        /// Allowed special characters in RPM package names (matching RPM's ALLOWED_CHARS_NAME).
-        const ALLOWED_CHARS_NAME: &[u8] = b".-_+%{}";
-
-        /// Allowed first characters in RPM package names (matching RPM's ALLOWED_FIRSTCHARS_NAME),
-        /// in addition to alphanumeric characters.
-        const ALLOWED_FIRSTCHARS_NAME: &[u8] = b"_%";
-
-        /// Allowed special characters in RPM version/release strings (matching RPM's ALLOWED_CHARS_VERREL).
-        const ALLOWED_CHARS_VERSION_RELEASE: &[u8] = b"._+%{}~^";
-
-        /// Validate an RPM package name. Names must start with an alphanumeric character, `_`, or `%`,
-        /// and may only contain alphanumeric characters plus `.-_+%{}`.
-        fn validate_name(value: &str) -> Result<(), Error> {
-            if value.is_empty() {
-                return Err(Error::InvalidCharacters {
-                    field: "name",
-                    value: value.to_string(),
-                    reason: "must not be empty",
-                });
-            }
-            let first = value.as_bytes()[0];
-            if !first.is_ascii_alphanumeric() && !ALLOWED_FIRSTCHARS_NAME.contains(&first) {
-                return Err(Error::InvalidCharacters {
-                    field: "name",
-                    value: value.to_string(),
-                    reason: "must start with an alphanumeric character, '_', or '%'",
-                });
-            }
-            if let Some(bad) = value
-                .bytes()
-                .find(|b| !b.is_ascii_alphanumeric() && !ALLOWED_CHARS_NAME.contains(b))
-            {
-                return Err(Error::InvalidCharacters {
-                    field: "name",
-                    value: value.to_string(),
-                    reason: if bad.is_ascii_whitespace() {
-                        "must not contain whitespace"
-                    } else {
-                        "contains invalid character (allowed: alphanumeric, '.', '-', '_', '+', '%', '{', '}')"
-                    },
-                });
-            }
-            Ok(())
-        }
-
-        /// Validate an RPM version or release string. May only contain alphanumeric characters
-        /// plus `._+%{}~^`.
-        fn validate_version(field: &'static str, value: &str) -> Result<(), Error> {
-            if value.is_empty() {
-                return Err(Error::InvalidCharacters {
-                    field,
-                    value: value.to_string(),
-                    reason: "must not be empty",
-                });
-            }
-            if value
-                .bytes()
-                .any(|b| !b.is_ascii_alphanumeric() && !ALLOWED_CHARS_VERSION_RELEASE.contains(&b))
-            {
-                return Err(Error::InvalidCharacters {
-                    field,
-                    value: value.to_string(),
-                    reason: "contains invalid character (allowed: alphanumeric, '.', '_', '+', '%', '{', '}', '~', '^')",
-                });
-            }
-            Ok(())
-        }
+        use super::util::{reject_control_chars, validate_name, validate_version};
 
         validate_name(&self.name)?;
         validate_version("version", &self.version)?;
