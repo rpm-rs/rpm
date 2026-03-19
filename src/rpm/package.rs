@@ -170,8 +170,8 @@ impl Package {
             let file_path = dest
                 .as_ref()
                 .join(file_entry.path.strip_prefix("/").unwrap_or(dest.as_ref()));
-            match file_entry.mode {
-                FileMode::Dir { .. } => {
+            match file_entry.mode.file_type() {
+                FileType::Dir => {
                     fs::create_dir_all(&file_path)?;
                     #[cfg(unix)]
                     {
@@ -180,7 +180,7 @@ impl Package {
                         fs::set_permissions(&file_path, perms)?;
                     }
                 }
-                FileMode::Regular { .. } => {
+                FileType::Regular => {
                     let mut f = fs::File::create(&file_path)?;
                     io::copy(&mut entry_reader, &mut f)?;
                     #[cfg(unix)]
@@ -190,14 +190,15 @@ impl Package {
                         f.set_permissions(perms)?;
                     }
                 }
-                FileMode::SymbolicLink { .. } => {
+                FileType::SymbolicLink => {
                     // broken symlinks (common for debuginfo handling) are perceived as not existing by "exists()"
                     if file_path.exists() || file_path.symlink_metadata().is_ok() {
                         fs::remove_file(&file_path)?;
                     }
                     symlink(&file_entry.linkto, &file_path)?;
                 }
-                _ => unreachable!("Encountered an unknown or invalid FileMode"),
+                // Skip file types we don't handle (e.g. device nodes, FIFOs, sockets)
+                _ => {}
             }
             entry_reader.finish()?;
         }

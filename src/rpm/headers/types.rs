@@ -64,144 +64,89 @@ pub struct PackageFileEntry {
     pub(crate) bulk_added: bool,
 }
 
+/// The type of a file entry in an RPM package.
 #[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-pub enum FileMode {
-    // It does not really matter if we use u16 or i16 since all we care about
-    // is the bit representation which is the same for both.
-    Dir { permissions: u16 },
-    Regular { permissions: u16 },
-    SymbolicLink { permissions: u16 },
-    // For "Invalid" we use a larger integer since it is possible to create an invalid
-    // FileMode by providing an overflowing integer.
-    Invalid { raw_mode: i32, reason: &'static str },
+pub enum FileType {
+    Regular,
+    Dir,
+    SymbolicLink,
+    /// A file type not directly handled by this library (e.g. block/char devices, FIFOs, sockets).
+    Other,
 }
 
-// there are more file types but in the context of RPM, only regular and directory and symbolic file should be relevant.
-// See <https://man7.org/linux/man-pages/man7/inode.7.html> section "The file type and mode"
+/// A file mode combining file type and permission bits, as stored in RPM headers.
+///
+/// See <https://man7.org/linux/man-pages/man7/inode.7.html> section "The file type and mode"
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct FileMode(u16);
+
 const FILE_TYPE_BIT_MASK: u16 = 0o170000; // bit representation = "1111000000000000"
 const PERMISSIONS_BIT_MASK: u16 = 0o7777; // bit representation = "0000111111111111"
 pub const REGULAR_FILE_TYPE: u16 = 0o100000; //  bit representation = "1000000000000000"
 pub const DIR_FILE_TYPE: u16 = 0o040000; //      bit representation = "0100000000000000"
 pub const SYMBOLIC_LINK_FILE_TYPE: u16 = 0o120000; // bit representation = "1010000000000000"
 
-// @todo: <https://github.com/rpm-rs/rpm/issues/52>
 impl From<u16> for FileMode {
     fn from(raw_mode: u16) -> Self {
-        // example
-        //  1111000000000000  (0o170000)  <- file type bit mask
-        // &1000000111101101  (0o100755)  <- regular executable file
-        // -----------------------------
-        //  1000000000000000  (0o100000)  <- type for regular files
-        //
-        // we effectively extract the file type bits with an AND operation.
-        // Here are two links for a quick refresh:
-        // <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Bitwise_AND>
-        // <https://en.wikipedia.org/wiki/Bitwise_operation#AND>
-        let file_type = raw_mode & FILE_TYPE_BIT_MASK;
-        let permissions = raw_mode & PERMISSIONS_BIT_MASK;
-        match file_type {
-            DIR_FILE_TYPE => FileMode::Dir { permissions },
-            REGULAR_FILE_TYPE => FileMode::Regular { permissions },
-            SYMBOLIC_LINK_FILE_TYPE => FileMode::SymbolicLink { permissions },
-            _ => FileMode::Invalid {
-                raw_mode: raw_mode as i32,
-                reason: "unknown file type",
-            },
-        }
+        FileMode(raw_mode)
     }
 }
 
-impl From<i32> for FileMode {
-    fn from(raw_mode: i32) -> Self {
-        // since we ultimately only deal with 16bit integers
-        // we need to check if a safe conversion to 16bit is doable.
+impl TryFrom<i32> for FileMode {
+    type Error = errors::Error;
+
+    fn try_from(raw_mode: i32) -> Result<Self, Self::Error> {
         if raw_mode > u16::MAX.into() || raw_mode < i16::MIN.into() {
-            FileMode::Invalid {
+            Err(errors::Error::InvalidFileMode {
                 raw_mode,
                 reason: "provided integer is out of 16bit bounds",
-            }
+            })
         } else {
-            FileMode::from(raw_mode as u16)
+            Ok(FileMode(raw_mode as u16))
         }
     }
 }
 
 impl FileMode {
-    /// Create a new Regular instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
+    /// Create a regular file mode. `permissions` will be masked to 0o7777.
     pub fn regular(permissions: u16) -> Self {
-        FileMode::Regular {
-            permissions: permissions & PERMISSIONS_BIT_MASK,
-        }
+        FileMode(REGULAR_FILE_TYPE | (permissions & PERMISSIONS_BIT_MASK))
     }
 
-    /// Create a new Dir instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
+    /// Create a directory mode. `permissions` will be masked to 0o7777.
     pub fn dir(permissions: u16) -> Self {
-        FileMode::Dir {
-            permissions: permissions & PERMISSIONS_BIT_MASK,
-        }
+        FileMode(DIR_FILE_TYPE | (permissions & PERMISSIONS_BIT_MASK))
     }
 
-    /// Create a new Symbolic link instance. `permissions` can be between 0 and 0o7777. Values greater will be set to 0o7777.
+    /// Create a symbolic link mode. `permissions` will be masked to 0o7777.
     pub fn symbolic_link(permissions: u16) -> Self {
-        FileMode::SymbolicLink {
-            permissions: permissions & PERMISSIONS_BIT_MASK,
-        }
+        FileMode(SYMBOLIC_LINK_FILE_TYPE | (permissions & PERMISSIONS_BIT_MASK))
     }
 
-    /// Usually this should be done with TryFrom, but since we already have a `From` implementation,
-    /// we run into this issue: <https://github.com/rust-lang/rust/issues/50133>
-    pub fn try_from_raw(raw: i32) -> Result<Self, errors::Error> {
-        let mode: FileMode = raw.into();
-        mode.to_result()
-    }
-
-    /// Turns this FileMode into a result. If the mode is Invalid, it will be converted into
-    /// Error::InvalidFileMode. Otherwise it is Ok(self).
-    pub fn to_result(self) -> Result<Self, errors::Error> {
-        match self {
-            Self::Invalid { raw_mode, reason } => {
-                Err(errors::Error::InvalidFileMode { raw_mode, reason })
-            }
-            _ => Ok(self),
-        }
-    }
-
-    /// Returns the complete file mode (type and permissions)
+    /// Returns the complete raw mode (type + permissions bits).
     pub fn raw_mode(&self) -> u16 {
-        match self {
-            Self::Dir { permissions }
-            | Self::Regular { permissions }
-            | Self::SymbolicLink { permissions } => *permissions | self.file_type(),
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16,
+        self.0
+    }
+
+    /// Returns the [`FileType`] of this mode.
+    pub fn file_type(&self) -> FileType {
+        match self.0 & FILE_TYPE_BIT_MASK {
+            DIR_FILE_TYPE => FileType::Dir,
+            REGULAR_FILE_TYPE => FileType::Regular,
+            SYMBOLIC_LINK_FILE_TYPE => FileType::SymbolicLink,
+            _ => FileType::Other,
         }
     }
 
-    pub fn file_type(&self) -> u16 {
-        match self {
-            Self::Dir { permissions: _ } => DIR_FILE_TYPE,
-            Self::Regular { permissions: _ } => REGULAR_FILE_TYPE,
-            Self::SymbolicLink { permissions: _ } => SYMBOLIC_LINK_FILE_TYPE,
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16 & FILE_TYPE_BIT_MASK,
-        }
+    /// Returns the raw file type bits from the mode.
+    pub fn raw_file_type(&self) -> u16 {
+        self.0 & FILE_TYPE_BIT_MASK
     }
 
+    /// Returns the permission bits (including setuid/setgid/sticky).
     pub fn permissions(&self) -> u16 {
-        match self {
-            Self::Dir { permissions }
-            | Self::Regular { permissions }
-            | Self::SymbolicLink { permissions } => *permissions,
-            Self::Invalid {
-                raw_mode,
-                reason: _,
-            } => *raw_mode as u16 & PERMISSIONS_BIT_MASK,
-        }
+        self.0 & PERMISSIONS_BIT_MASK
     }
 }
 
@@ -405,19 +350,8 @@ impl FileOptionsBuilder {
     ///
     /// See: `%attr` from specfile syntax
     pub fn permissions(mut self, permissions: u16) -> Self {
-        let masked = permissions & PERMISSIONS_BIT_MASK;
-        self.inner.mode = match self.inner.mode {
-            FileMode::Dir { .. } => FileMode::Dir {
-                permissions: masked,
-            },
-            FileMode::Regular { .. } => FileMode::Regular {
-                permissions: masked,
-            },
-            FileMode::SymbolicLink { .. } => FileMode::SymbolicLink {
-                permissions: masked,
-            },
-            other => other,
-        };
+        self.inner.mode =
+            FileMode(self.inner.mode.raw_file_type() | (permissions & PERMISSIONS_BIT_MASK));
         self.inner.inherit_permissions = false;
         self
     }
@@ -821,94 +755,53 @@ mod test {
             assert_eq!(expected, result.permissions());
         }
 
-        let test_table = vec![
+        // test TryFrom<i32>
+        let try_from_table: Vec<(i32, Result<FileMode, &str>)> = vec![
             (0o10_0664, Ok(FileMode::regular(0o664))),
             (0o04_0665, Ok(FileMode::dir(0o665))),
             // test sticky bit
             (0o10_1664, Ok(FileMode::regular(0o1664))),
             (0o12_0664, Ok(FileMode::symbolic_link(0o0664))),
             (0o12_1664, Ok(FileMode::symbolic_link(0o1664))),
-            (
-                0o664,
-                Err(errors::Error::InvalidFileMode {
-                    raw_mode: 0o664,
-                    reason: "unknown file type",
-                }),
-            ),
-            (
-                0o27_1664,
-                Err(errors::Error::InvalidFileMode {
-                    raw_mode: 0o27_1664,
-                    reason: "provided integer is out of 16bit bounds",
-                }),
-            ),
+            // unknown file type maps to Other
+            (0o664, Ok(FileMode(0o664))),
+            // out of 16bit bounds is an error
+            (0o27_1664, Err("provided integer is out of 16bit bounds")),
         ];
-
-        // test try_from_raw
-        for (testant, expected) in test_table {
-            let result = FileMode::try_from_raw(testant);
+        for (raw_mode, expected) in try_from_table {
+            let result = FileMode::try_from(raw_mode);
             match (&expected, &result) {
-                (Ok(expected), Ok(actual)) => {
-                    assert_eq!(expected, actual);
+                (Ok(expected), Ok(actual)) => assert_eq!(expected, actual),
+                (Err(expected_reason), Err(errors::Error::InvalidFileMode { reason, .. })) => {
+                    assert_eq!(expected_reason, reason);
                 }
-                (Err(expected), Err(actual)) => {
-                    if let errors::Error::InvalidFileMode {
-                        raw_mode: actual_raw_mode,
-                        reason: actual_reason,
-                    } = actual
-                    {
-                        if let errors::Error::InvalidFileMode {
-                            raw_mode: expected_raw_mode,
-                            reason: expected_reason,
-                        } = expected
-                        {
-                            assert_eq!(expected_raw_mode, actual_raw_mode);
-                            assert_eq!(expected_reason, actual_reason);
-                        } else {
-                            unreachable!();
-                        }
-                    } else {
-                        panic!("invalid error type");
-                    }
-                }
-                _ => panic!("a and b not equal,{:?} vs {:?}", expected, result),
+                _ => panic!(
+                    "mismatched result for {:#o}: expected {:?}, got {:?}",
+                    raw_mode, expected, result
+                ),
             }
         }
 
-        // test into methods
-        let test_table = vec![
-            (0o10_0755, FileMode::regular(0o0755), REGULAR_FILE_TYPE),
-            (0o10_1755, FileMode::regular(0o1755), REGULAR_FILE_TYPE),
-            (0o04_0755, FileMode::dir(0o0755), DIR_FILE_TYPE),
+        // test From<u16> and file_type()
+        let from_table: Vec<(i32, FileMode, FileType)> = vec![
+            (0o10_0755, FileMode::regular(0o0755), FileType::Regular),
+            (0o10_1755, FileMode::regular(0o1755), FileType::Regular),
+            (0o04_0755, FileMode::dir(0o0755), FileType::Dir),
             (
                 0o12_0755,
                 FileMode::symbolic_link(0o0755),
-                SYMBOLIC_LINK_FILE_TYPE,
+                FileType::SymbolicLink,
             ),
             (
                 0o12_1755,
                 FileMode::symbolic_link(0o1755),
-                SYMBOLIC_LINK_FILE_TYPE,
+                FileType::SymbolicLink,
             ),
-            (
-                0o20_0755,
-                FileMode::Invalid {
-                    raw_mode: 0o20_0755,
-                    reason: "provided integer is out of 16bit bounds",
-                },
-                0,
-            ),
-            (
-                0o0755,
-                FileMode::Invalid {
-                    raw_mode: 0o0755,
-                    reason: "unknown file type",
-                },
-                0,
-            ),
+            // unknown file type via From<u16>
+            (0o0755, FileMode(0o0755), FileType::Other),
         ];
-        for (raw_mode, expected_mode, expected_type) in test_table {
-            let mode = FileMode::from(raw_mode);
+        for (raw_mode, expected_mode, expected_type) in from_table {
+            let mode = FileMode::from(raw_mode as u16);
             assert_eq!(expected_mode, mode);
             assert_eq!(raw_mode as u16, mode.raw_mode());
             assert_eq!(expected_type, mode.file_type());

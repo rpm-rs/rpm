@@ -284,24 +284,24 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
         match entry.path.to_str().unwrap() {
             "/etc/test/config.toml" => {
                 assert!(entry.flags.contains(FileFlags::CONFIG));
-                assert!(matches!(entry.mode, FileMode::Regular { .. }));
+                assert_eq!(entry.mode.file_type(), FileType::Regular);
                 assert_eq!(entry.mode.permissions(), 0o644);
             }
             "/usr/bin/test_link" => {
-                assert!(matches!(entry.mode, FileMode::SymbolicLink { .. }));
+                assert_eq!(entry.mode.file_type(), FileType::SymbolicLink);
                 assert_eq!(&entry.linkto, "/usr/bin/test_target");
             }
             "/var/log/testapp" => {
-                assert!(matches!(entry.mode, FileMode::Dir { .. }));
+                assert_eq!(entry.mode.file_type(), FileType::Dir);
                 assert_eq!(entry.mode.permissions(), 0o750);
             }
             "/var/log/testapp/app.log" => {
                 assert!(entry.flags.contains(FileFlags::GHOST));
-                assert!(matches!(entry.mode, FileMode::Regular { .. }));
+                assert_eq!(entry.mode.file_type(), FileType::Regular);
             }
             "/var/run/testapp" => {
                 assert!(entry.flags.contains(FileFlags::GHOST));
-                assert!(matches!(entry.mode, FileMode::Dir { .. }));
+                assert_eq!(entry.mode.file_type(), FileType::Dir);
             }
             _ => {}
         }
@@ -337,12 +337,12 @@ fn test_with_dir_contents_basic() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Directory entry
-    assert!(matches!(entries[0].mode, FileMode::Dir { .. }));
+    assert_eq!(entries[0].mode.file_type(), FileType::Dir);
     assert_eq!(entries[0].size, 0);
 
     // Files should be regular
-    assert!(matches!(entries[1].mode, FileMode::Regular { .. }));
-    assert!(matches!(entries[2].mode, FileMode::Regular { .. }));
+    assert_eq!(entries[1].mode.file_type(), FileType::Regular);
+    assert_eq!(entries[2].mode.file_type(), FileType::Regular);
 
     Ok(())
 }
@@ -477,7 +477,7 @@ fn test_with_dir_contents_strips_flags_from_dirs() -> Result<(), Box<dyn std::er
         .iter()
         .find(|e| e.path == Path::new("/usr/lib/mymodule"))
         .expect("directory entry should be present");
-    assert!(matches!(dir_entry.mode, FileMode::Dir { .. }));
+    assert_eq!(dir_entry.mode.file_type(), FileType::Dir);
     assert!(
         !dir_entry.flags.contains(FileFlags::CONFIG),
         "CONFIG should be stripped from directory entries"
