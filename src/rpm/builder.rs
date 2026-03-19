@@ -406,7 +406,7 @@ impl PackageBuilder {
         #[allow(unused_mut)]
         let mut options = options.into();
 
-        if !matches!(options.mode, FileMode::Regular { .. }) {
+        if options.mode.file_type() != FileType::Regular {
             return Err(Error::InvalidFileOptions {
                 method: "with_file",
                 reason: "expected regular file mode (use FileOptions::new() or .mode() with a regular file mode); use with_dir() for directories or with_symlink() for symlinks",
@@ -421,7 +421,8 @@ impl PackageBuilder {
 
         #[cfg(unix)]
         if options.inherit_permissions {
-            options.mode = FileMode::from(metadata.permissions().mode() as i32);
+            options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
+                .expect("OS file permissions should always be a valid mode");
         }
         let modified_at = metadata.modified()?.try_into()?;
         self.add_data(
@@ -466,7 +467,7 @@ impl PackageBuilder {
     ) -> Result<Self, Error> {
         let options = options.into();
 
-        if !matches!(options.mode, FileMode::Regular { .. }) {
+        if options.mode.file_type() != FileType::Regular {
             return Err(Error::InvalidFileOptions {
                 method: "with_file_contents",
                 reason: "expected regular file mode (use FileOptions::new()); use with_dir() for directories or with_symlink() for symlinks",
@@ -510,7 +511,7 @@ impl PackageBuilder {
     pub fn with_dir(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
         let options = options.into();
 
-        if !matches!(options.mode, FileMode::Dir { .. }) {
+        if options.mode.file_type() != FileType::Dir {
             return Err(Error::InvalidFileOptions {
                 method: "with_dir",
                 reason: "expected directory file mode (use FileOptions::dir())",
@@ -546,7 +547,7 @@ impl PackageBuilder {
     pub fn with_symlink(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
         let options = options.into();
 
-        if !matches!(options.mode, FileMode::SymbolicLink { .. }) {
+        if options.mode.file_type() != FileType::SymbolicLink {
             return Err(Error::InvalidFileOptions {
                 method: "with_symlink",
                 reason: "expected symbolic link file mode (use FileOptions::symlink())",
@@ -673,7 +674,8 @@ impl PackageBuilder {
         #[cfg(unix)]
         if dir_options.inherit_permissions {
             let dir_metadata = source_dir.symlink_metadata()?;
-            dir_options.mode = FileMode::from(dir_metadata.permissions().mode() as i32);
+            dir_options.mode = FileMode::try_from(dir_metadata.permissions().mode() as i32)
+                .expect("OS file permissions should always be a valid mode");
         }
         self.add_data(
             ContentSource::None,
@@ -709,7 +711,8 @@ impl PackageBuilder {
 
                 #[cfg(unix)]
                 if options.inherit_permissions {
-                    options.mode = FileMode::from(metadata.permissions().mode() as i32);
+                    options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
+                        .expect("OS file permissions should always be a valid mode");
                 }
 
                 self.add_data(
@@ -773,7 +776,7 @@ impl PackageBuilder {
 
         // Directories cannot carry %config, %doc, or %license attributes in RPM.
         // These flags are silently stripped rather than rejected, as this matches RPM behavior.
-        if matches!(options.mode, FileMode::Dir { .. }) {
+        if options.mode.file_type() == FileType::Dir {
             options
                 .flag
                 .remove(FileFlags::CONFIG | FileFlags::DOC | FileFlags::LICENSE);
@@ -1178,7 +1181,6 @@ impl PackageBuilder {
                 groups_to_create.insert(entry.group.clone());
             }
             let is_ghost = entry.flags.contains(FileFlags::GHOST);
-            let is_regular = matches!(entry.mode, FileMode::Regular { .. });
             // Ghost files should report size 0 in headers since they have no payload content
             let file_size = entry.source.size()?;
             file_sizes.push(file_size);
@@ -1233,7 +1235,7 @@ impl PackageBuilder {
             // On a real filesystem, directories always have at least 2 hard links:
             // one from the parent and one from their own "." self-reference.
             // RPM follows this convention in the nlink field.
-            let nlink: u32 = if matches!(entry.mode, FileMode::Dir { .. }) {
+            let nlink: u32 = if entry.mode.file_type() == FileType::Dir {
                 2
             } else {
                 1
@@ -1252,7 +1254,7 @@ impl PackageBuilder {
                 payload::write_stripped_cpio(&mut archive, file_index as u32, entry.source.size()?)
             };
             // Only regular files have digests; dirs and symlinks get empty strings
-            if is_regular {
+            if entry.mode.file_type() == FileType::Regular {
                 let mut hash_writer = ChecksummingWriter::new(&mut writer, &[HashKind::Sha256]);
                 io::copy(&mut entry.source.try_into_bufread()?, &mut hash_writer)?;
                 let hash_value_map = hash_writer.into_digests().0;

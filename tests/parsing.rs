@@ -132,7 +132,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //     vec![
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs"),
-    //             mode: FileMode::Dir { permissions: 0o755 },
+    //             mode: FileMode::dir(0o755),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -147,7 +147,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/artifact"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -166,7 +166,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/config"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -185,7 +185,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/config_noreplace"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -223,7 +223,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/dir"),
-    //             mode: FileMode::Dir { permissions: 0o755 },
+    //             mode: FileMode::dir(0o755),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -238,7 +238,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/dir/normal"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -257,7 +257,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/doc"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -314,7 +314,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/example-binary"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -352,7 +352,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/ghost"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -367,7 +367,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/license"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -386,7 +386,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/missingok"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -405,7 +405,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/normal"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -424,7 +424,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/readme"),
-    //             mode: FileMode::Regular { permissions: 0o644 },
+    //             mode: FileMode::regular(0o644),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -458,7 +458,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     //         },
     //         FileEntry {
     //             path: PathBuf::from("/opt/rpm-file-attrs/symlink_dir"),
-    //             mode: FileMode::Dir { permissions: 0o755 },
+    //             mode: FileMode::dir(0o755),
     //             ownership: FileOwnership {
     //                 user: "root".to_owned(),
     //                 group: "root".to_owned(),
@@ -656,7 +656,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
         vec![
             FileEntry {
                 path: PathBuf::from("/etc/rpm-basic/example_config.toml"),
-                mode: FileMode::Regular { permissions: 0o644 },
+                mode: FileMode::regular(0o644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -675,9 +675,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/bin/rpm-basic"),
-                mode: FileMode::Regular {
-                    permissions: 0o0644
-                },
+                mode: FileMode::regular(0o0644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -696,9 +694,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/lib/rpm-basic"),
-                mode: FileMode::Dir {
-                    permissions: 0o0755
-                },
+                mode: FileMode::dir(0o0755),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -713,9 +709,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/lib/rpm-basic/module"),
-                mode: FileMode::Dir {
-                    permissions: 0o0755
-                },
+                mode: FileMode::dir(0o0755),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -730,9 +724,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/lib/rpm-basic/module/__init__.py"),
-                mode: FileMode::Regular {
-                    permissions: 0o0644
-                },
+                mode: FileMode::regular(0o0644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -751,9 +743,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/lib/rpm-basic/module/hello.py"),
-                mode: FileMode::Regular {
-                    permissions: 0o0644
-                },
+                mode: FileMode::regular(0o0644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -772,7 +762,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/share/doc/rpm-basic"),
-                mode: FileMode::Dir { permissions: 0o755 },
+                mode: FileMode::dir(0o755),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -787,7 +777,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/share/doc/rpm-basic/README"),
-                mode: FileMode::Regular { permissions: 0o644 },
+                mode: FileMode::regular(0o644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -806,7 +796,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/usr/share/rpm-basic/example_data.xml"),
-                mode: FileMode::Regular { permissions: 0o644 },
+                mode: FileMode::regular(0o644),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -825,7 +815,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/var/log/rpm-basic/basic.log"),
-                mode: FileMode::Regular { permissions: 0 },
+                mode: FileMode::regular(0),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -840,9 +830,7 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             },
             FileEntry {
                 path: PathBuf::from("/var/tmp/rpm-basic"),
-                mode: FileMode::Dir {
-                    permissions: 0o0755
-                },
+                mode: FileMode::dir(0o0755),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned()
@@ -1032,7 +1020,7 @@ fn test_empty_source_package() -> Result<(), Box<dyn std::error::Error>> {
         metadata.get_file_entries().unwrap(),
         vec![FileEntry {
             path: PathBuf::from("rpm-empty.spec"),
-            mode: FileMode::Regular { permissions: 0o644 },
+            mode: FileMode::regular(0o644),
             ownership: FileOwnership {
                 user: "root".to_owned(),
                 group: "root".to_owned()
