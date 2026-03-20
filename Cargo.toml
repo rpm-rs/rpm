@@ -61,9 +61,12 @@ zeroize = "1"
 env_logger = "0.11"
 serial_test = "3.2"
 pretty_assertions = "1.4"
+rand = "0.8"
+rsa = "0.9"
 gethostname = "1.0"
 hex-literal = "1.0"
 tempfile = "3.21.0"
+clap = { version = "4.6.0", features = ["derive"] }
 
 [features]
 default = [
@@ -85,3 +88,7 @@ signature-meta = []
 test-with-podman = ["signature-pgp"]
 
 zstdmt = ["zstd-compression", "zstd/zstdmt"]
+
+[[example]]
+name = "hsm-signing"
+required-features = ["signature-pgp"]
