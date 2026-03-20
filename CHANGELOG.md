@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Package::signature_key_fingerprints()`
 - The ability to mark files as `%missingok`
+- Support for singing and verifying packages that use OpenPGP v6 signatures.
 
 ### Fixed
 
