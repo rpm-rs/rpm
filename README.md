@@ -63,6 +63,21 @@ let pkg = rpm::Package::open("./with_signature.rpm")?;
 pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 ```
 
+#### Sign with a specific subkey
+
+```rust
+use rpm::signature::pgp::Signer;
+
+let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
+let subkey_fingerprint = hex::decode("1F9A6321E1C5B4600BC2F6D8130FD47580C5CC7701DD8BE59983C1F79325EBF9")?;
+
+let signer = Signer::load_from_asc_bytes(&raw_secret_key)?
+    .with_signing_key(&subkey_fingerprint)?;
+
+let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+pkg.sign(signer)?;
+```
+
 #### Build new package
 
 ```rust
