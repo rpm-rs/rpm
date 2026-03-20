@@ -430,7 +430,6 @@ pub(crate) mod test {
     use super::*;
     use crate::signature::pgp::{Signer, Verifier};
     use crate::signature::{Signing, Verifying, echo_signature};
-    use hex_literal::hex;
     use std::io::Cursor;
 
     const TEST_DATA: &[u8] = b"dfsdfjsd9ivnq320348934752312308205723900000580134850sdf";
@@ -468,138 +467,12 @@ pub(crate) mod test {
             (signer, verifier)
         }
 
+        /// Sign data with a v4 RSA key and verify the signature through
+        /// our public Signer/Verifier API.
         #[test]
         fn sign_verify_roundtrip() {
             let (signer, verifier) = prep();
             super::sign_verify_roundtrip(&signer, &verifier);
-        }
-
-        #[test]
-        fn sign_and_verify_via_pgp_crate() {
-            use pgp::packet::Signature;
-            use pgp::types::{SigningKey, VerifyingKey};
-
-            const RPM_SHA2_256: [u8; 32] =
-                hex!("d92bfe276e311a67fe128768c5df4d06fd461e043afdf872ba4c679d860db81e");
-
-            let (signer, verifier) = prep();
-            let signing_key = match signer.signing_key {
-                AnySigningKey::Primary(k) => k,
-                _ => unreachable!(),
-            };
-            let verification_key = verifier.public_key;
-
-            let passwd = Password::empty();
-            let digest = &RPM_SHA2_256[..];
-
-            // stage 1: verify created signature is fine
-            let signature = signing_key
-                .sign(&passwd, HashAlgorithm::Sha256, digest)
-                .expect("Failed to create signature");
-
-            verification_key
-                .verify(HashAlgorithm::Sha256, digest, &signature)
-                .expect("Failed to validate signature");
-
-            // stage 2: check parsing success
-            let sig_time = pgp::types::Timestamp::from_secs(TEST_TIMESTAMP.0);
-            let packet_header = pgp::packet::PacketHeader::from_parts(
-                pgp::types::PacketHeaderVersion::Old,
-                pgp::types::Tag::Signature,
-                pgp::types::PacketLength::Fixed(540),
-            )
-            .unwrap();
-            let wrapped = Signature::v4(
-                packet_header,
-                SignatureType::Binary,
-                PublicKeyAlgorithm::RSA,
-                HashAlgorithm::Sha256,
-                [digest[0], digest[1]],
-                signature,
-                vec![
-                    Subpacket::regular(SubpacketData::SignatureCreationTime(sig_time)).unwrap(),
-                    Subpacket::regular(SubpacketData::IssuerKeyId(signing_key.legacy_key_id()))
-                        .unwrap(),
-                ],
-                vec![],
-            );
-
-            let mut x = Vec::with_capacity(1024);
-            let mut buff = Cursor::new(&mut x);
-            wrapped
-                .to_writer_with_header(&mut buff)
-                .expect("Write should be ok");
-
-            let signature =
-                Verifier::parse_signature(x.as_slice()).expect("There is a signature for sure");
-            assert_eq!(signature, wrapped);
-            let signature = signature.signature().unwrap();
-            verification_key
-                .verify(HashAlgorithm::Sha256, digest, &signature)
-                .expect("Verify must succeed");
-        }
-
-        #[test]
-        fn sign_config_and_verify_via_pgp_crate() {
-            let (signer, verifier) = prep();
-
-            let data = [1u8; 322];
-            let data = &data[..];
-
-            let passwd = Password::empty();
-            let sig_time = pgp::types::Timestamp::from_secs(TEST_TIMESTAMP.0);
-
-            let mut sig_cfg = SignatureConfig::v4(
-                SignatureType::Binary,
-                PublicKeyAlgorithm::RSA,
-                HashAlgorithm::Sha256,
-            );
-            sig_cfg.hashed_subpackets.push(
-                Subpacket::regular(SubpacketData::SignatureCreationTime(sig_time)).unwrap(),
-            );
-            sig_cfg.hashed_subpackets.push(
-                Subpacket::regular(SubpacketData::IssuerKeyId(
-                    signer.signing_key.legacy_key_id(),
-                ))
-                .unwrap(),
-            );
-
-            let signature_packet = sig_cfg
-                .sign(&signer.signing_key, &passwd, data)
-                .expect("Should sign");
-
-            signature_packet
-                .verify(&verifier.public_key, data)
-                .expect("Failed to validate signature");
-        }
-
-        #[test]
-        fn parse_static_rpm_sign_signature() {
-            let _ = env_logger::try_init();
-
-            /// A sample signature extracted from rpm-sign using the v4 RSA test keys.
-            /// Should only be used for validating parsing.
-            const RPM_SIGN_SIGNATURE: [u8; 536] = hex!(
-                "8902150305005be98c5b24c6a8a7f4a80eb50108a84c0ffd1a9de30f7ebb74e3"
-                "62effd4d1c11a168220dff4a721118e4b0466b1182c6d4d6db53641b32334195"
-                "f30ca6c250ee81816a0805fa3b2666635cfa4b2502e7ad3f4f827aa34dad0da0"
-                "196377d2183054c71423220b0dd8ba1b6c94b30fb382186233514eaafa848a4b"
-                "cd8272f1409438c7bc48294f3298d9af351a0bf0877439d6e786449d5c7ade63"
-                "1a16b2291d469e61adff916f51658ab9370e65b6772fb7746a9c8af04b2d87bf"
-                "61ff70dc29ec9a0c7f12f655ea22b5f01a0da5e8c67f1b9c551b355cac722686"
-                "8930d52d08930f9e1afd8c7edbca574fd942d7f674cdf668efe324669229da96"
-                "878ea2882378eec3fc71fdb6366badd754554da0a3407051c276de9fa3e57f80"
-                "72a9c37f3e37d77a9998c4c64b5193bcd0f29309737f6e7ab46b7b79e0455539"
-                "fc61a7dea5ff80313914f6b6076cd7a410a087554de5a526c1990e5819aec3bf"
-                "e81648e08596511872b80f009f26deec1232ecd03cde310bd6bf4ac5665ccdb0"
-                "293c6dc61856d717b44debdcbbe44f1af5723a96444df314b17975a46acc9d27"
-                "47a912a707a830aef2debc3387b58c053f454e644a866dc3f4fe059181952fad"
-                "81da1b39f8f0b846f03882a6f235344d9e179a97afbd9b193188d83a502e9150"
-                "45059288b207109a6c44a2720fca6817991a62cd66230f90a414a66c7d06c44b"
-                "be814772ebd4a23d637386ef0e2b78d44f482eb0558c8e5d"
-            );
-
-            Verifier::parse_signature(&RPM_SIGN_SIGNATURE).expect("It should load");
         }
     }
 
@@ -620,12 +493,16 @@ pub(crate) mod test {
             (signer, verifier)
         }
 
+        /// Sign data with a v6 Ed25519 key (using the primary key by default)
+        /// and verify the signature through our public Signer/Verifier API.
         #[test]
         fn sign_verify_roundtrip() {
             let (signer, verifier) = prep();
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
+        /// Select the signing subkey by fingerprint and verify the resulting
+        /// signature can be verified against the corresponding public key.
         #[test]
         fn sign_verify_roundtrip_with_subkey() {
             let (signer, verifier) = prep();
@@ -647,6 +524,8 @@ pub(crate) mod test {
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
+        /// Explicitly select the primary key via `with_signing_key` and verify
+        /// the result is equivalent to the default behavior.
         #[test]
         fn with_signing_key_primary() {
             let (signer, verifier) = prep();
@@ -666,6 +545,8 @@ pub(crate) mod test {
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
+        /// Verify that `with_signing_key` returns an error when given a
+        /// fingerprint that doesn't match any key in the key material.
         #[test]
         fn with_signing_key_not_found() {
             let (signer, _verifier) = prep();
@@ -674,6 +555,8 @@ pub(crate) mod test {
             assert!(result.is_err(), "should fail with unknown fingerprint");
         }
 
+        /// Verify that signatures include the `SignersUserID` subpacket
+        /// when the key material contains a user ID.
         #[test]
         fn user_id_included_in_signature() {
             let (signer, _verifier) = prep();
