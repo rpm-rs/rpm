@@ -112,6 +112,16 @@ impl BuildConfig {
     }
 }
 
+/// Default ownership and permissions applied to file entries when not explicitly overridden.
+///
+/// Similar to `%defattr` in RPM spec files.
+#[derive(Clone, Debug, Default)]
+pub struct FileDefaults {
+    pub user: Option<String>,
+    pub group: Option<String>,
+    pub permissions: Option<u16>,
+}
+
 /// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
 pub struct PackageBuilder {
@@ -167,6 +177,11 @@ pub struct PackageBuilder {
 
     source_date: Option<Timestamp>,
     build_host: Option<String>,
+
+    /// Default ownership and permissions for regular file entries (like `%defattr` in spec files).
+    default_file_attrs: FileDefaults,
+    /// Default ownership and permissions for directory entries (like the dirmode in `%defattr`).
+    default_dir_attrs: FileDefaults,
 }
 
 impl PackageBuilder {
@@ -337,6 +352,61 @@ impl PackageBuilder {
         self
     }
 
+    /// Set default ownership and permissions for regular file entries.
+    ///
+    /// These defaults are applied to any file added via [`with_file()`](Self::with_file),
+    /// [`with_file_contents()`](Self::with_file_contents), or [`with_dir_contents()`](Self::with_dir_contents)
+    /// where the user/group/permissions have not been explicitly set on the [`FileOptions`].
+    ///
+    /// Pass `None` for any field to leave its current default unchanged (like `-` in `%defattr`).
+    ///
+    /// Can be called multiple times — each call changes the defaults for subsequent additions,
+    /// similar to positional `%defattr` in RPM spec files.
+    pub fn default_file_attrs(
+        mut self,
+        permissions: Option<u16>,
+        user: Option<String>,
+        group: Option<String>,
+    ) -> Self {
+        if let Some(p) = permissions {
+            self.default_file_attrs.permissions = Some(p);
+        }
+        if let Some(u) = user {
+            self.default_file_attrs.user = Some(u);
+        }
+        if let Some(g) = group {
+            self.default_file_attrs.group = Some(g);
+        }
+        self
+    }
+
+    /// Set default ownership and permissions for directory entries.
+    ///
+    /// These defaults are applied to any directory added via [`with_dir()`](Self::with_dir)
+    /// or [`with_dir_contents()`](Self::with_dir_contents) where the user/group/permissions
+    /// have not been explicitly set on the [`FileOptions`].
+    ///
+    /// Pass `None` for any field to leave its current default unchanged (like `-` in `%defattr`).
+    ///
+    /// Can be called multiple times — each call changes the defaults for subsequent additions.
+    pub fn default_dir_attrs(
+        mut self,
+        permissions: Option<u16>,
+        user: Option<String>,
+        group: Option<String>,
+    ) -> Self {
+        if let Some(p) = permissions {
+            self.default_dir_attrs.permissions = Some(p);
+        }
+        if let Some(u) = user {
+            self.default_dir_attrs.user = Some(u);
+        }
+        if let Some(g) = group {
+            self.default_dir_attrs.group = Some(g);
+        }
+        self
+    }
+
     /// Add an entry to the package changelog.
     ///
     /// The a changelog entry consists of an entry name (which includes author, email followed by
@@ -420,9 +490,20 @@ impl PackageBuilder {
         }
 
         #[cfg(unix)]
-        if options.inherit_permissions {
-            options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
-                .expect("OS file permissions should always be a valid mode");
+        if options.use_default_permissions {
+            // Apply builder defaults if available, otherwise inherit from filesystem
+            let defaults = if options.mode.file_type() == FileType::Dir {
+                &self.default_dir_attrs
+            } else {
+                &self.default_file_attrs
+            };
+            if let Some(perms) = defaults.permissions {
+                options.mode.set_permissions(perms);
+            } else {
+                options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
+                    .expect("OS file permissions should always be a valid mode");
+            }
+            options.use_default_permissions = false;
         }
         let modified_at = metadata.modified()?.try_into()?;
         self.add_data(
@@ -672,10 +753,15 @@ impl PackageBuilder {
         #[allow(unused_mut)]
         let mut dir_options: FileOptions = customize(FileOptions::dir(dest_prefix)).into();
         #[cfg(unix)]
-        if dir_options.inherit_permissions {
-            let dir_metadata = source_dir.symlink_metadata()?;
-            dir_options.mode = FileMode::try_from(dir_metadata.permissions().mode() as i32)
-                .expect("OS file permissions should always be a valid mode");
+        if dir_options.use_default_permissions {
+            if let Some(perms) = self.default_dir_attrs.permissions {
+                dir_options.mode.set_permissions(perms);
+            } else {
+                let dir_metadata = source_dir.symlink_metadata()?;
+                dir_options.mode = FileMode::try_from(dir_metadata.permissions().mode() as i32)
+                    .expect("OS file permissions should always be a valid mode");
+            }
+            dir_options.use_default_permissions = false;
         }
         self.add_data(
             ContentSource::None,
@@ -710,9 +796,14 @@ impl PackageBuilder {
                 let mut options: FileOptions = customize(FileOptions::new(&dest)).into();
 
                 #[cfg(unix)]
-                if options.inherit_permissions {
-                    options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
-                        .expect("OS file permissions should always be a valid mode");
+                if options.use_default_permissions {
+                    if let Some(perms) = self.default_file_attrs.permissions {
+                        options.mode.set_permissions(perms);
+                    } else {
+                        options.mode = FileMode::try_from(metadata.permissions().mode() as i32)
+                            .expect("OS file permissions should always be a valid mode");
+                    }
+                    options.use_default_permissions = false;
                 }
 
                 self.add_data(
@@ -734,6 +825,25 @@ impl PackageBuilder {
         mut options: FileOptions,
         bulk: bool,
     ) -> Result<(), Error> {
+        // Apply builder-level defaults for ownership and permissions where
+        // the FileOptions hasn't been explicitly overridden.
+        let defaults = if options.mode.file_type() == FileType::Dir {
+            &self.default_dir_attrs
+        } else {
+            &self.default_file_attrs
+        };
+        if options.user.is_none() {
+            options.user = Some(defaults.user.clone().unwrap_or_else(|| "root".to_string()));
+        }
+        if options.group.is_none() {
+            options.group = Some(defaults.group.clone().unwrap_or_else(|| "root".to_string()));
+        }
+        if options.use_default_permissions
+            && let Some(perms) = defaults.permissions
+        {
+            options.mode.set_permissions(perms);
+        }
+
         let dest = options.destination;
         if !dest.starts_with("./") && !dest.starts_with('/') {
             return Err(Error::InvalidDestinationPath {
@@ -810,8 +920,8 @@ impl PackageBuilder {
             base_name: pb.file_name().unwrap().to_string_lossy().to_string(),
             source: content_source,
             flags: options.flag,
-            user: options.user,
-            group: options.group,
+            user: options.user.expect("user should be resolved by now"),
+            group: options.group.expect("group should be resolved by now"),
             mode: options.mode,
             link: options.symlink,
             modified_at,

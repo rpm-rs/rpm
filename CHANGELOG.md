@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PackageBuilder::default_file_attrs()` and `PackageBuilder::default_dir_attrs()` for setting default ownership and permissions, similar to `%defattr` in RPM spec files.
 - `Package::signature_key_fingerprints()`
 - The ability to mark files as `%missingok`
 - Support for singing and verifying packages that use OpenPGP v6 signatures.

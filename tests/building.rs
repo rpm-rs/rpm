@@ -494,3 +494,221 @@ fn test_with_dir_contents_strips_flags_from_dirs() -> Result<(), Box<dyn std::er
 
     Ok(())
 }
+
+/// Default file attrs should apply permissions, user, and group to files when not explicitly set.
+#[test]
+fn test_default_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_file_attrs(Some(0o755), Some("myuser".into()), Some("mygroup".into()))
+        .with_file(&cargo_file, FileOptions::new("/usr/bin/myapp"))?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/bin/myapp"))
+        .expect("file should be present");
+
+    assert_eq!(entry.mode.permissions(), 0o755);
+    assert_eq!(entry.ownership.user, "myuser");
+    assert_eq!(entry.ownership.group, "mygroup");
+
+    Ok(())
+}
+
+/// Default dir attrs should apply permissions, user, and group to directories when not explicitly set.
+#[test]
+fn test_default_dir_attrs() -> Result<(), Box<dyn std::error::Error>> {
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_dir_attrs(Some(0o700), Some("diruser".into()), Some("dirgroup".into()))
+        .with_dir(FileOptions::dir("/var/log/myapp"))?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/var/log/myapp"))
+        .expect("dir should be present");
+
+    assert_eq!(entry.mode.permissions(), 0o700);
+    assert_eq!(entry.ownership.user, "diruser");
+    assert_eq!(entry.ownership.group, "dirgroup");
+
+    Ok(())
+}
+
+/// File defaults and dir defaults should apply independently to the correct entry types.
+#[test]
+fn test_default_attrs_file_vs_dir() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_file_attrs(
+            Some(0o644),
+            Some("fileuser".into()),
+            Some("filegroup".into()),
+        )
+        .default_dir_attrs(Some(0o755), Some("diruser".into()), Some("dirgroup".into()))
+        .with_file(&cargo_file, FileOptions::new("/etc/myapp.conf"))?
+        .with_dir(FileOptions::dir("/var/log/myapp"))?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let file_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/etc/myapp.conf"))
+        .expect("file should be present");
+    assert_eq!(file_entry.mode.permissions(), 0o644);
+    assert_eq!(file_entry.ownership.user, "fileuser");
+    assert_eq!(file_entry.ownership.group, "filegroup");
+
+    let dir_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/var/log/myapp"))
+        .expect("dir should be present");
+    assert_eq!(dir_entry.mode.permissions(), 0o755);
+    assert_eq!(dir_entry.ownership.user, "diruser");
+    assert_eq!(dir_entry.ownership.group, "dirgroup");
+
+    Ok(())
+}
+
+/// Explicit FileOptions should override default attrs.
+#[test]
+fn test_default_attrs_explicit_override() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_file_attrs(
+            Some(0o755),
+            Some("defaultuser".into()),
+            Some("defaultgroup".into()),
+        )
+        .with_file(
+            &cargo_file,
+            FileOptions::new("/usr/bin/myapp")
+                .permissions(0o700)
+                .user("explicituser")
+                .group("explicitgroup"),
+        )?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/bin/myapp"))
+        .expect("file should be present");
+
+    assert_eq!(entry.mode.permissions(), 0o700);
+    assert_eq!(entry.ownership.user, "explicituser");
+    assert_eq!(entry.ownership.group, "explicitgroup");
+
+    Ok(())
+}
+
+/// Calling default_file_attrs multiple times should accumulate — later calls override earlier ones.
+#[test]
+fn test_default_attrs_called_twice() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_file_attrs(Some(0o644), Some("user1".into()), Some("group1".into()))
+        .default_file_attrs(Some(0o755), None, None)
+        .with_file(&cargo_file, FileOptions::new("/usr/bin/myapp"))?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/bin/myapp"))
+        .expect("file should be present");
+
+    // Second call overrode permissions; user/group were None so first call's values persist
+    assert_eq!(entry.mode.permissions(), 0o755);
+    assert_eq!(entry.ownership.user, "user1");
+    assert_eq!(entry.ownership.group, "group1");
+
+    Ok(())
+}
+
+/// None fields in default attrs should leave the default (root) unchanged.
+#[test]
+fn test_default_attrs_none_fields() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .default_file_attrs(None, Some("myuser".into()), None)
+        .with_file(&cargo_file, FileOptions::new("/usr/bin/myapp"))?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/bin/myapp"))
+        .expect("file should be present");
+
+    assert_eq!(entry.ownership.user, "myuser");
+    assert_eq!(entry.ownership.group, "root");
+
+    Ok(())
+}
+
+/// Default attrs should apply to files added via `with_dir_contents`.
+#[test]
+fn test_default_attrs_with_dir_contents() -> Result<(), Box<dyn std::error::Error>> {
+    let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
+
+    let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
+        .source_date(1_600_000_000)
+        .default_file_attrs(Some(0o644), Some("fileuser".into()), None)
+        .default_dir_attrs(Some(0o755), Some("diruser".into()), None)
+        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .build()?;
+
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+    let entries = parsed.metadata.get_file_entries()?;
+
+    let dir_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule"))
+        .expect("dir should be present");
+    assert_eq!(dir_entry.mode.permissions(), 0o755);
+    assert_eq!(dir_entry.ownership.user, "diruser");
+
+    let file_entry = entries
+        .iter()
+        .find(|e| e.path == Path::new("/usr/lib/mymodule/hello.py"))
+        .expect("file should be present");
+    assert_eq!(file_entry.mode.permissions(), 0o644);
+    assert_eq!(file_entry.ownership.user, "fileuser");
+
+    Ok(())
+}

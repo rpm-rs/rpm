@@ -89,6 +89,10 @@ let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_ed25519.a
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .using_config(build_config)
+    // set default ownership and permissions for files and directories, similar to %defattr
+    // in an RPM spec file. Pass None for any field to leave it unchanged (like `-` in %defattr).
+    .default_file_attrs(Some(0o644), Some("myuser".into()), Some("mygroup".into()))
+    .default_dir_attrs(Some(0o755), Some("myuser".into()), Some("mygroup".into()))
     // add a file with no special options
     // by default, files will be owned by the "root" user and group, and inherit their permissions
     // from the on-disk file.
