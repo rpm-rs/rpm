@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead.
 - `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
 - `Signer` fields are no longer public; use the provided constructor methods instead.
+- Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
 
 ### Fixed
 
