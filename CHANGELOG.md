@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The ability to mark files as `%missingok`
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
+- Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
 
 ### Fixed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `pgp` to `0.19.0`
 - Improved performance of package header parsing.
 - The `signature-pgp` feature now depends on `getrandom` in addition to `pgp` and `chrono`.
+- `Signer::load_from_asc` now auto-selects the first subkey with the signing capability flag, rather than always using the primary key. This is the correct behavior for v6 keys where the primary key is certification-only.
 
 ### Breaking Changes
 

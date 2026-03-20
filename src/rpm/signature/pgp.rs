@@ -196,22 +196,28 @@ impl Signer {
 
     /// Load the private key for signing from an ascii armored string.
     ///
-    /// The primary key is used for signing by default. Use
-    /// [`Signer::with_signing_key`] to select a specific subkey instead.
+    /// If the key contains a subkey with the signing capability flag,
+    /// that subkey is used for signing by default. Otherwise, the primary
+    /// key is used. Use [`Signer::with_signing_key`] to select a specific
+    /// key by fingerprint.
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (signed_key, _) =
             SignedSecretKey::from_string(input).map_err(Error::KeyLoadSecretKeyError)?;
 
-        let user_id = signed_key
-            .details
-            .users
-            .first()
-            .map(|u| u.id.id().to_vec());
+        let user_id = signed_key.details.users.first().map(|u| u.id.id().to_vec());
 
-        validate_algorithm(signed_key.primary_key.algorithm())?;
+        // Prefer the first subkey with the signing capability flag
+        let signing_key = signed_key
+            .secret_subkeys
+            .iter()
+            .find(|sk| sk.signatures.iter().any(|sig| sig.key_flags().sign()))
+            .map(|sk| AnySigningKey::Sub(sk.key.clone()))
+            .unwrap_or_else(|| AnySigningKey::Primary(signed_key.primary_key.clone()));
+
+        validate_algorithm(signing_key.algorithm())?;
 
         Ok(Self {
-            signing_key: AnySigningKey::Primary(signed_key.primary_key.clone()),
+            signing_key,
             signed_key: Some(signed_key),
             user_id,
             key_passphrase: None,
@@ -226,9 +232,12 @@ impl Signer {
     /// This method is only effective when the signer was created via
     /// [`Signer::load_from_asc`] or [`Signer::load_from_asc_bytes`].
     pub fn with_signing_key(self, fingerprint: &[u8]) -> Result<Self, Error> {
-        let signed_key = self.signed_key.as_ref().ok_or_else(|| Error::KeyNotFoundError {
-            key_ref: hex::encode(fingerprint),
-        })?;
+        let signed_key = self
+            .signed_key
+            .as_ref()
+            .ok_or_else(|| Error::KeyNotFoundError {
+                key_ref: hex::encode(fingerprint),
+            })?;
 
         // Check primary key
         if signed_key.primary_key.fingerprint().as_bytes() == fingerprint {
@@ -437,6 +446,17 @@ pub(crate) mod test {
             let (signer, verifier) = prep();
             super::sign_verify_roundtrip(&signer, &verifier);
         }
+
+        /// Verify that `load_from_asc` uses the primary key when there
+        /// are no subkeys (the typical v4 case).
+        #[test]
+        fn uses_primary_key_without_subkeys() {
+            let (signer, _verifier) = prep();
+            assert!(
+                matches!(signer.signing_key, AnySigningKey::Primary(_)),
+                "v4 key without subkeys should use the primary key"
+            );
+        }
     }
 
     mod v6 {
@@ -456,35 +476,23 @@ pub(crate) mod test {
             (signer, verifier)
         }
 
-        /// Sign data with a v6 Ed25519 key (using the primary key by default)
-        /// and verify the signature through our public Signer/Verifier API.
+        /// Sign data with a v6 Ed25519 key and verify the signature through
+        /// our public Signer/Verifier API.
         #[test]
         fn sign_verify_roundtrip() {
             let (signer, verifier) = prep();
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
-        /// Select the signing subkey by fingerprint and verify the resulting
-        /// signature can be verified against the corresponding public key.
+        /// Verify that `load_from_asc` auto-selects the signing subkey for
+        /// v6 keys where the primary key is certification-only.
         #[test]
-        fn sign_verify_roundtrip_with_subkey() {
-            let (signer, verifier) = prep();
-
-            // The v6 ed25519 test key has a signing subkey
-            let signed_key = signer.signed_key.as_ref().unwrap();
-            assert_eq!(signed_key.secret_subkeys.len(), 1, "expected one signing subkey");
-            let subkey_fingerprint = signed_key.secret_subkeys[0].key.fingerprint();
-
-            let signer = signer
-                .with_signing_key(subkey_fingerprint.as_bytes())
-                .expect("subkey selection should succeed");
-
+        fn auto_selects_signing_subkey() {
+            let (signer, _verifier) = prep();
             assert!(
                 matches!(signer.signing_key, AnySigningKey::Sub(_)),
-                "should be using a subkey"
+                "v6 key with a signing subkey should auto-select it"
             );
-
-            super::sign_verify_roundtrip(&signer, &verifier);
         }
 
         /// Explicitly select the primary key via `with_signing_key` and verify
@@ -539,7 +547,10 @@ pub(crate) mod test {
                 .hashed_subpackets
                 .iter()
                 .any(|sp| matches!(sp.data, SubpacketData::SignersUserID(_)));
-            assert!(has_signer_uid, "signature should contain SignersUserID subpacket");
+            assert!(
+                has_signer_uid,
+                "signature should contain SignersUserID subpacket"
+            );
         }
     }
 }
