@@ -1,4 +1,4 @@
-use super::{AlgorithmType, traits};
+use super::traits;
 use crate::errors::Error;
 
 use std::io;
@@ -78,22 +78,13 @@ impl SigningKey for AnySigningKey {
     }
 }
 
-fn algorithm_type(alg: PublicKeyAlgorithm) -> Result<AlgorithmType, Error> {
+fn validate_algorithm(alg: PublicKeyAlgorithm) -> Result<(), Error> {
     match alg {
-        PublicKeyAlgorithm::RSA => Ok(AlgorithmType::RSA),
-        PublicKeyAlgorithm::EdDSALegacy | PublicKeyAlgorithm::Ed25519 => Ok(AlgorithmType::EdDSA),
-        PublicKeyAlgorithm::ECDSA => Ok(AlgorithmType::ECDSA),
+        PublicKeyAlgorithm::RSA
+        | PublicKeyAlgorithm::EdDSALegacy
+        | PublicKeyAlgorithm::Ed25519
+        | PublicKeyAlgorithm::ECDSA => Ok(()),
         algorithm => Err(Error::UnsupportedPGPKeyType(algorithm)),
-    }
-}
-
-impl From<traits::AlgorithmType> for ::pgp::crypto::public_key::PublicKeyAlgorithm {
-    fn from(value: traits::AlgorithmType) -> Self {
-        match value {
-            traits::AlgorithmType::RSA => PublicKeyAlgorithm::RSA,
-            traits::AlgorithmType::EdDSA => PublicKeyAlgorithm::EdDSALegacy,
-            traits::AlgorithmType::ECDSA => PublicKeyAlgorithm::ECDSA,
-        }
     }
 }
 
@@ -114,7 +105,6 @@ pub struct Signer {
     signing_key: AnySigningKey,
     /// The signer's user ID, included in signatures when available.
     user_id: Option<Vec<u8>>,
-    algorithm: traits::AlgorithmType,
     key_passphrase: Option<String>,
 }
 
@@ -179,10 +169,6 @@ impl traits::Signing for Signer {
 
         Ok(signature_bytes)
     }
-
-    fn algorithm(&self) -> traits::AlgorithmType {
-        self.algorithm
-    }
 }
 
 impl Signer {
@@ -193,12 +179,11 @@ impl Signer {
     /// Prefer [`Signer::load_from_asc`] or [`Signer::load_from_asc_bytes`]
     /// when possible.
     pub fn new(key: SecretKey) -> Result<Self, Error> {
-        let algorithm = algorithm_type(key.algorithm())?;
+        validate_algorithm(key.algorithm())?;
         Ok(Self {
             signed_key: None,
             signing_key: AnySigningKey::Primary(key),
             user_id: None,
-            algorithm,
             key_passphrase: None,
         })
     }
@@ -223,13 +208,12 @@ impl Signer {
             .first()
             .map(|u| u.id.id().to_vec());
 
-        let algorithm = algorithm_type(signed_key.primary_key.algorithm())?;
+        validate_algorithm(signed_key.primary_key.algorithm())?;
 
         Ok(Self {
             signing_key: AnySigningKey::Primary(signed_key.primary_key.clone()),
             signed_key: Some(signed_key),
             user_id,
-            algorithm,
             key_passphrase: None,
         })
     }
@@ -248,10 +232,8 @@ impl Signer {
 
         // Check primary key
         if signed_key.primary_key.fingerprint().as_bytes() == fingerprint {
-            let algorithm = algorithm_type(signed_key.primary_key.algorithm())?;
             return Ok(Self {
                 signing_key: AnySigningKey::Primary(signed_key.primary_key.clone()),
-                algorithm,
                 ..self
             });
         }
@@ -259,10 +241,8 @@ impl Signer {
         // Check secret subkeys
         for subkey in &signed_key.secret_subkeys {
             if subkey.key.fingerprint().as_bytes() == fingerprint {
-                let algorithm = algorithm_type(subkey.key.algorithm())?;
                 return Ok(Self {
                     signing_key: AnySigningKey::Sub(subkey.key.clone()),
-                    algorithm,
                     ..self
                 });
             }
@@ -290,7 +270,6 @@ impl Signer {
 #[derive(Clone, Debug)]
 pub struct Verifier {
     public_key: SignedPublicKey,
-    algorithm: AlgorithmType,
 }
 
 impl Verifier {
@@ -390,10 +369,6 @@ impl traits::Verifying for Verifier {
             }
         }
     }
-
-    fn algorithm(&self) -> super::AlgorithmType {
-        self.algorithm
-    }
 }
 
 impl Verifier {
@@ -407,21 +382,9 @@ impl Verifier {
         let (public_key, _) =
             SignedPublicKey::from_string(input).map_err(Error::KeyLoadSecretKeyError)?;
 
-        match public_key.algorithm() {
-            PublicKeyAlgorithm::RSA => Ok(Self {
-                public_key,
-                algorithm: AlgorithmType::RSA,
-            }),
-            PublicKeyAlgorithm::EdDSALegacy | PublicKeyAlgorithm::Ed25519 => Ok(Self {
-                public_key,
-                algorithm: AlgorithmType::EdDSA,
-            }),
-            PublicKeyAlgorithm::ECDSA => Ok(Self {
-                public_key,
-                algorithm: AlgorithmType::ECDSA,
-            }),
-            a => Err(Error::UnsupportedPGPKeyType(a)),
-        }
+        validate_algorithm(public_key.algorithm())?;
+
+        Ok(Self { public_key })
     }
 }
 
