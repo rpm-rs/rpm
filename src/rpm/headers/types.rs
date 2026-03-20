@@ -124,6 +124,11 @@ impl FileMode {
         FileMode(SYMBOLIC_LINK_FILE_TYPE | (permissions & PERMISSIONS_BIT_MASK))
     }
 
+    /// Set the permission bits, preserving the file type. Values greater than 0o7777 will be masked.
+    pub fn set_permissions(&mut self, permissions: u16) {
+        self.0 = self.raw_file_type() | (permissions & PERMISSIONS_BIT_MASK);
+    }
+
     /// Returns the complete raw mode (type + permissions bits).
     pub fn raw_mode(&self) -> u16 {
         self.0
@@ -165,12 +170,14 @@ impl From<FileMode> for u16 {
 #[derive(Debug)]
 pub struct FileOptions {
     pub(crate) destination: String,
-    pub(crate) user: String,
-    pub(crate) group: String,
+    /// `None` means use the builder's default user.
+    pub(crate) user: Option<String>,
+    /// `None` means use the builder's default group.
+    pub(crate) group: Option<String>,
     pub(crate) symlink: String,
     pub(crate) mode: FileMode,
     pub(crate) flag: FileFlags,
-    pub(crate) inherit_permissions: bool,
+    pub(crate) use_default_permissions: bool,
     pub(crate) caps: Option<FileCaps>,
     pub(crate) verify_flags: FileVerifyFlags,
 }
@@ -185,12 +192,12 @@ impl FileOptions {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
-                user: "root".to_string(),
-                group: "root".to_string(),
+                user: None,
+                group: None,
                 symlink: "".to_string(),
                 mode: FileMode::regular(0o664),
                 flag: FileFlags::empty(),
-                inherit_permissions: true,
+                use_default_permissions: true,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -207,12 +214,12 @@ impl FileOptions {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
-                user: "root".to_string(),
-                group: "root".to_string(),
+                user: None,
+                group: None,
                 symlink: "".to_string(),
                 mode: FileMode::dir(0o755),
                 flag: FileFlags::empty(),
-                inherit_permissions: false,
+                use_default_permissions: true,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -231,12 +238,12 @@ impl FileOptions {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
-                user: "root".to_string(),
-                group: "root".to_string(),
+                user: None,
+                group: None,
                 symlink: target.into(),
                 mode: FileMode::symbolic_link(0o777),
                 flag: FileFlags::empty(),
-                inherit_permissions: false,
+                use_default_permissions: false,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -256,12 +263,12 @@ impl FileOptions {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
-                user: "root".to_string(),
-                group: "root".to_string(),
+                user: None,
+                group: None,
                 symlink: "".to_string(),
                 mode: FileMode::regular(0o644),
                 flag: FileFlags::GHOST,
-                inherit_permissions: false,
+                use_default_permissions: true,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -280,12 +287,12 @@ impl FileOptions {
         FileOptionsBuilder {
             inner: FileOptions {
                 destination: dest.into(),
-                user: "root".to_string(),
-                group: "root".to_string(),
+                user: None,
+                group: None,
                 symlink: "".to_string(),
                 mode: FileMode::dir(0o755),
                 flag: FileFlags::GHOST,
-                inherit_permissions: false,
+                use_default_permissions: true,
                 caps: None,
                 verify_flags: FileVerifyFlags::all(),
             },
@@ -306,7 +313,7 @@ impl FileOptionsBuilder {
     ///
     /// See: `%attr` from specfile syntax
     pub fn user(mut self, user: impl Into<String>) -> Self {
-        self.inner.user = user.into();
+        self.inner.user = Some(user.into());
         self
     }
 
@@ -317,7 +324,7 @@ impl FileOptionsBuilder {
     ///
     /// See: `%attr` from specfile syntax
     pub fn group(mut self, group: impl Into<String>) -> Self {
-        self.inner.group = group.into();
+        self.inner.group = Some(group.into());
         self
     }
 
@@ -337,7 +344,7 @@ impl FileOptionsBuilder {
     /// See: `%attr` from specfile syntax
     pub fn mode(mut self, mode: impl Into<FileMode>) -> Self {
         self.inner.mode = mode.into();
-        self.inner.inherit_permissions = false;
+        self.inner.use_default_permissions = false;
         self
     }
 
@@ -350,9 +357,8 @@ impl FileOptionsBuilder {
     ///
     /// See: `%attr` from specfile syntax
     pub fn permissions(mut self, permissions: u16) -> Self {
-        self.inner.mode =
-            FileMode(self.inner.mode.raw_file_type() | (permissions & PERMISSIONS_BIT_MASK));
-        self.inner.inherit_permissions = false;
+        self.inner.mode.set_permissions(permissions);
+        self.inner.use_default_permissions = false;
         self
     }
 
@@ -754,6 +760,27 @@ mod test {
             let result = FileMode::symbolic_link(permissions);
             assert_eq!(expected, result.permissions());
         }
+
+        // test set_permissions
+        let mut mode = FileMode::regular(0o644);
+        assert_eq!(mode.permissions(), 0o644);
+        assert_eq!(mode.file_type(), FileType::Regular);
+
+        mode.set_permissions(0o755);
+        assert_eq!(mode.permissions(), 0o755);
+        assert_eq!(mode.file_type(), FileType::Regular);
+
+        // set_permissions on a directory preserves the directory type
+        let mut dir_mode = FileMode::dir(0o755);
+        dir_mode.set_permissions(0o700);
+        assert_eq!(dir_mode.permissions(), 0o700);
+        assert_eq!(dir_mode.file_type(), FileType::Dir);
+
+        // set_permissions masks values > 0o7777
+        let mut mode2 = FileMode::regular(0o644);
+        mode2.set_permissions(0o17777);
+        assert_eq!(mode2.permissions(), 0o7777);
+        assert_eq!(mode2.file_type(), FileType::Regular);
 
         // test TryFrom<i32>
         let try_from_table: Vec<(i32, Result<FileMode, &str>)> = vec![
