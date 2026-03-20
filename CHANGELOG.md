@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Package::signature_key_fingerprints()`
 - The ability to mark files as `%missingok`
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
+- Support for signing packages using select subkeys rather than the primary key of the provided key material.
 
 ### Fixed
 
@@ -24,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump `pgp` to `0.19.0`
 - Improved performance of package header parsing.
+- The `signature-pgp` feature now depends on `getrandom` in addition to `pgp` and `chrono`.
+
+### Breaking Changes
+
+- `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead.
+- `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
+- `Signer` fields are no longer public; use the provided constructor methods instead.
 
 ### Fixed
 
