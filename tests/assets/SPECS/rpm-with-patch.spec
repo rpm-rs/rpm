@@ -2,7 +2,7 @@ Name:           rpm-with-patch
 Version:        1.0
 License:        LGPL
 Release:        0
-Summary:        "A package built from a tarball with a patch"
+Summary:        A package built from a tarball with a patch
 
 BuildArch:  noarch
 Source0:    basic-2.3.4.tar.gz
