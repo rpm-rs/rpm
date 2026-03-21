@@ -40,6 +40,8 @@ Suggests: chilipowder
 
 Enhances: purity > 9000
 
+OrderWithRequires: methylamine
+
 %description
 This package attempts to exercise basic features of RPM packages.
 
