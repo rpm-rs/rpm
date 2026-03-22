@@ -45,23 +45,6 @@ where
     }
 }
 
-pub mod key {
-
-    /// Marker trait for key types.
-    pub trait KeyType: super::Debug + Copy {}
-
-    /// A secret key that should not be shared with any other party under any circumstance.
-    #[derive(Debug, Clone, Copy)]
-    pub struct Secret;
-
-    /// A key publishable to the public.
-    #[derive(Debug, Clone, Copy)]
-    pub struct Public;
-
-    impl KeyType for Secret {}
-    impl KeyType for Public {}
-}
-
 /// Implement unreachable signer for empty tuple `()`
 impl<T> Signing for std::marker::PhantomData<T> {
     type Signature = Vec<u8>;
