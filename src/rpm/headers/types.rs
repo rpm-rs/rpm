@@ -799,7 +799,10 @@ echo `hello world`
 
         assert!(records.len() == 3);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_PREIN as u32);
-        assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
+        assert_eq!(
+            records[0].data,
+            crate::IndexData::StringTag("echo `hello world`".to_string())
+        );
         assert_eq!(records[1].tag, crate::IndexTag::RPMTAG_PREINFLAGS as u32);
         assert_eq!(records[1].data, crate::IndexData::Int32(vec![1]));
         assert_eq!(records[2].tag, crate::IndexTag::RPMTAG_PREINPROG as u32);
@@ -821,7 +824,10 @@ echo `hello world`
         scriptlet.apply(&mut records, crate::POSTUN_TAGS);
         assert!(records.len() == 1);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_POSTUN as u32);
-        assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
+        assert_eq!(
+            records[0].data,
+            crate::IndexData::StringTag("echo `hello world`".to_string())
+        );
     }
 
     mod checksumming_writer {
