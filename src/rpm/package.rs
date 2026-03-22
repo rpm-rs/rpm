@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
@@ -149,7 +150,7 @@ impl Package {
             .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES)?;
 
         // pull every base directory name in the package and create the directory in advance
-        for dir in dirs {
+        for dir in &dirs {
             let dir_path = dest
                 .as_ref()
                 .join(Path::new(dir).strip_prefix("/").unwrap_or(dest.as_ref()));
@@ -626,11 +627,11 @@ impl PackageMetadata {
     #[inline]
     pub fn get_nevra(&'_ self) -> Result<Nevra<'_>, Error> {
         Ok(Nevra::new(
-            self.get_name()?.to_owned(),
-            self.get_epoch()?.to_string(),
-            self.get_version()?.to_owned(),
-            self.get_release()?.to_owned(),
-            self.get_arch()?.to_owned(),
+            Cow::Borrowed(self.get_name()?),
+            Cow::Owned(self.get_epoch()?.to_string()),
+            Cow::Borrowed(self.get_version()?),
+            Cow::Borrowed(self.get_release()?),
+            Cow::Borrowed(self.get_arch()?),
         ))
     }
 
@@ -808,8 +809,8 @@ impl PackageMetadata {
 
         let script = self
             .header
-            .get_entry_data_as_string(scriptlet_tag)
-            .map(|s| s.to_string())?;
+            .get_entry_data_as_string(scriptlet_tag)?
+            .to_owned();
         let flags = self
             .header
             .get_entry_data_as_u32(flags_tag)
@@ -819,7 +820,7 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_string_array(program_tag)
             .ok()
-            .map(|p| p.to_owned());
+            .map(|v| v.into_iter().map(|s| s.to_owned()).collect());
 
         Ok(Scriptlet {
             script,
@@ -998,7 +999,7 @@ impl PackageMetadata {
                         Err(e)
                     }
                 },
-                CompressionType::from_str,
+                |s| CompressionType::from_str(s),
             )
     }
 
@@ -1204,12 +1205,12 @@ impl PackageMetadata {
                         } else {
                             Some(FileDigest::new(algorithm, digest)?)
                         };
-                        let cap = match caps {
-                            Some(caps) => caps.get(idx).map(|x| x.to_owned()),
+                        let cap = match &caps {
+                            Some(caps) => caps.get(idx).map(|s| (*s).to_owned()),
                             None => None,
                         };
-                        let ima_signature: Option<String> = match ima_signatures {
-                            Some(ima_signatures) => ima_signatures.get(idx).map(|x| x.to_owned()),
+                        let ima_signature: Option<String> = match &ima_signatures {
+                            Some(ima_signatures) => ima_signatures.get(idx).map(|s| (*s).to_owned()),
                             None => None,
                         };
                         acc.push(FileEntry {

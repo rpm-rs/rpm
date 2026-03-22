@@ -12,20 +12,6 @@ use std::{
 use super::*;
 use crate::{Timestamp, constants::*, errors::*};
 
-/// Decode raw bytes into a String.
-///
-/// Uses `from_utf8` (which is SIMD-optimized in std) rather than `from_utf8_lossy`
-/// because `from_utf8_lossy` uses the `Utf8Chunks` iterator internally, which is
-/// significantly slower even when the input is valid UTF-8. Since RPM header strings
-/// are almost always valid UTF-8, we try the fast path first and only fall back to
-/// the lossy conversion for the rare case of invalid input.
-fn decode_string(raw: &[u8]) -> String {
-    match std::str::from_utf8(raw) {
-        Ok(s) => s.to_owned(),
-        Err(_) => String::from_utf8_lossy(raw).into_owned(),
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header<T: Tag> {
     pub(crate) index_header: IndexHeader,
@@ -67,7 +53,7 @@ where
         let store = Vec::from(bytes);
         // add data to entries
         for entry in &mut entries {
-            let mut remaining = &bytes[entry.offset as usize..];
+            let remaining = &bytes[entry.offset as usize..];
 
             match &mut entry.data {
                 IndexData::Null => {}
@@ -86,29 +72,51 @@ where
                 IndexData::Int64(ints) => {
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u64)?;
                 }
-                IndexData::StringTag(string) => {
-                    let nul =
-                        memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                    string.push_str(&decode_string(&remaining[..nul]));
+                // String data lives in `store` and is read on access via offset/num_items.
+                // We validate UTF-8 here during parse (cheap, SIMD-optimized) so that
+                // getters can return &str borrowing directly from `store` with no
+                // allocation or re-validation.
+                //
+                // If validation fails (rare — only possible with old non-UTF-8 packages),
+                // we store a lossy-converted fallback in the IndexData variant. Getters
+                // detect this via `is_empty()`: an empty String/Vec means "valid UTF-8,
+                // read from store", while a populated one holds the lossy fallback.
+                // This is unambiguous because an empty byte sequence is always valid
+                // UTF-8, so the fallback path is never triggered for genuinely empty
+                // strings.
+                IndexData::StringTag(s) => {
+                    let nul = memchr::memchr(0, remaining)
+                        .ok_or(Error::UnterminatedHeaderString)?;
+                    if std::str::from_utf8(&remaining[..nul]).is_err() {
+                        *s = String::from_utf8_lossy(&remaining[..nul]).into_owned();
+                    }
+                }
+                IndexData::StringArray(strings)
+                | IndexData::I18NString(strings) => {
+                    let mut pos = remaining;
+                    let mut has_invalid = false;
+                    for _ in 0..entry.num_items {
+                        let nul = memchr::memchr(0, pos)
+                            .ok_or(Error::UnterminatedHeaderString)?;
+                        if std::str::from_utf8(&pos[..nul]).is_err() {
+                            has_invalid = true;
+                        }
+                        pos = &pos[nul + 1..];
+                    }
+                    if has_invalid {
+                        let mut pos = remaining;
+                        for _ in 0..entry.num_items {
+                            let nul = memchr::memchr(0, pos)
+                                .ok_or(Error::UnterminatedHeaderString)?;
+                            strings.push(
+                                String::from_utf8_lossy(&pos[..nul]).into_owned(),
+                            );
+                            pos = &pos[nul + 1..];
+                        }
+                    }
                 }
                 IndexData::Bin(bin) => {
                     parse_binary_entry(remaining, entry.num_items, bin, "Bin")?;
-                }
-                IndexData::StringArray(strings) => {
-                    for _ in 0..entry.num_items {
-                        let nul =
-                            memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                        strings.push(decode_string(&remaining[..nul]));
-                        remaining = &remaining[nul + 1..];
-                    }
-                }
-                IndexData::I18NString(strings) => {
-                    for _ in 0..entry.num_items {
-                        let nul =
-                            memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                        strings.push(decode_string(&remaining[..nul]));
-                        remaining = &remaining[nul + 1..];
-                    }
                 }
             }
         }
@@ -146,110 +154,152 @@ where
 
     pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_binary()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Bin(d) => Ok(d.as_slice()),
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "binary",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_str()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            // Non-empty: lossy fallback populated during parse (see parse comment above).
+            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            IndexData::StringTag(s) if !s.is_empty() => Ok(s.as_str()),
+            IndexData::StringTag(_) => {
+                let remaining = &self.store[entry.offset as usize..];
+                let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                Ok(std::str::from_utf8(&remaining[..nul]).expect("UTF-8 validated during parse"))
+            }
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "string",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_i18n_str()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            // Non-empty: lossy fallback populated during parse (see parse comment above).
+            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            IndexData::I18NString(strings) if !strings.is_empty() => Ok(strings[0].as_str()),
+            IndexData::I18NString(_) => {
+                // @todo: an actual implementation that doesn't just get the first string from the table
+                let remaining = &self.store[entry.offset as usize..];
+                let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                Ok(std::str::from_utf8(&remaining[..nul]).expect("UTF-8 validated during parse"))
+            }
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "i18n string array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_u16_array()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Int16(s) => Ok(s.to_vec()),
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint16 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_u32()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Int32(s) => s.first().copied().ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint32",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+            _ => Err(Error::UnexpectedTagDataType {
+                expected_data_type: "uint32",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            }),
+        }
     }
 
     pub fn get_entry_data_as_u32_array(&self, tag: T) -> Result<Vec<u32>, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_u32_array()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Int32(s) => Ok(s.to_vec()),
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint32 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_u64()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Int64(s) => s.first().copied().ok_or_else(|| Error::UnexpectedTagDataType {
                 expected_data_type: "uint64",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+            _ => Err(Error::UnexpectedTagDataType {
+                expected_data_type: "uint64",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            }),
+        }
     }
 
     pub fn get_entry_data_as_u64_array(&self, tag: T) -> Result<Vec<u64>, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_u64_array()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            IndexData::Int64(s) => Ok(s.to_vec()),
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint64 array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
-    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<&[String], Error> {
+    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<Vec<&str>, Error> {
         let entry = self.find_entry_or_err(tag)?;
-        entry
-            .data
-            .as_string_array()
-            .ok_or_else(|| Error::UnexpectedTagDataType {
+        match &entry.data {
+            // Non-empty: lossy fallback populated during parse (see parse comment above).
+            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            IndexData::StringArray(strings) | IndexData::I18NString(strings)
+                if !strings.is_empty() =>
+            {
+                Ok(strings.iter().map(|s| s.as_str()).collect())
+            }
+            IndexData::StringArray(_) | IndexData::I18NString(_) => {
+                let mut remaining = &self.store[entry.offset as usize..];
+                let mut result = Vec::with_capacity(entry.num_items as usize);
+                for _ in 0..entry.num_items {
+                    let nul =
+                        memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                    let s = std::str::from_utf8(&remaining[..nul])
+                        .expect("UTF-8 validated during parse");
+                    result.push(s);
+                    remaining = &remaining[nul + 1..];
+                }
+                Ok(result)
+            }
+            _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "string array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
-            })
+            }),
+        }
     }
 
     pub(crate) fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
@@ -609,6 +659,10 @@ impl IndexHeader {
 #[derive(Clone, PartialEq)]
 pub(crate) struct IndexEntry<T: num::FromPrimitive> {
     pub(crate) tag: u32,
+    /// For parsed headers, string data lives in `Header::store` and must be accessed
+    /// through `Header` getter methods. This field may only hold a lossy UTF-8
+    /// fallback for string types (see the parse comment in `Header::parse`).
+    /// For builder-created entries, this holds the actual data to be written.
     pub(crate) data: IndexData,
     pub(crate) offset: i32,
     pub(crate) num_items: u32,
@@ -872,87 +926,6 @@ impl IndexData {
             IndexData::I18NString(_) => 9,
         }
     }
-
-    pub(crate) fn as_str(&self) -> Option<&str> {
-        match self {
-            IndexData::StringTag(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn as_char_array(&self) -> Option<Vec<u8>> {
-        match self {
-            IndexData::Char(s) => Some(s.to_vec()),
-            _ => None,
-        }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn as_u8_array(&self) -> Option<Vec<u8>> {
-        match self {
-            IndexData::Int8(s) => Some(s.to_vec()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_u16_array(&self) -> Option<Vec<u16>> {
-        match self {
-            IndexData::Int16(s) => Some(s.to_vec()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_u32(&self) -> Option<u32> {
-        match self {
-            IndexData::Int32(s) => s.first().copied(),
-            _ => None,
-        }
-    }
-    pub(crate) fn as_u32_array(&self) -> Option<Vec<u32>> {
-        match self {
-            IndexData::Int32(s) => Some(s.to_vec()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_u64(&self) -> Option<u64> {
-        match self {
-            IndexData::Int64(s) => s.first().copied(),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_u64_array(&self) -> Option<Vec<u64>> {
-        match self {
-            IndexData::Int64(s) => Some(s.to_vec()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_string_array(&self) -> Option<&[String]> {
-        match self {
-            IndexData::StringArray(d) | IndexData::I18NString(d) => Some(d),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_i18n_str(&self) -> Option<&str> {
-        match self {
-            IndexData::I18NString(s) => {
-                // @todo: an actual implementation that doesn't just get the first string from the table
-                Some(&s[0])
-            }
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_binary(&self) -> Option<&[u8]> {
-        match self {
-            IndexData::Bin(d) => Some(d.as_slice()),
-            _ => None,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -963,11 +936,10 @@ mod test {
     fn test_region_tag() -> Result<(), Box<dyn std::error::Error>> {
         let region_entry = Header::create_region_tag(IndexSignatureTag::HEADER_SIGNATURES, 2, 400);
 
-        let possible_binary = region_entry.data.as_binary();
-
-        assert!(possible_binary.is_some(), "should be binary");
-
-        let data = possible_binary.unwrap();
+        let data = match &region_entry.data {
+            IndexData::Bin(d) => d.as_slice(),
+            _ => panic!("should be binary"),
+        };
 
         let (_, entry) = IndexEntry::<IndexSignatureTag>::parse(data)?;
 
@@ -981,15 +953,4 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn test_decode_string() {
-        // Valid UTF-8
-        assert_eq!(decode_string(b"hello world"), "hello world");
-
-        // Invalid UTF-8 — replaced with U+FFFD
-        assert_eq!(decode_string(b"hello\xff world"), "hello\u{FFFD} world");
-
-        // Empty
-        assert_eq!(decode_string(b""), "");
-    }
 }
