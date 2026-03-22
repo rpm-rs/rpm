@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
-- `PackageBuilder::with_dir()` as a shortcut to adding a directory on the RPM (doesn't add contents).
-- `PackageBuilder::with_dir_contents()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir_contents()`.
+- `PackageBuilder::with_dir_entry()` as a shortcut to adding a directory entry on the RPM (doesn't add contents).
+- `PackageBuilder::with_dir()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir()`.
 
 ### Fixed
 
@@ -43,8 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
 - `Signer` fields are no longer public; use the provided constructor methods instead.
 - Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
-
-
 - Refactored the `FileOptions` functions. Use `FileOptions::new()`, `FileOptions::dir()`, `FileOptions::symlink()`, `FileOptions::ghost()` for a regular file, directory, symbolic link, or "ghost" file, respectively.
 - Renamed file attribute methods on `FileOptionsBuilder` to drop the `is_` prefix:
   `is_config()` → `config()`, `is_license()` → `license()`, `is_readme()` → `readme()` (deprecated).
