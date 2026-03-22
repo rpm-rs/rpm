@@ -30,6 +30,8 @@ pub enum Error {
         raw_data_type: u32,
         store_type: &'static str,
     },
+    #[error("unterminated string in header data store")]
+    UnterminatedHeaderString,
     #[error("unable to find tag {0}")]
     TagNotFound(String),
     #[error("unable to find scriptlet")]

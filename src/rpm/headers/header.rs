@@ -12,18 +12,18 @@ use std::{
 use super::*;
 use crate::{Timestamp, constants::*, errors::*};
 
-/// Strip ASCII control characters from a string, preserving tabs and newlines.
-/// This prevents control characters embedded in RPM metadata from propagating to
-/// downstream consumers (e.g. XML repository metadata where they are illegal).
-fn strip_control_chars(s: &str) -> String {
-    if s.bytes()
-        .all(|b| !b.is_ascii_control() || b == b'\t' || b == b'\n')
-    {
-        return s.to_string();
+/// Decode raw bytes into a String.
+///
+/// Uses `from_utf8` (which is SIMD-optimized in std) rather than `from_utf8_lossy`
+/// because `from_utf8_lossy` uses the `Utf8Chunks` iterator internally, which is
+/// significantly slower even when the input is valid UTF-8. Since RPM header strings
+/// are almost always valid UTF-8, we try the fast path first and only fall back to
+/// the lossy conversion for the rare case of invalid input.
+fn decode_string(raw: &[u8]) -> String {
+    match std::str::from_utf8(raw) {
+        Ok(s) => s.to_owned(),
+        Err(_) => String::from_utf8_lossy(raw).into_owned(),
     }
-    s.chars()
-        .filter(|&c| !c.is_ascii_control() || c == '\t' || c == '\n')
-        .collect()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -87,28 +87,27 @@ where
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u64)?;
                 }
                 IndexData::StringTag(string) => {
-                    let (_rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
-                    let decoded = String::from_utf8_lossy(raw_string);
-                    string.push_str(&strip_control_chars(&decoded));
+                    let nul =
+                        memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                    string.push_str(&decode_string(&remaining[..nul]));
                 }
                 IndexData::Bin(bin) => {
                     parse_binary_entry(remaining, entry.num_items, bin, "Bin")?;
                 }
                 IndexData::StringArray(strings) => {
                     for _ in 0..entry.num_items {
-                        let (rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
-                        // the null byte is still in there.. we need to cut it out.
-                        remaining = &rest[1..];
-                        let decoded = String::from_utf8_lossy(raw_string);
-                        strings.push(strip_control_chars(&decoded));
+                        let nul =
+                            memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                        strings.push(decode_string(&remaining[..nul]));
+                        remaining = &remaining[nul + 1..];
                     }
                 }
                 IndexData::I18NString(strings) => {
                     for _ in 0..entry.num_items {
-                        let (rest, raw_string) = complete::take_till(|item| item == 0)(remaining)?;
-                        remaining = rest;
-                        let decoded = String::from_utf8_lossy(raw_string);
-                        strings.push(strip_control_chars(&decoded));
+                        let nul =
+                            memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                        strings.push(decode_string(&remaining[..nul]));
+                        remaining = &remaining[nul + 1..];
                     }
                 }
             }
@@ -968,31 +967,14 @@ mod test {
     }
 
     #[test]
-    fn test_strip_control_chars() {
-        // No control characters — returned as-is
-        assert_eq!(strip_control_chars("hello world"), "hello world");
+    fn test_decode_string() {
+        // Valid UTF-8
+        assert_eq!(decode_string(b"hello world"), "hello world");
 
-        // Tabs and newlines are preserved
-        assert_eq!(strip_control_chars("hello\tworld\n"), "hello\tworld\n");
+        // Invalid UTF-8 — replaced with U+FFFD
+        assert_eq!(decode_string(b"hello\xff world"), "hello\u{FFFD} world");
 
-        // NUL, BEL, ESC, DEL are stripped
-        assert_eq!(strip_control_chars("he\x00ll\x07o\x1b\x7f"), "hello");
-
-        // Carriage return (0x0D) is stripped
-        assert_eq!(strip_control_chars("line1\r\nline2"), "line1\nline2");
-
-        // All control chars 0x01-0x08, 0x0B-0x0C, 0x0E-0x1F stripped
-        let mut input = String::from("a");
-        for b in 0x01u8..=0x1f {
-            if b != b'\t' && b != b'\n' {
-                input.push(b as char);
-            }
-        }
-        input.push('\x7f');
-        input.push('z');
-        assert_eq!(strip_control_chars(&input), "az");
-
-        // Empty string
-        assert_eq!(strip_control_chars(""), "");
+        // Empty
+        assert_eq!(decode_string(b""), "");
     }
 }
