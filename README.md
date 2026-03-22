@@ -33,7 +33,7 @@ This library does not build software like rpmbuild. It is meant for finished art
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
 
-let pkg = rpm::Package::open("tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
 
 let name = pkg.metadata.get_name()?;
 let version = pkg.metadata.get_version()?;
@@ -84,7 +84,7 @@ pkg.sign(signer)?;
 use rpm::signature::pgp::Signer;
 
 let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
-let raw_secret_key = std::fs::read("./tests/assets/signing_keys/secret_ed25519.asc")?;
+let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
 // It's recommended to use timestamp of last commit in your VCS
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -115,8 +115,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
             .flags(ScriptletFlags::EXPAND)
             .prog(vec!["/bin/blah/bash", "-c"])
     )
-    // If you don't need reproducible builds,
-    // you can remove the following line
+    // If you don't need reproducible builds, you can remove the following line
     .source_date(source_date)
     .build_host(gethostname::gethostname().to_str().unwrap_or("host"))
     .add_changelog_entry(

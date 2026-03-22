@@ -8,8 +8,7 @@ VERSION="2.3.4-5.el9"
 REPRODUCIBLE_OPTS=(
     --define "use_source_date_epoch_as_buildtime 1"
     --define "%_buildhost localhost"
-    --define "_binary_payload w.ufdio"
-    --define "_source_payload w.ufdio"
+    --define "_rpmfilename %{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}.rpm"
 )
 
 # v4 signing keys (used with plain --addsign)
@@ -33,32 +32,67 @@ V6_RSA_KEY_OPTS=( "${V6_SQ_OPTS[@]}" --define "_gpg_name rpm-testkey-v6-rsa4k" )
 V6_EDDSA_KEY_OPTS=( "${V6_SQ_OPTS[@]}" --define "_gpg_name rpm-testkey-v6-ed25519" )
 V6_MLDSA_KEY_OPTS=( "${V6_SQ_OPTS[@]}" --define "_gpg_name rpm-testkey-v6-mldsa65-ed25519" )
 
-build_packages() {
-    local fmt=$1
-    local rpmdir="$(pwd)/RPMS/v${fmt}"
+# Build a single spec file
+#   $1 = spec file path
+#   $2 = rpm format (4 or 6)
+#   $3 = payload compression macro (e.g. "w.ufdio", "w9.gzdio")
+#   $4 = (optional) rpmdir override for compression variants
+build_spec() {
+    local spec=$1
+    local fmt=$2
+    local payload=$3
+    local rpmdir="${4:-$(pwd)/RPMS/v${fmt}}"
     local srpmdir="$(pwd)/SRPMS/v${fmt}"
 
     mkdir -p "$rpmdir" "$srpmdir"
 
-    for spec in SPECS/*.spec; do
-        rpmbuild \
-            --define "_topdir $(pwd)" \
-            --define "_rpmdir ${rpmdir}" \
-            --define "_srcrpmdir ${srpmdir}" \
-            --define "_rpmformat ${fmt}" \
-            "${REPRODUCIBLE_OPTS[@]}" \
-            -ba "$spec"
-    done
+    rpmbuild \
+        --define "_topdir $(pwd)" \
+        --define "_rpmdir ${rpmdir}" \
+        --define "_srcrpmdir ${srpmdir}" \
+        --define "_rpmformat ${fmt}" \
+        --define "_binary_payload ${payload}" \
+        --define "_source_payload ${payload}" \
+        "${REPRODUCIBLE_OPTS[@]}" \
+        -ba "$spec"
 
     rm -rf ./BUILD/
+}
+
+# Build rpm-basic and rpm-empty for both v4 and v6 (uncompressed),
+# plus rpm-basic v6 with all compression types
+build_basic_packages() {
+    for spec in SPECS/rpm-basic.spec SPECS/rpm-empty.spec; do
+        for fmt in 4 6; do
+            build_spec "$spec" "$fmt" "w.ufdio"
+        done
+    done
+
+    # v6: compressed variants (separate subdirectories)
+    for payload_name in gzip xz zstd; do
+        case "$payload_name" in
+            gzip) payload="w9.gzdio" ;;
+            xz)   payload="w9.xzdio" ;;
+            zstd)  payload="w19.zstdio" ;;
+        esac
+        build_spec SPECS/rpm-basic.spec 6 "$payload" \
+            "$(pwd)/RPMS/v6/${payload_name}"
+    done
+}
+
+# Build all other specs once (v6, uncompressed)
+build_other_packages() {
+    for spec in SPECS/*.spec; do
+        [[ "$spec" == *rpm-basic* || "$spec" == *rpm-empty* ]] && continue
+        build_spec "$spec" 6 "w.ufdio"
+    done
 }
 
 sign_v4_packages() {
     local rpmdir="RPMS/v4"
     local srpmdir="SRPMS/v4"
-    local noarch="${rpmdir}/noarch"
 
-    BASIC_RPM="${noarch}/rpm-basic-${VERSION}.noarch.rpm"
+    BASIC_RPM="${rpmdir}/rpm-basic-${VERSION}.noarch.rpm"
     BASIC_SRPM="${srpmdir}/rpm-basic-${VERSION}.src.rpm"
 
     mkdir -p "${rpmdir}/signed" "${srpmdir}/signed"
@@ -100,9 +134,8 @@ sign_v4_packages() {
 sign_v6_packages() {
     local rpmdir="RPMS/v6"
     local srpmdir="SRPMS/v6"
-    local noarch="${rpmdir}/noarch"
 
-    BASIC_RPM="${noarch}/rpm-basic-${VERSION}.noarch.rpm"
+    BASIC_RPM="${rpmdir}/rpm-basic-${VERSION}.noarch.rpm"
     BASIC_SRPM="${srpmdir}/rpm-basic-${VERSION}.src.rpm"
 
     mkdir -p "${rpmdir}/signed" "${srpmdir}/signed"
@@ -139,7 +172,7 @@ sign_v6_packages() {
     rpmsign --rpmv6 --addsign "$EDDSA_SIGNED_SRPM" "${V6_EDDSA_KEY_OPTS[@]}"
 }
 
-build_packages 4
-build_packages 6
+build_basic_packages
+build_other_packages
 sign_v4_packages
 sign_v6_packages

@@ -103,9 +103,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.files()? {
     ///     let file = entry?;
     ///     // do something with file.content
@@ -138,7 +138,7 @@ impl Package {
     /// # Examples
     ///
     /// ```text
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// package.extract(&package.metadata.get_name()?)?;
     /// ```
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
@@ -245,9 +245,9 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let mut package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret")?;
     /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
@@ -917,7 +917,7 @@ impl PackageMetadata {
     ///
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat this
     /// package as a "requires" when the matching package is installed. Unlike a "requires" however,
-    /// if installing it would cause errors, it can be ignored ignored without error.
+    /// if installing it would cause errors, it can be ignored without error.
     pub fn get_supplements(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_SUPPLEMENTNAME,
@@ -930,9 +930,9 @@ impl PackageMetadata {
     /// This function returns the computed (byte) boundaries between those segments in the package file
     /// as if it were written out on-disk.
     ///
-    /// ```ignore
+    /// ```
     /// # use rpm::Package;
-    /// # let package = Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm").unwrap();
+    /// # let package = Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm").unwrap();
     /// let offsets = package.metadata.get_package_segment_offsets();
     /// let lead = offsets.lead..offsets.signature_header;
     /// let sig_header = offsets.signature_header..offsets.header;
@@ -1007,9 +1007,9 @@ impl PackageMetadata {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for path in package.metadata.get_file_paths()? {
     ///     println!("{}", path.display());
     /// }
@@ -1085,9 +1085,9 @@ impl PackageMetadata {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.metadata.get_file_entries()? {
     ///     println!("{} is {} bytes", entry.path.display(), entry.size);
     /// }
@@ -1135,8 +1135,8 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS);
 
-        // Look for the file capabilities tag
-        // but it's not required so don't error out if it's not
+        // Look for the file capabilities tag, but it's not required so don't error out if it's not
+        // present
         let caps = match self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILECAPS)

@@ -16,8 +16,8 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC_RSA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC_IMA_SIGNED.as_ref())?;
-    assert_boundaries(common::pkgs::v4::RPM_EMPTY_SRC.as_ref())?;
-    assert_boundaries(common::pkgs::v4::RPM_BASIC_SRC.as_ref())?;
+    assert_boundaries(common::pkgs::v4::src::RPM_EMPTY_SRC.as_ref())?;
+    assert_boundaries(common::pkgs::v4::src::RPM_BASIC_SRC.as_ref())?;
 
     let mut temp = tempfile::NamedTempFile::new()?;
 
@@ -94,7 +94,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[ignore]
 fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_FILE_ATTRS)?;
+    let package = Package::open(common::pkgs::v6::RPM_FILE_ATTRS)?;
     let metadata = &package.metadata;
 
     assert_eq!(metadata.is_source_package(), false);
@@ -1004,7 +1004,7 @@ fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[ignore]
 fn test_empty_source_package() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_EMPTY_SRC)?;
+    let package = Package::open(common::pkgs::v4::src::RPM_EMPTY_SRC)?;
     let metadata = &package.metadata;
 
     assert_eq!(metadata.is_source_package(), true);
