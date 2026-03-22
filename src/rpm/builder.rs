@@ -355,7 +355,7 @@ impl PackageBuilder {
     /// Set default ownership and permissions for regular file entries.
     ///
     /// These defaults are applied to any file added via [`with_file()`](Self::with_file),
-    /// [`with_file_contents()`](Self::with_file_contents), or [`with_dir_contents()`](Self::with_dir_contents)
+    /// [`with_file_contents()`](Self::with_file_contents), or [`with_dir()`](Self::with_dir)
     /// where the user/group/permissions have not been explicitly set on the [`FileOptions`].
     ///
     /// Pass `None` for any field to leave its current default unchanged (like `-` in `%defattr`).
@@ -382,8 +382,8 @@ impl PackageBuilder {
 
     /// Set default ownership and permissions for directory entries.
     ///
-    /// These defaults are applied to any directory added via [`with_dir()`](Self::with_dir)
-    /// or [`with_dir_contents()`](Self::with_dir_contents) where the user/group/permissions
+    /// These defaults are applied to any directory added via [`with_dir_entry()`](Self::with_dir_entry)
+    /// or [`with_dir()`](Self::with_dir) where the user/group/permissions
     /// have not been explicitly set on the [`FileOptions`].
     ///
     /// Pass `None` for any field to leave its current default unchanged (like `-` in `%defattr`).
@@ -479,7 +479,7 @@ impl PackageBuilder {
         if options.mode.file_type() != FileType::Regular {
             return Err(Error::InvalidFileOptions {
                 method: "with_file",
-                reason: "expected regular file mode (use FileOptions::new() or .mode() with a regular file mode); use with_dir() for directories or with_symlink() for symlinks",
+                reason: "expected regular file mode (use FileOptions::new() or .mode() with a regular file mode); use with_dir_entry() for directories or with_symlink() for symlinks",
             });
         }
         if options.flag.contains(FileFlags::GHOST) {
@@ -551,7 +551,7 @@ impl PackageBuilder {
         if options.mode.file_type() != FileType::Regular {
             return Err(Error::InvalidFileOptions {
                 method: "with_file_contents",
-                reason: "expected regular file mode (use FileOptions::new()); use with_dir() for directories or with_symlink() for symlinks",
+                reason: "expected regular file mode (use FileOptions::new()); use with_dir_entry() for directories or with_symlink() for symlinks",
             });
         }
         if options.flag.contains(FileFlags::GHOST) {
@@ -582,19 +582,19 @@ impl PackageBuilder {
     /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
     ///
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "Apache-2.0", "x86_64", "some baz package")
-    ///     .with_dir(
+    ///     .with_dir_entry(
     ///         rpm::FileOptions::dir("/var/log/myapp").user("myuser").permissions(0o750),
     ///     )?
     ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_dir(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+    pub fn with_dir_entry(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
         let options = options.into();
 
         if options.mode.file_type() != FileType::Dir {
             return Err(Error::InvalidFileOptions {
-                method: "with_dir",
+                method: "with_dir_entry",
                 reason: "expected directory file mode (use FileOptions::dir())",
             });
         }
@@ -721,12 +721,12 @@ impl PackageBuilder {
     ///         rpm::FileOptions::new("/etc/myapp/special.conf").config().noreplace(),
     ///     )?
     ///     // Bulk-add everything; special.conf is skipped since it was already added
-    ///     .with_dir_contents("./build/etc", "/etc/myapp", |o| o.config())?
+    ///     .with_dir("./build/etc", "/etc/myapp", |o| o.config())?
     ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_dir_contents<P, D, F>(
+    pub fn with_dir<P, D, F>(
         self,
         source_dir: P,
         dest_prefix: D,
@@ -898,8 +898,8 @@ impl PackageBuilder {
                 // or by a previous bulk operation). This allows explicit with_file() calls
                 // to take precedence regardless of ordering.
                 //
-                // NOTE: when two bulk operations overlap (e.g. with_dir_contents for "/etc"
-                // then with_dir_contents for "/etc/myapp" with different options), the first
+                // NOTE: when two bulk operations overlap (e.g. with_dir for "/etc"
+                // then with_dir for "/etc/myapp" with different options), the first
                 // bulk add wins. If we need more sophisticated merging (e.g. a more-specific
                 // bulk operation overriding a less-specific one), that would require tracking
                 // additional provenance such as the depth or specificity of the bulk source.

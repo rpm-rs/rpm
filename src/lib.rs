@@ -49,7 +49,7 @@
 //!         rpm::FileOptions::symlink("/usr/bin/awesome_link", "/usr/bin/awesome"),
 //!     )?
 //!     // directories can be created with explicit ownership and permissions
-//!     .with_dir(
+//!     .with_dir_entry(
 //!         rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
 //!     )?
 //!     // ghost files track metadata without including content

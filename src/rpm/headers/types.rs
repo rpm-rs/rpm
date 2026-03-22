@@ -59,7 +59,7 @@ pub struct PackageFileEntry {
     pub caps: Option<FileCaps>,
     pub verify_flags: FileVerifyFlags,
     pub source: ContentSource,
-    /// Whether this entry was added by a bulk operation (e.g. `with_dir_contents`).
+    /// Whether this entry was added by a bulk operation (e.g. `with_dir`).
     /// Bulk-added entries can be replaced by explicit methods like `with_file`.
     pub(crate) bulk_added: bool,
 }
@@ -207,7 +207,7 @@ impl FileOptions {
     /// Create a new FileOptions for a directory at the provided path.
     ///
     /// Directories do not require any content source. Use with
-    /// [`PackageBuilder::with_dir()`] to add a directory entry.
+    /// [`PackageBuilder::with_dir_entry()`] to add a directory entry.
     ///
     /// Default permissions are 0o755.
     pub fn dir(dest: impl Into<String>) -> FileOptionsBuilder {

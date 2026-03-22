@@ -83,7 +83,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
                 "/usr/bin/awesome_link",
                 "/usr/bin/awesome",
             ))?
-            .with_dir(
+            .with_dir_entry(
                 FileOptions::dir("/var/log/foobar")
                     .user("root")
                     .permissions(0o750),

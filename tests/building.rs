@@ -176,10 +176,13 @@ fn test_reject_control_chars_in_file_metadata() {
 fn test_file_options_validation() {
     let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
-    // with_dir rejects non-Dir mode
+    // with_dir_entry rejects non-Dir mode
     let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_dir(FileOptions::new("/var/log/foo"));
-    assert!(err.is_err(), "with_dir should reject regular file options");
+        .with_dir_entry(FileOptions::new("/var/log/foo"));
+    assert!(
+        err.is_err(),
+        "with_dir_entry should reject regular file options"
+    );
 
     // with_symlink rejects non-SymbolicLink mode
     let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
@@ -252,7 +255,7 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
             "/usr/bin/test_target",
         ))?
         // Explicit directory entry
-        .with_dir(
+        .with_dir_entry(
             FileOptions::dir("/var/log/testapp")
                 .permissions(0o750)
                 .user("testuser"),
@@ -310,14 +313,14 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Verify that `with_dir_contents` recursively adds directory entries and files.
+/// Verify that `with_dir` recursively adds directory entries and files.
 #[test]
-fn test_with_dir_contents_basic() -> Result<(), Box<dyn std::error::Error>> {
+fn test_with_dir_basic() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
         .source_date(1_600_000_000)
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .build()?;
 
     let mut buf = Vec::new();
@@ -347,10 +350,9 @@ fn test_with_dir_contents_basic() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// An explicit `with_file` added before `with_dir_contents` should take priority over the bulk add.
+/// An explicit `with_file` added before `with_dir` should take priority over the bulk add.
 #[test]
-fn test_with_dir_contents_explicit_override_before_bulk() -> Result<(), Box<dyn std::error::Error>>
-{
+fn test_with_dir_explicit_override_before_bulk() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
     let init_file = source_dir.join("__init__.py");
 
@@ -362,7 +364,7 @@ fn test_with_dir_contents_explicit_override_before_bulk() -> Result<(), Box<dyn 
             &init_file,
             FileOptions::new("/usr/lib/mymodule/__init__.py").config(),
         )?
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .build()?;
 
     let mut buf = Vec::new();
@@ -381,9 +383,9 @@ fn test_with_dir_contents_explicit_override_before_bulk() -> Result<(), Box<dyn 
     Ok(())
 }
 
-/// An explicit `with_file` added after `with_dir_contents` should replace the bulk-added entry.
+/// An explicit `with_file` added after `with_dir` should replace the bulk-added entry.
 #[test]
-fn test_with_dir_contents_explicit_override_after_bulk() -> Result<(), Box<dyn std::error::Error>> {
+fn test_with_dir_explicit_override_after_bulk() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
     let init_file = source_dir.join("__init__.py");
 
@@ -391,7 +393,7 @@ fn test_with_dir_contents_explicit_override_after_bulk() -> Result<(), Box<dyn s
     // The explicit entry should replace the bulk-added one.
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
         .source_date(1_600_000_000)
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .with_file(
             &init_file,
             FileOptions::new("/usr/lib/mymodule/__init__.py").config(),
@@ -414,16 +416,16 @@ fn test_with_dir_contents_explicit_override_after_bulk() -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// When two `with_dir_contents` calls cover the same path, the first bulk add wins.
+/// When two `with_dir` calls cover the same path, the first bulk add wins.
 #[test]
-fn test_with_dir_contents_overlapping_bulk_first_wins() -> Result<(), Box<dyn std::error::Error>> {
+fn test_with_dir_overlapping_bulk_first_wins() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     // Two bulk adds of the same directory — first one wins
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
         .source_date(1_600_000_000)
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.config())?
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.doc())?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.config())?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.doc())?
         .build()?;
 
     let mut buf = Vec::new();
@@ -458,14 +460,14 @@ fn test_duplicate_explicit_add_still_errors() {
 
 /// File-only flags like CONFIG applied via the `customize` callback should be stripped from directory entries.
 #[test]
-fn test_with_dir_contents_strips_flags_from_dirs() -> Result<(), Box<dyn std::error::Error>> {
+fn test_with_dir_strips_flags_from_dirs() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     // Customize callback adds CONFIG — should be stripped from the directory entry
     // but preserved on the file entries
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
         .source_date(1_600_000_000)
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o.config())?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.config())?
         .build()?;
 
     let mut buf = Vec::new();
@@ -527,7 +529,7 @@ fn test_default_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
 fn test_default_dir_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
         .default_dir_attrs(Some(0o700), Some("diruser".into()), Some("dirgroup".into()))
-        .with_dir(FileOptions::dir("/var/log/myapp"))?
+        .with_dir_entry(FileOptions::dir("/var/log/myapp"))?
         .build()?;
 
     let mut buf = Vec::new();
@@ -560,7 +562,7 @@ fn test_default_attrs_file_vs_dir() -> Result<(), Box<dyn std::error::Error>> {
         )
         .default_dir_attrs(Some(0o755), Some("diruser".into()), Some("dirgroup".into()))
         .with_file(&cargo_file, FileOptions::new("/etc/myapp.conf"))?
-        .with_dir(FileOptions::dir("/var/log/myapp"))?
+        .with_dir_entry(FileOptions::dir("/var/log/myapp"))?
         .build()?;
 
     let mut buf = Vec::new();
@@ -679,16 +681,16 @@ fn test_default_attrs_none_fields() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Default attrs should apply to files added via `with_dir_contents`.
+/// Default attrs should apply to files added via `with_dir`.
 #[test]
-fn test_default_attrs_with_dir_contents() -> Result<(), Box<dyn std::error::Error>> {
+fn test_default_attrs_with_dir() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
         .source_date(1_600_000_000)
         .default_file_attrs(Some(0o644), Some("fileuser".into()), None)
         .default_dir_attrs(Some(0o755), Some("diruser".into()), None)
-        .with_dir_contents(&source_dir, "/usr/lib/mymodule", |o| o)?
+        .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .build()?;
 
     let mut buf = Vec::new();

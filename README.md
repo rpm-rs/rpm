@@ -120,7 +120,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     )?
     // directories can be created with explicit ownership and permissions
     // this does not add any directory contents, just declares a directory
-    .with_dir(
+    .with_dir_entry(
         rpm::FileOptions::dir("/var/log/awesome").permissions(0o750),
     )?
     // ghost files / directories are not included in the package payload, but their metadata
