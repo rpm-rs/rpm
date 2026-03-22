@@ -226,7 +226,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
 
         let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
             .expect("Must load signer from signing key")
-            .with_key_passphrase(common::keys::v4::RSA3072_PROTECTED_PASSPHRASE);
+            .with_key_passphrase(common::keys::v4::RSA_3K_PASSPHRASE);
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
         let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig_protected.rpm");

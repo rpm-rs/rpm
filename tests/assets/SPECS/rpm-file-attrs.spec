@@ -25,7 +25,6 @@ echo "artifact" > %{buildroot}/opt/%{name}/artifact
 echo "config" > %{buildroot}/opt/%{name}/config
 echo "config_noreplace" > %{buildroot}/opt/%{name}/config_noreplace
 echo "doc" > %{buildroot}/opt/%{name}/doc
-echo "ghost" > %{buildroot}/opt/%{name}/ghost
 echo "license" > %{buildroot}/opt/%{name}/license
 echo "missingok" > %{buildroot}/opt/%{name}/missingok
 echo "readme" > %{buildroot}/opt/%{name}/readme
@@ -46,7 +45,12 @@ echo "verify_not" > %{buildroot}/opt/%{name}/verify_not
 echo "verify_all" > %{buildroot}/opt/%{name}/verify_all
 echo "verify_none" > %{buildroot}/opt/%{name}/verify_none
 
+# sysusers.d config for non-root owners
+mkdir -p %{buildroot}/usr/lib/sysusers.d
+cp %{_sourcedir}/rpm-file-attrs-sysusers.conf %{buildroot}/usr/lib/sysusers.d/%{name}.conf
+
 %files
+/usr/lib/sysusers.d/%{name}.conf
 /opt/%{name}/normal
 /opt/%{name}/dir/
 /opt/%{name}/symlink
