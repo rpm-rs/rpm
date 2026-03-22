@@ -28,7 +28,7 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
         &signing_key,
-        Some(common::keys::v4::RSA3072_PROTECTED_PASSPHRASE.to_string()),
+        Some(common::keys::v4::RSA_3K_PASSPHRASE.to_string()),
         &verification_key,
         "rsa_resigned_pkg.rpm",
     )?;
