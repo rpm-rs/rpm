@@ -999,7 +999,7 @@ impl PackageMetadata {
                         Err(e)
                     }
                 },
-                |s| CompressionType::from_str(s),
+                CompressionType::from_str,
             )
     }
 
