@@ -51,6 +51,16 @@ where
         debug_assert_eq!(bytes.len(), index_header.data_section_size as usize);
 
         let store = Vec::from(bytes);
+
+        // Check if RPMTAG_ENCODING is present and set to "utf-8". If so, the
+        // header is guaranteed to contain only UTF-8 strings, and invalid UTF-8
+        // should be treated as an error rather than silently lossy-converted.
+        let encoding_is_utf8 = entries.iter().any(|e| {
+            e.tag == IndexTag::RPMTAG_ENCODING.to_u32()
+                && matches!(&e.data, IndexData::StringTag(_))
+                && bytes[e.offset as usize..].starts_with(b"utf-8\0")
+        });
+
         // add data to entries
         for entry in &mut entries {
             let remaining = &bytes[entry.offset as usize..];
@@ -75,19 +85,22 @@ where
                 // String data lives in `store` and is read on access via offset/num_items.
                 // We validate UTF-8 here during parse (cheap, SIMD-optimized) so that
                 // getters can return &str borrowing directly from `store` with no
-                // allocation or re-validation.
+                // allocation (or, potentially, re-validation).
                 //
-                // If validation fails (rare — only possible with old non-UTF-8 packages),
-                // we store a lossy-converted fallback in the IndexData variant. Getters
-                // detect this via `is_empty()`: an empty String/Vec means "valid UTF-8,
-                // read from store", while a populated one holds the lossy fallback.
-                // This is unambiguous because an empty byte sequence is always valid
-                // UTF-8, so the fallback path is never triggered for genuinely empty
-                // strings.
+                // If RPMTAG_ENCODING is "utf-8", invalid UTF-8 is an error (the
+                // package is malformed). Otherwise (old non-UTF-8 packages), we store
+                // a lossy-converted fallback in the IndexData variant. Getters detect
+                // this via `is_empty()`: an empty String/Vec means "valid UTF-8, read
+                // from store", while a populated one holds the lossy fallback. This is
+                // unambiguous because an empty byte sequence is always valid UTF-8, so
+                // the fallback path is never triggered for genuinely empty strings.
                 IndexData::StringTag(s) => {
                     let nul = memchr::memchr(0, remaining)
                         .ok_or(Error::UnterminatedHeaderString)?;
                     if std::str::from_utf8(&remaining[..nul]).is_err() {
+                        if encoding_is_utf8 {
+                            return Err(Error::InvalidUtf8 { tag: entry.tag.to_string() });
+                        }
                         *s = String::from_utf8_lossy(&remaining[..nul]).into_owned();
                     }
                 }
@@ -104,6 +117,9 @@ where
                         pos = &pos[nul + 1..];
                     }
                     if has_invalid {
+                        if encoding_is_utf8 {
+                            return Err(Error::InvalidUtf8 { tag: entry.tag.to_string() });
+                        }
                         let mut pos = remaining;
                         for _ in 0..entry.num_items {
                             let nul = memchr::memchr(0, pos)

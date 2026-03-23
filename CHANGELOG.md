@@ -26,9 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bump `pgp` to `0.19.0`
-- Improved performance of package header parsing.
 - The `signature-pgp` feature now depends on `getrandom` in addition to `pgp` and `chrono`.
 - `Signer::load_from_asc` now auto-selects the first subkey with the signing capability flag, rather than always using the primary key. This is the correct behavior for v6 keys where the primary key is certification-only.
+- Packages that declare `RPMTAG_ENCODING = "utf-8"` will be validated that their strings are valid UTF-8 (lazily, on field access).
+- Improved performance and memory overhead of package header parsing.
+  - As a low-level detail, the data field on `IndexEntry` will no longer be eagerly filled with data from the package header. Only in cases where the data needs to be transformed before being presented will this happen, otherwise data is lazily parsed from the `store` section of the header.
 
 ### Breaking Changes
 
