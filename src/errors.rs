@@ -32,6 +32,8 @@ pub enum Error {
     },
     #[error("unterminated string in header data store")]
     UnterminatedHeaderString,
+    #[error("invalid UTF-8 in tag {tag} (encoding is guaranteed as utf-8)")]
+    InvalidUtf8 { tag: String },
     #[error("unable to find tag {0}")]
     TagNotFound(String),
     #[error("unable to find scriptlet")]
