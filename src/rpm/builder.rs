@@ -1105,61 +1105,37 @@ impl PackageBuilder {
             supplements_versions.push(d.version);
         }
 
-        let offset = 0;
-
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
             // If the SOURCERPM tag is set, then the package is seen as a binary rpm.
             IndexEntry::new(
                 IndexTag::RPMTAG_SOURCERPM,
-                offset,
                 IndexData::StringTag("(none)".to_string()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_HEADERI18NTABLE,
-                offset,
                 IndexData::StringArray(vec!["C".to_string()]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_NAME,
-                offset,
-                IndexData::StringTag(self.name),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_EPOCH,
-                offset,
-                IndexData::Int32(vec![self.epoch]),
-            ),
+            IndexEntry::new(IndexTag::RPMTAG_NAME, IndexData::StringTag(self.name)),
+            IndexEntry::new(IndexTag::RPMTAG_EPOCH, IndexData::Int32(vec![self.epoch])),
             IndexEntry::new(
                 IndexTag::RPMTAG_RPMVERSION,
-                offset,
                 IndexData::StringTag(format!("rpm-rs {}", env!("CARGO_PKG_VERSION"))),
             ),
             // @todo: write RPMTAG_PLATFORM?
-            IndexEntry::new(
-                IndexTag::RPMTAG_VERSION,
-                offset,
-                IndexData::StringTag(self.version),
-            ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_RELEASE,
-                offset,
-                IndexData::StringTag(self.release),
-            ),
+            IndexEntry::new(IndexTag::RPMTAG_VERSION, IndexData::StringTag(self.version)),
+            IndexEntry::new(IndexTag::RPMTAG_RELEASE, IndexData::StringTag(self.release)),
             IndexEntry::new(
                 IndexTag::RPMTAG_DESCRIPTION,
-                offset,
                 IndexData::I18NString(vec![self.desc.unwrap_or_else(|| self.summary.clone())]),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_SUMMARY,
-                offset,
                 IndexData::I18NString(vec![self.summary]),
             ),
             if uses_large_files {
                 IndexEntry::new(
                     IndexTag::RPMTAG_LONGSIZE,
-                    offset,
                     IndexData::Int64(vec![combined_file_sizes]),
                 )
             } else {
@@ -1168,40 +1144,27 @@ impl PackageBuilder {
                     .expect("combined_file_sizes should be smaller than 4 GiB");
                 IndexEntry::new(
                     IndexTag::RPMTAG_SIZE,
-                    offset,
                     IndexData::Int32(vec![combined_file_sizes]),
                 )
             },
-            IndexEntry::new(
-                IndexTag::RPMTAG_LICENSE,
-                offset,
-                IndexData::StringTag(self.license),
-            ),
+            IndexEntry::new(IndexTag::RPMTAG_LICENSE, IndexData::StringTag(self.license)),
             IndexEntry::new(
                 IndexTag::RPMTAG_OS,
-                offset,
                 IndexData::StringTag("linux".to_string()),
             ),
             // @todo: Fedora packaging guidelines recommend against using %group <https://fedoraproject.org/wiki/RPMGroups>
             // If it's legacy and safe to drop entirely let's do so. rpmbuild still writes it in the header though.
             IndexEntry::new(
                 IndexTag::RPMTAG_GROUP,
-                offset,
                 IndexData::I18NString(vec!["Unspecified".to_string()]),
             ),
-            IndexEntry::new(
-                IndexTag::RPMTAG_ARCH,
-                offset,
-                IndexData::StringTag(self.arch),
-            ),
+            IndexEntry::new(IndexTag::RPMTAG_ARCH, IndexData::StringTag(self.arch)),
             IndexEntry::new(
                 IndexTag::RPMTAG_ENCODING,
-                offset,
                 IndexData::StringTag("utf-8".to_string()),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFORMAT,
-                offset,
                 IndexData::StringTag("cpio".to_string()),
             ),
         ];
@@ -1213,14 +1176,12 @@ impl PackageBuilder {
         };
         actual_records.push(IndexEntry::new(
             IndexTag::RPMTAG_BUILDTIME,
-            offset,
             IndexData::Int32(vec![build_time.into()]),
         ));
 
         if let Some(build_host) = self.build_host {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_BUILDHOST,
-                offset,
                 IndexData::StringTag(build_host),
             ));
         }
@@ -1228,11 +1189,7 @@ impl PackageBuilder {
         // if we have an empty RPM, we have to leave out all file related index entries.
         if !self.files.is_empty() {
             let size_entry = if uses_large_files {
-                IndexEntry::new(
-                    IndexTag::RPMTAG_LONGFILESIZES,
-                    offset,
-                    IndexData::Int64(file_sizes),
-                )
+                IndexEntry::new(IndexTag::RPMTAG_LONGFILESIZES, IndexData::Int64(file_sizes))
             } else {
                 let file_sizes = file_sizes
                     .into_iter()
@@ -1242,99 +1199,57 @@ impl PackageBuilder {
                         "combined_file_sizes and thus all file sizes \
                          should be smaller than 4 GiB",
                     );
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILESIZES,
-                    offset,
-                    IndexData::Int32(file_sizes),
-                )
+                IndexEntry::new(IndexTag::RPMTAG_FILESIZES, IndexData::Int32(file_sizes))
             };
             actual_records.extend([
                 size_entry,
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILEMODES,
-                    offset,
-                    IndexData::Int16(file_modes),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILERDEVS,
-                    offset,
-                    IndexData::Int16(file_rdevs),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILEMTIMES,
-                    offset,
-                    IndexData::Int32(file_mtimes),
-                ),
+                IndexEntry::new(IndexTag::RPMTAG_FILEMODES, IndexData::Int16(file_modes)),
+                IndexEntry::new(IndexTag::RPMTAG_FILERDEVS, IndexData::Int16(file_rdevs)),
+                IndexEntry::new(IndexTag::RPMTAG_FILEMTIMES, IndexData::Int32(file_mtimes)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEDIGESTS,
-                    offset,
                     IndexData::StringArray(file_hashes),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILELINKTOS,
-                    offset,
                     IndexData::StringArray(file_linktos),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILEFLAGS,
-                    offset,
-                    IndexData::Int32(file_flags),
-                ),
+                IndexEntry::new(IndexTag::RPMTAG_FILEFLAGS, IndexData::Int32(file_flags)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEUSERNAME,
-                    offset,
                     IndexData::StringArray(file_usernames),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEGROUPNAME,
-                    offset,
                     IndexData::StringArray(file_groupnames),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILEDEVICES,
-                    offset,
-                    IndexData::Int32(file_devices),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_FILEINODES,
-                    offset,
-                    IndexData::Int32(file_inodes),
-                ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_DIRINDEXES,
-                    offset,
-                    IndexData::Int32(dir_indixes),
-                ),
+                IndexEntry::new(IndexTag::RPMTAG_FILEDEVICES, IndexData::Int32(file_devices)),
+                IndexEntry::new(IndexTag::RPMTAG_FILEINODES, IndexData::Int32(file_inodes)),
+                IndexEntry::new(IndexTag::RPMTAG_DIRINDEXES, IndexData::Int32(dir_indixes)),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILELANGS,
-                    offset,
                     IndexData::StringArray(file_langs),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEDIGESTALGO,
-                    offset,
                     IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_FILEVERIFYFLAGS,
-                    offset,
                     IndexData::Int32(file_verify_flags),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_BASENAMES,
-                    offset,
                     IndexData::StringArray(base_names),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_DIRNAMES,
-                    offset,
                     IndexData::StringArray(self.directories.into_iter().collect()),
                 ),
             ]);
             if file_caps.iter().any(|caps| caps.is_some()) {
                 actual_records.extend([IndexEntry::new(
                     IndexTag::RPMTAG_FILECAPS,
-                    offset,
                     IndexData::StringArray(
                         file_caps
                             .iter()
@@ -1351,17 +1266,14 @@ impl PackageBuilder {
         actual_records.extend([
             IndexEntry::new(
                 IndexTag::RPMTAG_PROVIDENAME,
-                offset,
                 IndexData::StringArray(provide_names),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PROVIDEVERSION,
-                offset,
                 IndexData::StringArray(provide_versions),
             ),
             IndexEntry::new(
                 IndexTag::RPMTAG_PROVIDEFLAGS,
-                offset,
                 IndexData::Int32(provide_flags),
             ),
         ]);
@@ -1393,17 +1305,14 @@ impl PackageBuilder {
             actual_records.extend([
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256,
-                    offset,
                     IndexData::StringArray(vec![payload_sha256]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256ALGO,
-                    offset,
                     IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256ALT,
-                    offset,
                     IndexData::StringArray(vec![raw_archive_sha256.to_string()]),
                 ),
             ]);
@@ -1411,19 +1320,13 @@ impl PackageBuilder {
 
         if self.config.format == RpmFormat::V6 {
             actual_records.extend([
-                IndexEntry::new(
-                    IndexTag::RPMTAG_RPMFORMAT,
-                    offset,
-                    IndexData::Int32(vec![6]),
-                ),
+                IndexEntry::new(IndexTag::RPMTAG_RPMFORMAT, IndexData::Int32(vec![6])),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSIZE,
-                    offset,
                     IndexData::Int64(vec![payload.len() as u64]),
                 ),
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSIZEALT,
-                    offset,
                     IndexData::Int64(vec![raw_archive_size as u64]),
                 ),
             ]);
@@ -1431,12 +1334,10 @@ impl PackageBuilder {
                 actual_records.extend([
                     IndexEntry::new(
                         IndexTag::RPMTAG_PAYLOAD_SHA3_256,
-                        offset,
                         IndexData::StringTag(payload_sha3_256),
                     ),
                     IndexEntry::new(
                         IndexTag::RPMTAG_PAYLOAD_SHA3_256_ALT,
-                        offset,
                         IndexData::StringTag(raw_archive_sha3_256.to_string()),
                     ),
                 ]);
@@ -1445,12 +1346,10 @@ impl PackageBuilder {
                 actual_records.extend([
                     IndexEntry::new(
                         IndexTag::RPMTAG_PAYLOAD_SHA512,
-                        offset,
                         IndexData::StringTag(payload_sha512),
                     ),
                     IndexEntry::new(
                         IndexTag::RPMTAG_PAYLOAD_SHA512_ALT,
-                        offset,
                         IndexData::StringTag(raw_archive_sha512.to_string()),
                     ),
                 ]);
@@ -1468,12 +1367,10 @@ impl PackageBuilder {
         if let Some((compression_name, compression_level)) = compression_details {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
-                offset,
                 IndexData::StringTag(compression_name),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADFLAGS,
-                offset,
                 IndexData::StringTag(compression_level),
             ));
         }
@@ -1481,17 +1378,14 @@ impl PackageBuilder {
         if !self.changelog_names.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGNAME,
-                offset,
                 IndexData::StringArray(self.changelog_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTEXT,
-                offset,
                 IndexData::StringArray(self.changelog_entries),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CHANGELOGTIME,
-                offset,
                 IndexData::Int32(self.changelog_times.into_iter().map(Into::into).collect()),
             ));
         }
@@ -1499,17 +1393,14 @@ impl PackageBuilder {
         if !obsolete_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_OBSOLETENAME,
-                offset,
                 IndexData::StringArray(obsolete_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_OBSOLETEVERSION,
-                offset,
                 IndexData::StringArray(obsolete_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_OBSOLETEFLAGS,
-                offset,
                 IndexData::Int32(obsolete_flags),
             ));
         }
@@ -1517,17 +1408,14 @@ impl PackageBuilder {
         if !require_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_REQUIRENAME,
-                offset,
                 IndexData::StringArray(require_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_REQUIREVERSION,
-                offset,
                 IndexData::StringArray(require_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_REQUIREFLAGS,
-                offset,
                 IndexData::Int32(require_flags),
             ));
         }
@@ -1535,17 +1423,14 @@ impl PackageBuilder {
         if !conflicts_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CONFLICTNAME,
-                offset,
                 IndexData::StringArray(conflicts_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CONFLICTVERSION,
-                offset,
                 IndexData::StringArray(conflicts_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_CONFLICTFLAGS,
-                offset,
                 IndexData::Int32(conflicts_flags),
             ));
         }
@@ -1553,17 +1438,14 @@ impl PackageBuilder {
         if !recommends_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_RECOMMENDNAME,
-                offset,
                 IndexData::StringArray(recommends_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_RECOMMENDVERSION,
-                offset,
                 IndexData::StringArray(recommends_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_RECOMMENDFLAGS,
-                offset,
                 IndexData::Int32(recommends_flags),
             ));
         }
@@ -1571,17 +1453,14 @@ impl PackageBuilder {
         if !suggests_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUGGESTNAME,
-                offset,
                 IndexData::StringArray(suggests_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUGGESTVERSION,
-                offset,
                 IndexData::StringArray(suggests_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUGGESTFLAGS,
-                offset,
                 IndexData::Int32(suggests_flags),
             ));
         }
@@ -1589,17 +1468,14 @@ impl PackageBuilder {
         if !enhances_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_ENHANCENAME,
-                offset,
                 IndexData::StringArray(enhances_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_ENHANCEVERSION,
-                offset,
                 IndexData::StringArray(enhances_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_ENHANCEFLAGS,
-                offset,
                 IndexData::Int32(enhances_flags),
             ));
         }
@@ -1607,57 +1483,53 @@ impl PackageBuilder {
         if !supplements_flags.is_empty() {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUPPLEMENTNAME,
-                offset,
                 IndexData::StringArray(supplements_names),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUPPLEMENTVERSION,
-                offset,
                 IndexData::StringArray(supplements_versions),
             ));
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUPPLEMENTFLAGS,
-                offset,
                 IndexData::Int32(supplements_flags),
             ));
         }
 
         if let Some(script) = self.pre_inst_script {
-            script.apply(&mut actual_records, offset, PREIN_TAGS);
+            script.apply(&mut actual_records, PREIN_TAGS);
         }
 
         if let Some(script) = self.post_inst_script {
-            script.apply(&mut actual_records, offset, POSTIN_TAGS);
+            script.apply(&mut actual_records, POSTIN_TAGS);
         }
 
         if let Some(script) = self.pre_uninst_script {
-            script.apply(&mut actual_records, offset, PREUN_TAGS);
+            script.apply(&mut actual_records, PREUN_TAGS);
         }
 
         if let Some(script) = self.post_uninst_script {
-            script.apply(&mut actual_records, offset, POSTUN_TAGS);
+            script.apply(&mut actual_records, POSTUN_TAGS);
         }
 
         if let Some(script) = self.pre_trans_script {
-            script.apply(&mut actual_records, offset, PRETRANS_TAGS);
+            script.apply(&mut actual_records, PRETRANS_TAGS);
         }
 
         if let Some(script) = self.post_trans_script {
-            script.apply(&mut actual_records, offset, POSTTRANS_TAGS);
+            script.apply(&mut actual_records, POSTTRANS_TAGS);
         }
 
         if let Some(script) = self.pre_untrans_script {
-            script.apply(&mut actual_records, offset, PREUNTRANS_TAGS);
+            script.apply(&mut actual_records, PREUNTRANS_TAGS);
         }
 
         if let Some(script) = self.post_untrans_script {
-            script.apply(&mut actual_records, offset, POSTUNTRANS_TAGS);
+            script.apply(&mut actual_records, POSTUNTRANS_TAGS);
         }
 
         if let Some(vendor) = self.vendor {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_VENDOR,
-                offset,
                 IndexData::StringTag(vendor),
             ));
         }
@@ -1665,7 +1537,6 @@ impl PackageBuilder {
         if let Some(url) = self.url {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_URL,
-                offset,
                 IndexData::StringTag(url),
             ));
         }
@@ -1673,7 +1544,6 @@ impl PackageBuilder {
         if let Some(vcs) = self.vcs {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_VCS,
-                offset,
                 IndexData::StringTag(vcs),
             ));
         }
@@ -1681,7 +1551,6 @@ impl PackageBuilder {
         if let Some(cookie) = self.cookie {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_COOKIE,
-                offset,
                 IndexData::StringTag(cookie),
             ));
         }

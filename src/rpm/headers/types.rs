@@ -627,34 +627,23 @@ impl Scriptlet {
     }
 
     /// Consumes the receiver and applies all index entries for the scriptlet based on builder state
-    pub(crate) fn apply(
-        self,
-        records: &mut Vec<IndexEntry<IndexTag>>,
-        offset: i32,
-        tags: ScriptletIndexTags,
-    ) {
+    pub(crate) fn apply(self, records: &mut Vec<IndexEntry<IndexTag>>, tags: ScriptletIndexTags) {
         let (script_tag, flags_tag, prog_tag) = tags;
 
         records.push(IndexEntry::new(
             script_tag,
-            offset,
             IndexData::StringTag(self.script),
         ));
 
         if let Some(flags) = self.flags {
             records.push(IndexEntry::new(
                 flags_tag,
-                offset,
                 IndexData::Int32(vec![flags.bits()]),
             ));
         }
 
         if let Some(prog) = self.program {
-            records.push(IndexEntry::new(
-                prog_tag,
-                offset,
-                IndexData::StringArray(prog),
-            ));
+            records.push(IndexEntry::new(prog_tag, IndexData::StringArray(prog)));
         }
     }
 }
@@ -805,9 +794,8 @@ echo `hello world`
         .prog(vec!["/usr/bin/blah", "-c"]);
 
         let mut records = vec![];
-        let offset = 0i32;
 
-        scriptlet.apply(&mut records, offset, crate::PREIN_TAGS);
+        scriptlet.apply(&mut records, crate::PREIN_TAGS);
 
         assert!(records.len() == 3);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_PREIN as u32);
@@ -829,9 +817,8 @@ echo `hello world`
         );
 
         let mut records = vec![];
-        let offset = 0i32;
 
-        scriptlet.apply(&mut records, offset, crate::POSTUN_TAGS);
+        scriptlet.apply(&mut records, crate::POSTUN_TAGS);
         assert!(records.len() == 1);
         assert_eq!(records[0].tag, crate::IndexTag::RPMTAG_POSTUN as u32);
         assert_eq!(records[0].data.as_str(), Some("echo `hello world`"));
