@@ -82,24 +82,18 @@ impl SignatureHeaderBuilder {
 
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_OPENPGP,
-                0i32,
                 IndexData::StringArray(openpgp_signatures),
             ));
 
             // the legacy signature tags are produced from the last signature in the list
             if let Some((tag, sig_bytes)) = legacy_sig {
-                entries.push(IndexEntry::new(
-                    tag,
-                    0i32,
-                    IndexData::Bin(sig_bytes.clone()),
-                ));
+                entries.push(IndexEntry::new(tag, IndexData::Bin(sig_bytes.clone())));
             }
         }
 
         if let Some(digest) = self.header_sha256 {
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA256,
-                0i32,
                 IndexData::StringTag(digest),
             ));
         }
@@ -107,7 +101,6 @@ impl SignatureHeaderBuilder {
         if let Some(digest) = self.header_sha3_256 {
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA3_256,
-                0i32,
                 IndexData::StringTag(digest),
             ));
         }
@@ -116,13 +109,11 @@ impl SignatureHeaderBuilder {
             if let Ok(len) = u32::try_from(len) {
                 entries.push(IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SIZE,
-                    0,
                     IndexData::Int32(vec![len]),
                 ));
             } else {
                 entries.push(IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_LONGSIZE,
-                    0,
                     IndexData::Int64(vec![len]),
                 ));
             }

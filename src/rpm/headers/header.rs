@@ -254,15 +254,26 @@ where
 
     pub(crate) fn create_region_tag(tag: T, records_count: i32, offset: i32) -> IndexEntry<T> {
         let mut header_immutable_index_data = vec![];
-        let mut hie = IndexEntry::new(
-            tag,
-            (records_count + 1) * -(INDEX_ENTRY_SIZE as i32),
-            IndexData::Bin(Vec::new()),
-        );
-        hie.num_items = 16;
+        let hie: IndexEntry<T> = IndexEntry {
+            tag: tag.to_u32(),
+            data: IndexData::Bin(Vec::new()),
+            offset: (records_count + 1) * -(INDEX_ENTRY_SIZE as i32),
+            // num_items for Bin is the byte count; the region tag's data is one
+            // serialized index entry, which is INDEX_ENTRY_SIZE (16) bytes.
+            num_items: INDEX_ENTRY_SIZE,
+            entry_type: PhantomData,
+        };
         hie.write_index(&mut header_immutable_index_data)
             .expect("unable to write to memory buffer");
-        IndexEntry::new(tag, offset, IndexData::Bin(header_immutable_index_data))
+        let data = IndexData::Bin(header_immutable_index_data);
+        let num_items = data.num_items();
+        IndexEntry {
+            tag: tag.to_u32(),
+            data,
+            offset, // offset matters in this case
+            num_items,
+            entry_type: PhantomData,
+        }
     }
 
     pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
@@ -671,10 +682,14 @@ impl<T: Tag> IndexEntry<T> {
         Ok(())
     }
 
-    pub(crate) fn new(tag: T, offset: i32, data: IndexData) -> IndexEntry<T> {
+    /// Create a new IndexEntry for use in building headers.
+    ///
+    /// The `offset` field is initialized to 0 because it is computed later
+    /// by `Header::from_entries` when the entry's data is appended to the store.
+    pub(crate) fn new(tag: T, data: IndexData) -> IndexEntry<T> {
         IndexEntry {
             tag: tag.to_u32(),
-            offset,
+            offset: 0,
             num_items: data.num_items(),
             data,
             entry_type: PhantomData,
