@@ -83,51 +83,48 @@ where
                     parse_entry_data_number(remaining, entry.num_items, ints, be_u64)?;
                 }
                 // String data lives in `store` and is read on access via offset/num_items.
-                // We validate UTF-8 here during parse (cheap, SIMD-optimized) so that
-                // getters can return &str borrowing directly from `store` with no
-                // allocation (or, potentially, re-validation).
                 //
-                // If RPMTAG_ENCODING is "utf-8", invalid UTF-8 is an error (the
-                // package is malformed). Otherwise (old non-UTF-8 packages), we store
-                // a lossy-converted fallback in the IndexData variant. Getters detect
-                // this via `is_empty()`: an empty String/Vec means "valid UTF-8, read
-                // from store", while a populated one holds the lossy fallback. This is
+                // When encoding_is_utf8 is true (modern packages with RPMTAG_ENCODING),
+                // we skip validation here entirely — getters validate lazily and return
+                // Error::InvalidUtf8 on failure. This avoids scanning strings that are
+                // never accessed.
+                //
+                // When encoding_is_utf8 is false (old packages without RPMTAG_ENCODING),
+                // we validate eagerly and store a lossy-converted fallback in the
+                // IndexData variant for any invalid strings. Getters detect this via
+                // `is_empty()`: an empty String/Vec means "valid UTF-8, read from
+                // store", while a populated one holds the lossy fallback. This is
                 // unambiguous because an empty byte sequence is always valid UTF-8, so
                 // the fallback path is never triggered for genuinely empty strings.
                 IndexData::StringTag(s) => {
-                    let nul = memchr::memchr(0, remaining)
-                        .ok_or(Error::UnterminatedHeaderString)?;
-                    if std::str::from_utf8(&remaining[..nul]).is_err() {
-                        if encoding_is_utf8 {
-                            return Err(Error::InvalidUtf8 { tag: entry.tag.to_string() });
+                    if !encoding_is_utf8 {
+                        let nul =
+                            memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                        if std::str::from_utf8(&remaining[..nul]).is_err() {
+                            *s = String::from_utf8_lossy(&remaining[..nul]).into_owned();
                         }
-                        *s = String::from_utf8_lossy(&remaining[..nul]).into_owned();
                     }
                 }
-                IndexData::StringArray(strings)
-                | IndexData::I18NString(strings) => {
-                    let mut pos = remaining;
-                    let mut has_invalid = false;
-                    for _ in 0..entry.num_items {
-                        let nul = memchr::memchr(0, pos)
-                            .ok_or(Error::UnterminatedHeaderString)?;
-                        if std::str::from_utf8(&pos[..nul]).is_err() {
-                            has_invalid = true;
-                        }
-                        pos = &pos[nul + 1..];
-                    }
-                    if has_invalid {
-                        if encoding_is_utf8 {
-                            return Err(Error::InvalidUtf8 { tag: entry.tag.to_string() });
-                        }
+                IndexData::StringArray(strings) | IndexData::I18NString(strings) => {
+                    if !encoding_is_utf8 {
                         let mut pos = remaining;
+                        let mut has_invalid = false;
                         for _ in 0..entry.num_items {
-                            let nul = memchr::memchr(0, pos)
-                                .ok_or(Error::UnterminatedHeaderString)?;
-                            strings.push(
-                                String::from_utf8_lossy(&pos[..nul]).into_owned(),
-                            );
+                            let nul =
+                                memchr::memchr(0, pos).ok_or(Error::UnterminatedHeaderString)?;
+                            if std::str::from_utf8(&pos[..nul]).is_err() {
+                                has_invalid = true;
+                            }
                             pos = &pos[nul + 1..];
+                        }
+                        if has_invalid {
+                            let mut pos = remaining;
+                            for _ in 0..entry.num_items {
+                                let nul = memchr::memchr(0, pos)
+                                    .ok_or(Error::UnterminatedHeaderString)?;
+                                strings.push(String::from_utf8_lossy(&pos[..nul]).into_owned());
+                                pos = &pos[nul + 1..];
+                            }
                         }
                     }
                 }
@@ -184,12 +181,14 @@ where
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
             // Non-empty: lossy fallback populated during parse (see parse comment above).
-            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            // Empty: valid UTF-8 (or not yet validated), read directly from store.
             IndexData::StringTag(s) if !s.is_empty() => Ok(s.as_str()),
             IndexData::StringTag(_) => {
                 let remaining = &self.store[entry.offset as usize..];
                 let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                Ok(std::str::from_utf8(&remaining[..nul]).expect("UTF-8 validated during parse"))
+                std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                    tag: entry.tag.to_string(),
+                })
             }
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "string",
@@ -203,13 +202,15 @@ where
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
             // Non-empty: lossy fallback populated during parse (see parse comment above).
-            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            // Empty: valid UTF-8 (or not yet validated), read directly from store.
             IndexData::I18NString(strings) if !strings.is_empty() => Ok(strings[0].as_str()),
             IndexData::I18NString(_) => {
                 // @todo: an actual implementation that doesn't just get the first string from the table
                 let remaining = &self.store[entry.offset as usize..];
                 let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                Ok(std::str::from_utf8(&remaining[..nul]).expect("UTF-8 validated during parse"))
+                std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                    tag: entry.tag.to_string(),
+                })
             }
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "i18n string array",
@@ -234,11 +235,14 @@ where
     pub fn get_entry_data_as_u32(&self, tag: T) -> Result<u32, Error> {
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
-            IndexData::Int32(s) => s.first().copied().ok_or_else(|| Error::UnexpectedTagDataType {
-                expected_data_type: "uint32",
-                actual_data_type: entry.data.to_string(),
-                tag: entry.tag.to_string(),
-            }),
+            IndexData::Int32(s) => s
+                .first()
+                .copied()
+                .ok_or_else(|| Error::UnexpectedTagDataType {
+                    expected_data_type: "uint32",
+                    actual_data_type: entry.data.to_string(),
+                    tag: entry.tag.to_string(),
+                }),
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint32",
                 actual_data_type: entry.data.to_string(),
@@ -262,11 +266,14 @@ where
     pub fn get_entry_data_as_u64(&self, tag: T) -> Result<u64, Error> {
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
-            IndexData::Int64(s) => s.first().copied().ok_or_else(|| Error::UnexpectedTagDataType {
-                expected_data_type: "uint64",
-                actual_data_type: entry.data.to_string(),
-                tag: entry.tag.to_string(),
-            }),
+            IndexData::Int64(s) => s
+                .first()
+                .copied()
+                .ok_or_else(|| Error::UnexpectedTagDataType {
+                    expected_data_type: "uint64",
+                    actual_data_type: entry.data.to_string(),
+                    tag: entry.tag.to_string(),
+                }),
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint64",
                 actual_data_type: entry.data.to_string(),
@@ -291,7 +298,7 @@ where
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
             // Non-empty: lossy fallback populated during parse (see parse comment above).
-            // Empty: valid UTF-8, read directly from store. Could use from_utf8_unchecked.
+            // Empty: valid UTF-8 (or not yet validated), read directly from store.
             IndexData::StringArray(strings) | IndexData::I18NString(strings)
                 if !strings.is_empty() =>
             {
@@ -303,8 +310,10 @@ where
                 for _ in 0..entry.num_items {
                     let nul =
                         memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                    let s = std::str::from_utf8(&remaining[..nul])
-                        .expect("UTF-8 validated during parse");
+                    let s =
+                        std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                            tag: entry.tag.to_string(),
+                        })?;
                     result.push(s);
                     remaining = &remaining[nul + 1..];
                 }
@@ -968,5 +977,4 @@ mod test {
 
         Ok(())
     }
-
 }
