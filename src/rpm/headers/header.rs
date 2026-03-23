@@ -165,8 +165,48 @@ where
         // an integer, and the name of the tag (or "unknown") can be easily derived from that
     }
 
-    pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], Error> {
-        let entry = self.find_entry_or_err(tag)?;
+    /// Resolve an entry's data from the store, returning a filled owned `IndexData`.
+    ///
+    /// For eagerly-parsed types (Char, Int8, Int16, Int32, Int64), this clones
+    /// the existing data. For lazily-resolved types (StringTag, StringArray,
+    /// I18NString, Bin), this reads from the store and allocates owned data.
+    ///
+    /// You probably don't want to use this, unless it's for e.g. debugging purposes.
+    #[allow(dead_code)]
+    fn resolve_entry_data(&self, entry: &IndexEntry<T>) -> Result<IndexData, Error> {
+        match &entry.data {
+            IndexData::Null => Ok(IndexData::Null),
+            IndexData::Char(d) => Ok(IndexData::Char(d.clone())),
+            IndexData::Int8(d) => Ok(IndexData::Int8(d.clone())),
+            IndexData::Int16(d) => Ok(IndexData::Int16(d.clone())),
+            IndexData::Int32(d) => Ok(IndexData::Int32(d.clone())),
+            IndexData::Int64(d) => Ok(IndexData::Int64(d.clone())),
+            IndexData::StringTag(_) => {
+                let s = self.entry_as_string(entry)?;
+                Ok(IndexData::StringTag(s.to_owned()))
+            }
+            IndexData::Bin(_) => {
+                let b = self.entry_as_binary(entry)?;
+                Ok(IndexData::Bin(b.to_vec()))
+            }
+            IndexData::StringArray(_) => {
+                let v = self.entry_as_string_array(entry)?;
+                Ok(IndexData::StringArray(
+                    v.into_iter().map(|s| s.to_owned()).collect(),
+                ))
+            }
+            IndexData::I18NString(_) => {
+                let v = self.entry_as_string_array(entry)?;
+                Ok(IndexData::I18NString(
+                    v.into_iter().map(|s| s.to_owned()).collect(),
+                ))
+            }
+        }
+    }
+
+    /// Resolve a `Bin` entry's data, reading from the store for parsed entries
+    /// or returning inline data for builder-created entries.
+    fn entry_as_binary<'a>(&'a self, entry: &'a IndexEntry<T>) -> Result<&'a [u8], Error> {
         match &entry.data {
             // Non-empty: builder-created entry with inline data.
             // Empty: parsed entry, read directly from store.
@@ -183,8 +223,9 @@ where
         }
     }
 
-    pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, Error> {
-        let entry = self.find_entry_or_err(tag)?;
+    /// Resolve a `StringTag` entry's data, returning the lossy fallback if one
+    /// was stored during parse, or reading directly from the store otherwise.
+    fn entry_as_string<'a>(&'a self, entry: &'a IndexEntry<T>) -> Result<&'a str, Error> {
         match &entry.data {
             // Non-empty: lossy fallback populated during parse (see parse comment above).
             // Empty: valid UTF-8 (or not yet validated), read directly from store.
@@ -204,8 +245,9 @@ where
         }
     }
 
-    pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, Error> {
-        let entry = self.find_entry_or_err(tag)?;
+    /// Resolve an `I18NString` entry, returning the first string from the table.
+    /// Returns the lossy fallback if stored during parse, or reads from the store.
+    fn entry_as_i18n_string<'a>(&'a self, entry: &'a IndexEntry<T>) -> Result<&'a str, Error> {
         match &entry.data {
             // Non-empty: lossy fallback populated during parse (see parse comment above).
             // Empty: valid UTF-8 (or not yet validated), read directly from store.
@@ -224,6 +266,59 @@ where
                 tag: entry.tag.to_string(),
             }),
         }
+    }
+
+    /// Resolve a `StringArray` or `I18NString` entry as a list of strings.
+    /// Returns lossy fallbacks if stored during parse, or reads from the store.
+    fn entry_as_string_array<'a>(
+        &'a self,
+        entry: &'a IndexEntry<T>,
+    ) -> Result<Vec<&'a str>, Error> {
+        match &entry.data {
+            // Non-empty: lossy fallback populated during parse (see parse comment above).
+            // Empty: valid UTF-8 (or not yet validated), read directly from store.
+            IndexData::StringArray(strings) | IndexData::I18NString(strings)
+                if !strings.is_empty() =>
+            {
+                Ok(strings.iter().map(|s| s.as_str()).collect())
+            }
+            IndexData::StringArray(_) | IndexData::I18NString(_) => {
+                let mut remaining = &self.store[entry.offset as usize..];
+                let mut result = Vec::with_capacity(entry.num_items as usize);
+                for _ in 0..entry.num_items {
+                    let nul =
+                        memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                    let s =
+                        std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                            tag: entry.tag.to_string(),
+                        })?;
+                    result.push(s);
+                    remaining = &remaining[nul + 1..];
+                }
+                Ok(result)
+            }
+            _ => Err(Error::UnexpectedTagDataType {
+                expected_data_type: "string array",
+                actual_data_type: entry.data.to_string(),
+                tag: entry.tag.to_string(),
+            }),
+        }
+    }
+
+    pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], Error> {
+        self.entry_as_binary(self.find_entry_or_err(tag)?)
+    }
+
+    pub fn get_entry_data_as_string(&self, tag: T) -> Result<&str, Error> {
+        self.entry_as_string(self.find_entry_or_err(tag)?)
+    }
+
+    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<Vec<&str>, Error> {
+        self.entry_as_string_array(self.find_entry_or_err(tag)?)
+    }
+
+    pub fn get_entry_data_as_i18n_string(&self, tag: T) -> Result<&str, Error> {
+        self.entry_as_i18n_string(self.find_entry_or_err(tag)?)
     }
 
     pub fn get_entry_data_as_u16_array(&self, tag: T) -> Result<Vec<u16>, Error> {
@@ -294,39 +389,6 @@ where
             IndexData::Int64(s) => Ok(s.to_vec()),
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "uint64 array",
-                actual_data_type: entry.data.to_string(),
-                tag: entry.tag.to_string(),
-            }),
-        }
-    }
-
-    pub fn get_entry_data_as_string_array(&self, tag: T) -> Result<Vec<&str>, Error> {
-        let entry = self.find_entry_or_err(tag)?;
-        match &entry.data {
-            // Non-empty: lossy fallback populated during parse (see parse comment above).
-            // Empty: valid UTF-8 (or not yet validated), read directly from store.
-            IndexData::StringArray(strings) | IndexData::I18NString(strings)
-                if !strings.is_empty() =>
-            {
-                Ok(strings.iter().map(|s| s.as_str()).collect())
-            }
-            IndexData::StringArray(_) | IndexData::I18NString(_) => {
-                let mut remaining = &self.store[entry.offset as usize..];
-                let mut result = Vec::with_capacity(entry.num_items as usize);
-                for _ in 0..entry.num_items {
-                    let nul =
-                        memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
-                    let s =
-                        std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
-                            tag: entry.tag.to_string(),
-                        })?;
-                    result.push(s);
-                    remaining = &remaining[nul + 1..];
-                }
-                Ok(result)
-            }
-            _ => Err(Error::UnexpectedTagDataType {
-                expected_data_type: "string array",
                 actual_data_type: entry.data.to_string(),
                 tag: entry.tag.to_string(),
             }),
