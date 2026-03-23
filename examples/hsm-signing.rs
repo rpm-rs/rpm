@@ -1,6 +1,9 @@
 use clap::Parser;
-use pgp::types::{KeyVersion, Timestamp};
-use rpm::Package;
+use pgp::{
+    adapter::RsaSigner,
+    types::{KeyVersion, Timestamp},
+};
+use rpm::{Package, signature::pgp::HsmSigner};
 use rsa::{RsaPrivateKey, pkcs1v15};
 use std::path::PathBuf;
 
@@ -26,10 +29,10 @@ fn main() {
 
     // pgp::adapter::RsaSigner accept any key that implements [`signature::Keypair`] and
     // [`signature::PrehashSigner`].
-    let rsa_signer = pgp::adapter::RsaSigner::new(rsa_key, KeyVersion::V4, Timestamp::now())
-        .expect("create a PGP signer");
+    let rsa_signer =
+        RsaSigner::new(rsa_key, KeyVersion::V4, Timestamp::now()).expect("create a PGP signer");
 
-    let pgp_signer = rpm::signature::pgp::Signer::new(rsa_signer).expect("Create an RPM signer");
+    let pgp_signer = HsmSigner::new(rsa_signer);
 
     let mut pkg = Package::open(args.input).expect("open source rpm");
     pkg.sign(pgp_signer)
