@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation to reject control characters in inputs to `PackageBuilder`.
 - Added validation to match RPM's treatment of characters allowed or disallowed in package names.
 - Improved handling of file paths (normalization) to prevent duplicates and behave more like the OG `rpm`.
-- Improved handling of "ghost" files.
+- A number of issues / discrepancies in package payload writing.
+- A number of issues / discrepancies in the treatment of ghost files.
 
 ### Changed
 
@@ -36,10 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer` fields are no longer public; use the provided constructor methods instead.
 - Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
 
-### Fixed
-
-- A number of issues / discrepancies in package payload writing.
-- A number of issues / discrepancies in the treatment of ghost files.
 
 ## 0.19.0
 
