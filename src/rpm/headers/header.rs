@@ -128,9 +128,9 @@ where
                         }
                     }
                 }
-                IndexData::Bin(bin) => {
-                    parse_binary_entry(remaining, entry.num_items, bin, "Bin")?;
-                }
+                // Bin data lives in `store` and is read on access via offset/num_items,
+                // same as string data. See get_entry_data_as_binary.
+                IndexData::Bin(_) => {}
             }
         }
 
@@ -168,7 +168,13 @@ where
     pub fn get_entry_data_as_binary(&self, tag: T) -> Result<&[u8], Error> {
         let entry = self.find_entry_or_err(tag)?;
         match &entry.data {
-            IndexData::Bin(d) => Ok(d.as_slice()),
+            // Non-empty: builder-created entry with inline data.
+            // Empty: parsed entry, read directly from store.
+            IndexData::Bin(d) if !d.is_empty() => Ok(d.as_slice()),
+            IndexData::Bin(_) => {
+                let start = entry.offset as usize;
+                Ok(&self.store[start..start + entry.num_items as usize])
+            }
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "binary",
                 actual_data_type: entry.data.to_string(),
