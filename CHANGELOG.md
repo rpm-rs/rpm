@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
 - `PackageBuilder::with_dir_entry()` as a shortcut to adding a directory entry on the RPM (doesn't add contents).
 - `PackageBuilder::with_dir()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir()`.
+- `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
 
 ### Fixed
 

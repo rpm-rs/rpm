@@ -156,6 +156,12 @@ impl Signer {
         })
     }
 
+    /// Load the private key for signing from an ascii armored file.
+    pub fn load_from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+        let input = std::fs::read_to_string(path).map_err(Error::Io)?;
+        Self::load_from_asc(&input)
+    }
+
     /// Load the private key for signing from ascii armored bytes.
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
@@ -394,12 +400,19 @@ impl traits::Verifying for Verifier {
 }
 
 impl Verifier {
+    /// Load the public key for verification from an ascii armored file.
+    pub fn load_from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+        let input = std::fs::read_to_string(path).map_err(Error::Io)?;
+        Self::load_from_asc(&input)
+    }
+
+    /// Load the public key for verification from ascii armored bytes.
     pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
-        // only asc loading is supported right now
         let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
         Self::load_from_asc(input)
     }
 
+    /// Load the public key for verification from an ascii armored string.
     pub fn load_from_asc(input: &str) -> Result<Self, Error> {
         let (public_key, _) =
             SignedPublicKey::from_string(input).map_err(Error::KeyLoadSecretKeyError)?;
