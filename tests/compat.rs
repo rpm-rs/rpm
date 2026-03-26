@@ -219,11 +219,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
                     continue;
                 }
 
-                let rpm_file = Path::new(pkg_path)
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
+                let rpm_file = Path::new(pkg_path).file_name().unwrap().to_str().unwrap();
 
                 let assets_subdir = match fmt {
                     RpmFormat::V4 => "RPMS/v4/signed",
@@ -385,16 +381,17 @@ fn podman_container_launcher(
     // always mount assets and out directory into container
     let var_cache = Path::new(common::CARGO_MANIFEST_DIR).join("dnf-cache");
     let _ = std::fs::create_dir(var_cache.as_path());
-    let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
-    let out = format!("{}:/out:z", common::CARGO_OUT_DIR);
-    let assets = format!("{}/tests/assets:/assets:z", common::CARGO_MANIFEST_DIR,);
+    let var_cache = format!("{}:/var/cache/dnf", var_cache.display());
+    let out = format!("{}:/out", common::CARGO_OUT_DIR);
+    let assets = format!("{}/tests/assets:/assets:ro", common::CARGO_MANIFEST_DIR,);
     mappings.extend(vec![out, assets, var_cache]);
-    let mut args = mappings
-        .iter()
-        .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
+    let mut args = mappings.iter().fold(
+        vec!["run", "-i", "--rm", "--security-opt", "label=disable"],
+        |mut acc, mapping| {
             acc.extend(vec!["-v", mapping]);
             acc
-        });
+        },
+    );
     args.extend(vec![image, "sh"]);
 
     let mut podman_cmd = std::process::Command::new("podman");
