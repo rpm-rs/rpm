@@ -102,6 +102,10 @@ sign_v4_packages() {
     cp "$BASIC_RPM" "$RSA_SIGNED_RPM"
     rpmsign --addsign "$RSA_SIGNED_RPM" "${V4_RSA_KEY_OPTS[@]}"
 
+    # No fixture for the passphrase-protected RSA key — the passphrase only
+    # affects decrypting the private key, not the resulting signature or its
+    # verification. That code path is exercised in the Rust integration tests.
+
     # ECDSA (nist-p256) Signed
     ECDSA_SIGNED_RPM="${rpmdir}/signed/rpm-basic-with-ecdsa-${VERSION}.noarch.rpm"
     cp "$BASIC_RPM" "$ECDSA_SIGNED_RPM"
