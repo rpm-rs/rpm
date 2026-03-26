@@ -1,5 +1,7 @@
 #!/bin/sh
 
+mkdir -p ./signing_keys/v4 ./signing_keys/v6
+
 # Generate PGP v4 keys
 
 gpg --quick-generate-key --batch --passphrase "" 'rpm-testkey-v4-rsa4096 <rpm-testkey-v4-rsa4096@example.com>' rsa4096 sign never
@@ -84,6 +86,18 @@ sq cert export --overwrite --cert-email "rpm-testkey-v6-ed25519@example.org" --o
 
 sq key export --overwrite --cert-email "rpm-testkey-v6-mldsa65-ed25519@example.org" --output ./signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.secret
 sq cert export --overwrite --cert-email "rpm-testkey-v6-mldsa65-ed25519@example.org" --output ./signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.asc
+
+## Generate keyring files containing multiple certificates (for testing keyring support)
+
+cat ./signing_keys/v4/rpm-testkey-v4-rsa4096.asc ./signing_keys/v4/rpm-testkey-v4-ed25519.asc \
+    > ./signing_keys/v4/rpm-testkey-v4-keyring.asc
+cat ./signing_keys/v4/rpm-testkey-v4-rsa4096.secret ./signing_keys/v4/rpm-testkey-v4-ed25519.secret \
+    > ./signing_keys/v4/rpm-testkey-v4-keyring.secret
+
+cat ./signing_keys/v6/rpm-testkey-v6-rsa4k.asc ./signing_keys/v6/rpm-testkey-v6-ed25519.asc ./signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.asc \
+    > ./signing_keys/v6/rpm-testkey-v6-keyring.asc
+cat ./signing_keys/v6/rpm-testkey-v6-rsa4k.secret ./signing_keys/v6/rpm-testkey-v6-ed25519.secret ./signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.secret \
+    > ./signing_keys/v6/rpm-testkey-v6-keyring.secret
 
 ## Generate IMA file signing key
 
