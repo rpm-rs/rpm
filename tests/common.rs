@@ -183,50 +183,6 @@ pub mod keys {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/assets/signing_keys/v4/rpm-testkey-v4-ecdsa-nistp256.secret"
         );
-
-        pub fn load_rsa() -> (Vec<u8>, Vec<u8>) {
-            (rsa_private(), rsa_public())
-        }
-
-        pub fn rsa_private() -> Vec<u8> {
-            std::fs::read(RSA_4K_PRIVATE).unwrap()
-        }
-
-        pub fn rsa_public() -> Vec<u8> {
-            std::fs::read(RSA_4K_PUBLIC).unwrap()
-        }
-
-        pub fn load_protected_rsa() -> (Vec<u8>, Vec<u8>) {
-            let signing_key =
-                include_bytes!("assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.secret");
-            let verification_key =
-                include_bytes!("assets/signing_keys/v4/rpm-testkey-v4-rsa3072-protected.asc");
-            (signing_key.to_vec(), verification_key.to_vec())
-        }
-
-        pub fn eddsa_private() -> Vec<u8> {
-            std::fs::read(ED25519_PRIVATE).unwrap()
-        }
-
-        pub fn eddsa_public() -> Vec<u8> {
-            std::fs::read(ED25519_PUBLIC).unwrap()
-        }
-
-        pub fn load_eddsa() -> (Vec<u8>, Vec<u8>) {
-            (eddsa_private(), eddsa_public())
-        }
-
-        pub fn ecdsa_private() -> Vec<u8> {
-            std::fs::read(ECDSA_NISTP256_PRIVATE).unwrap()
-        }
-
-        pub fn ecdsa_public() -> Vec<u8> {
-            std::fs::read(ECDSA_NISTP256_PUBLIC).unwrap()
-        }
-
-        pub fn load_ecdsa() -> (Vec<u8>, Vec<u8>) {
-            (ecdsa_private(), ecdsa_public())
-        }
     }
 
     pub mod v6 {
