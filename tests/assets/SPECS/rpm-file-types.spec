@@ -1,6 +1,7 @@
 Name:           rpm-file-types
 Version:        1.0
 Release:        1
+Epoch:          0
 Summary:        Test RPM handling of various file content types and paths
 License:        MIT
 BuildArch:      noarch

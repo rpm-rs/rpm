@@ -25,7 +25,6 @@ echo "artifact" > %{buildroot}/opt/%{name}/artifact
 echo "config" > %{buildroot}/opt/%{name}/config
 echo "config_noreplace" > %{buildroot}/opt/%{name}/config_noreplace
 echo "doc" > %{buildroot}/opt/%{name}/doc
-echo "ghost" > %{buildroot}/opt/%{name}/ghost
 echo "license" > %{buildroot}/opt/%{name}/license
 echo "missingok" > %{buildroot}/opt/%{name}/missingok
 echo "readme" > %{buildroot}/opt/%{name}/readme
