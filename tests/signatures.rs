@@ -1,3 +1,4 @@
+use std::fs;
 use std::{path::Path, time::SystemTime};
 
 use rpm::{
@@ -14,42 +15,38 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     let pkg_path = common::pkgs::v4::RPM_BASIC_RSA_SIGNED;
 
     // test RSA
-    let (signing_key, verification_key) = common::keys::v4::load_rsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
-        &signing_key,
+        &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
         None,
-        &verification_key,
+        &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
         "rsa_resigned_pkg.rpm",
     )?;
 
     // test RSA - with secret key protected by a passphrase
-    let (signing_key, verification_key) = common::keys::v4::load_protected_rsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
-        &signing_key,
+        &fs::read(common::keys::v4::RSA_3K_PROTECTED_PRIVATE)?,
         Some(common::keys::v4::RSA_3K_PASSPHRASE.to_string()),
-        &verification_key,
+        &fs::read(common::keys::v4::RSA_3K_PROTECTED_PUBLIC)?,
         "rsa_resigned_pkg.rpm",
     )?;
 
     // test EdDSA
-    let (signing_key, verification_key) = common::keys::v4::load_eddsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
-        &signing_key,
+        &fs::read(common::keys::v4::ED25519_PRIVATE)?,
         None,
-        &verification_key,
+        &fs::read(common::keys::v4::ED25519_PUBLIC)?,
         "eddsa_resigned_pkg.rpm",
     )?;
 
     // test ECDSA
-    let (signing_key, verification_key) = common::keys::v4::load_ecdsa();
     resign_and_verify_with_keys(
         pkg_path.as_ref(),
-        &signing_key,
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
         None,
-        &verification_key,
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
         "ecdsa_resigned_pkg.rpm",
     )
 }
@@ -61,16 +58,25 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     let _ = env_logger::try_init();
 
     // test RSA
-    let (signing_key, verification_key) = common::keys::v4::load_rsa();
-    build_parse_sign_and_verify(&signing_key, &verification_key, "rsa_signed_pkg.rpm")?;
+    build_parse_sign_and_verify(
+        &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
+        &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
+        "rsa_signed_pkg.rpm",
+    )?;
 
     // test EdDSA
-    let (signing_key, verification_key) = common::keys::v4::load_eddsa();
-    build_parse_sign_and_verify(&signing_key, &verification_key, "eddsa_signed_pkg.rpm")?;
+    build_parse_sign_and_verify(
+        &fs::read(common::keys::v4::ED25519_PRIVATE)?,
+        &fs::read(common::keys::v4::ED25519_PUBLIC)?,
+        "eddsa_signed_pkg.rpm",
+    )?;
 
     // test ECDSA
-    let (signing_key, verification_key) = common::keys::v4::load_ecdsa();
-    build_parse_sign_and_verify(&signing_key, &verification_key, "ecdsa_signed_pkg.rpm")?;
+    build_parse_sign_and_verify(
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
+        "ecdsa_signed_pkg.rpm",
+    )?;
 
     Ok(())
 }
@@ -82,24 +88,21 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
 
     // test RSA
-    let verification_key = common::keys::v4::rsa_public();
-    let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
 
     // test EdDSA
-    let verification_key = common::keys::v4::eddsa_public();
-    let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
 
     // test ECDSA
-    let verification_key = common::keys::v4::ecdsa_public();
-    let verifier = Verifier::load_from_asc_bytes(verification_key.as_ref())?;
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
@@ -138,9 +141,9 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
-    sign_clear_and_verify(&common::keys::v4::eddsa_private())?;
-    sign_clear_and_verify(&common::keys::v4::ecdsa_private())?;
-    sign_clear_and_verify(&common::keys::v4::rsa_private())?;
+    sign_clear_and_verify(&fs::read(common::keys::v4::ED25519_PRIVATE)?)?;
+    sign_clear_and_verify(&fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?)?;
+    sign_clear_and_verify(&fs::read(common::keys::v4::RSA_4K_PRIVATE)?)?;
 
     Ok(())
 }
@@ -148,13 +151,13 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
 /// Test an attempt to verify the signature of a package using the wrong key type
 #[test]
 fn test_verify_package_with_wrong_key_type() -> Result<(), Box<dyn std::error::Error>> {
-    let rsa_signer = Signer::load_from_asc_bytes(&common::keys::v4::rsa_private())?;
-    let rsa_verifier = Verifier::load_from_asc_bytes(&common::keys::v4::rsa_public())?;
+    let rsa_signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let rsa_verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&rsa_signer)?;
 
-    let eddsa_signer = Signer::load_from_asc_bytes(&common::keys::v4::eddsa_private())?;
-    let eddsa_verifier = Verifier::load_from_asc_bytes(&common::keys::v4::eddsa_public())?;
+    let eddsa_signer = Signer::load_from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let eddsa_verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
     let eddsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&eddsa_signer)?;
 

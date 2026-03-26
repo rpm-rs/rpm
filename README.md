@@ -52,15 +52,15 @@ for changelog in pkg.metadata.get_changelog_entries()? {
 ```rust
 use rpm::signature::pgp::{Signer, Verifier};
 
-let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
-let raw_pub_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
+let signer = Signer::load_from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
+let verifier = Verifier::load_from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
 
 let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
-pkg.sign(&raw_secret_key)?;
+pkg.sign(signer)?;
 pkg.write_file("./with_signature.rpm")?;
 
 let pkg = rpm::Package::open("./with_signature.rpm")?;
-pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
+pkg.verify_signature(verifier)?;
 ```
 
 #### Sign with a specific subkey
@@ -68,10 +68,9 @@ pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
 ```rust
 use rpm::signature::pgp::Signer;
 
-let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
 let subkey_fingerprint = hex::decode("1F9A6321E1C5B4600BC2F6D8130FD47580C5CC7701DD8BE59983C1F79325EBF9")?;
 
-let signer = Signer::load_from_asc_bytes(&raw_secret_key)?
+let signer = Signer::load_from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?
     .with_signing_key(&subkey_fingerprint)?;
 
 let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
@@ -84,7 +83,7 @@ pkg.sign(signer)?;
 use rpm::signature::pgp::Signer;
 
 let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
-let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
+let signer = Signer::load_from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
 // It's recommended to use timestamp of last commit in your VCS
 let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
@@ -134,7 +133,7 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .vendor("corporation or individual")
     .url("www.github.com/repo")
     .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
-    .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)?;
+    .build_and_sign(signer)?;
 
 pkg.write_file("./awesome.rpm")?;
 ```

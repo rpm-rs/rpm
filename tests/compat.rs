@@ -10,7 +10,7 @@ mod common;
 #[cfg(target_os = "linux")]
 mod pgp {
     use super::*;
-    use rpm::signature::pgp::Signer;
+    use rpm::signature::pgp::{Signer, Verifier};
 
     #[track_caller]
     fn execute_against_supported_distros(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -106,38 +106,54 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
 
     /// Verify fixture packages against both rpm-rs and rpm (with --checksig)
     #[test]
-    #[ignore = "TODO: needs static assets"]
     fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        // let pkgs = [
-        //     (
-        //         common::rpm_basic_pkg_path_rsa_signed(),
-        //         common::rsa_public_key(),
-        //     ),
-        //     (common::rpm_basic_pkg_path_rsa_signed_protected(), common::rsa_public_key_protected()),
-        //     (common::rpm_basic_pkg_path_ecdsa_signed(), common::ecdsa_public_key()),
-        //     (common::rpm_basic_pkg_path_eddsa_signed(), common::eddsa_public_key()),
-        // ];
+        let pkgs: &[(&str, &str)] = &[
+            (
+                common::pkgs::v4::RPM_BASIC_RSA_SIGNED,
+                common::keys::v4::RSA_4K_PUBLIC,
+            ),
+            // (
+            //     common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED,
+            //     common::keys::v4::ECDSA_NISTP256_PUBLIC,
+            // ),
+            // (
+            //     common::pkgs::v4::RPM_BASIC_EDDSA_SIGNED,
+            //     common::keys::v4::ED25519_PUBLIC,
+            // ),
+            // (
+            //     common::pkgs::v6::RPM_BASIC_RSA_SIGNED,
+            //     common::keys::v6::RSA4K_PUBLIC,
+            // ),
+            // (
+            //     common::pkgs::v6::RPM_BASIC_EDDSA_SIGNED,
+            //     common::keys::v6::ED25519_PUBLIC,
+            // ),
+            // (
+            //     common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED,
+            //     common::keys::v6::MLDSA65_ED25519_PUBLIC,
+            // ),
+        ];
 
         // TODO: currently only RSA-signed packages are accepted across the full range of supported distros
         // it would be nice to test others here as well, but that requires a bit more finesse
 
-        let cmd = String::new();
+        let mut cmd = String::new();
 
-        //         for (pkg_path, pubkey) in &pkgs {
-        //             let verifier = Verifier::load_from_asc_bytes(pubkey.as_ref())?;
-        //             let package = rpm::Package::open(pkg_path)?;
-        //             package.verify_signature(verifier)?;
+        for (pkg_path, pubkey_path) in pkgs {
+            let verifier = Verifier::load_from_asc_file(pubkey_path)?;
+            let package = rpm::Package::open(pkg_path)?;
+            package.verify_signature(verifier)?;
 
-        //             let pkg_cmd = format!(
-        //                 r#"
-        // echo ">>> verify signature with rpm"
-        // rpm -vv --checksig /assets/RPMS/signed/{rpm_file} 2>&1
-        // "#,
-        //                 rpm_file = pkg_path.file_name().unwrap().to_str().unwrap()
-        //             );
-        //             cmd.push_str(&pkg_cmd);
-        //         }
+            let rpm_file = Path::new(pkg_path).file_name().unwrap().to_str().unwrap();
+            let pkg_cmd = format!(
+                r#"
+echo ">>> verify signature with rpm"
+rpm -vv --checksig /assets/RPMS/signed/{rpm_file} 2>&1
+"#,
+            );
+            cmd.push_str(&pkg_cmd);
+        }
 
         execute_against_supported_distros(&cmd)
     }
@@ -162,10 +178,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
             .build_and_sign(&signer)?;
@@ -197,9 +210,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
         let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig.rpm");
@@ -216,10 +227,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
     #[serial_test::serial]
     fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key")
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_3K_PROTECTED_PRIVATE)?
             .with_key_passphrase(common::keys::v4::RSA_3K_PASSPHRASE);
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
@@ -302,9 +310,7 @@ fn podman_container_launcher(
 
     podman_cmd.stdin(Stdio::piped());
 
-    // partially following:
-    //
-    //  https://access.redhat.com/articles/3359321
+    // partially following: https://access.redhat.com/articles/3359321
     let setup = r#"
 set -e
 

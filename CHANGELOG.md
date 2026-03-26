@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
+- `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
 
 ### Fixed
 
