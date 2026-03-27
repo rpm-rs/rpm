@@ -183,6 +183,15 @@ pub mod keys {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/assets/signing_keys/v4/rpm-testkey-v4-ecdsa-nistp256.secret"
         );
+
+        pub const KEYRING_PUBLIC: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc"
+        );
+        pub const KEYRING_PRIVATE: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.secret"
+        );
     }
 
     pub mod v6 {
@@ -211,6 +220,15 @@ pub mod keys {
         pub const MLDSA65_ED25519_PRIVATE: &str = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/assets/signing_keys/v6/rpm-testkey-v6-mldsa65-ed25519.secret"
+        );
+
+        pub const KEYRING_PUBLIC: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/assets/signing_keys/v6/rpm-testkey-v6-keyring.asc"
+        );
+        pub const KEYRING_PRIVATE: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/assets/signing_keys/v6/rpm-testkey-v6-keyring.secret"
         );
     }
 }
