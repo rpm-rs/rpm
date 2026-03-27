@@ -417,6 +417,10 @@ if grep -Eq "ID=.*(centos|almalinux)" /etc/os-release; then
 
     REPOS="--disablerepo=* --enablerepo=base*"
     PACKAGES="rpm-sign gpg"
+    # sequoia-sq is not available on el8
+    if ! grep -q 'VERSION_ID="8' /etc/os-release; then
+        PACKAGES="$PACKAGES sequoia-sq"
+    fi
 fi
 
 echo "\### install tooling for signing"
