@@ -77,6 +77,23 @@ let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-
 pkg.sign(signer)?;
 ```
 
+#### Verify using a keyring with multiple certificates
+
+```rust
+use rpm::signature::pgp::Verifier;
+
+// Keyring files containing multiple OpenPGP certificates are supported.
+// The verifier will try each certificate until it finds one that matches.
+let verifier = Verifier::load_from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?;
+
+let pkg = rpm::Package::open("./tests/assets/RPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm")?;
+pkg.verify_signature(verifier)?;
+
+// You can also narrow down to a specific certificate by fingerprint:
+let verifier = Verifier::load_from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?
+    .with_key(hex::decode("D996AEDC0D64D1E621B95AD2E964F9FB30D073B5")?)?;
+```
+
 #### Build new package
 
 ```rust
