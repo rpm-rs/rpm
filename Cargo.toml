@@ -68,6 +68,7 @@ rsa = "0.9"
 gethostname = "1.0"
 tempfile = "3.21.0"
 clap = { version = "4.6.0", features = ["derive"] }
+pgp = "0.19.0"
 
 [features]
 default = [

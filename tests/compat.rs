@@ -10,26 +10,65 @@ mod common;
 #[cfg(target_os = "linux")]
 mod pgp {
     use super::*;
-    use rpm::signature::pgp::Signer;
+    use rpm::signature::pgp::{Signer, Verifier};
 
-    #[track_caller]
-    fn execute_against_supported_distros(cmd: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let distros = [
-            "quay.io/fedora/fedora:latest",
-            "quay.io/centos/centos:stream10",
-            "quay.io/centos/centos:stream9",
-            "quay.io/almalinuxorg/8-base",
-        ];
-
-        distros.iter().try_for_each(|image| {
-            podman_container_launcher(&cmd, image, vec![])?;
-            Ok(())
-        })
+    /// Signature algorithms that a distro's RPM may or may not support.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum Algorithm {
+        Rsa,
+        Ecdsa,
+        Eddsa,
+        // Mldsa,  TODO: add to matrix once support exists somewhere
     }
 
-    /// Verify that the RPM is installable with valid signatures on the various supported distros
+    /// RPM format versions.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum RpmFormat {
+        V4,
+        V6,
+    }
+
+    struct Distro {
+        image: &'static str,
+        algorithms: &'static [Algorithm],
+        formats: &'static [RpmFormat],
+    }
+
+    impl Distro {
+        fn supports(&self, alg: Algorithm, fmt: RpmFormat) -> bool {
+            self.algorithms.contains(&alg) && self.formats.contains(&fmt)
+        }
+    }
+
+    // NOTE: If a distro gains support for an algorithm or format, update the relevant entry.
+    const DISTROS: &[Distro] = &[
+        Distro {
+            image: "quay.io/almalinuxorg/8-base",
+            algorithms: &[Algorithm::Rsa],
+            formats: &[RpmFormat::V4],
+        },
+        Distro {
+            image: "quay.io/centos/centos:stream9",
+            algorithms: &[Algorithm::Rsa, Algorithm::Eddsa],
+            formats: &[RpmFormat::V4],
+        },
+        Distro {
+            image: "quay.io/centos/centos:stream10",
+            algorithms: &[Algorithm::Rsa, Algorithm::Ecdsa, Algorithm::Eddsa],
+            formats: &[RpmFormat::V4, RpmFormat::V6],
+        },
+        Distro {
+            image: "quay.io/fedora/fedora:latest",
+            algorithms: &[Algorithm::Rsa, Algorithm::Ecdsa, Algorithm::Eddsa],
+            formats: &[RpmFormat::V4, RpmFormat::V6],
+        },
+    ];
+
+    /// Install and checksig a package on distros that support the given
+    /// algorithm and format. Pass `None` for unsigned packages (all distros).
     #[track_caller]
     fn try_installation_and_verify_signatures(
+        required: Option<(Algorithm, RpmFormat)>,
         path: impl AsRef<Path>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let cmd = format!(
@@ -39,7 +78,16 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
             pkg_path = path.as_ref().display()
         );
 
-        execute_against_supported_distros(&cmd)
+        for distro in DISTROS {
+            let should_run = match required {
+                Some((alg, fmt)) => distro.supports(alg, fmt),
+                None => true,
+            };
+            if should_run {
+                podman_container_launcher(&cmd, distro.image, vec![])?;
+            }
+        }
+        Ok(())
     }
 
     fn build_full_rpm() -> Result<PackageBuilder, Box<dyn std::error::Error>> {
@@ -104,42 +152,88 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         Ok(bldr)
     }
 
-    /// Verify fixture packages against both rpm-rs and rpm (with --checksig)
+    /// Verify fixture packages against both rpm-rs and rpm (with --checksig),
+    /// only running each package on distros that support its algorithm and format.
     #[test]
-    #[ignore = "TODO: needs static assets"]
     fn test_verify_externally_signed_rpm() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        // let pkgs = [
-        //     (
-        //         common::rpm_basic_pkg_path_rsa_signed(),
-        //         common::rsa_public_key(),
-        //     ),
-        //     (common::rpm_basic_pkg_path_rsa_signed_protected(), common::rsa_public_key_protected()),
-        //     (common::rpm_basic_pkg_path_ecdsa_signed(), common::ecdsa_public_key()),
-        //     (common::rpm_basic_pkg_path_eddsa_signed(), common::eddsa_public_key()),
-        // ];
 
-        // TODO: currently only RSA-signed packages are accepted across the full range of supported distros
-        // it would be nice to test others here as well, but that requires a bit more finesse
+        let fixture_pkgs: &[(Algorithm, RpmFormat, &str, &str)] = &[
+            (
+                Algorithm::Rsa,
+                RpmFormat::V4,
+                common::pkgs::v4::RPM_BASIC_RSA_SIGNED,
+                common::keys::v4::RSA_4K_PUBLIC,
+            ),
+            (
+                Algorithm::Ecdsa,
+                RpmFormat::V4,
+                common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED,
+                common::keys::v4::ECDSA_NISTP256_PUBLIC,
+            ),
+            (
+                Algorithm::Eddsa,
+                RpmFormat::V4,
+                common::pkgs::v4::RPM_BASIC_EDDSA_SIGNED,
+                common::keys::v4::ED25519_PUBLIC,
+            ),
+            (
+                Algorithm::Rsa,
+                RpmFormat::V6,
+                common::pkgs::v6::RPM_BASIC_RSA_SIGNED,
+                common::keys::v6::RSA4K_PUBLIC,
+            ),
+            (
+                Algorithm::Eddsa,
+                RpmFormat::V6,
+                common::pkgs::v6::RPM_BASIC_EDDSA_SIGNED,
+                common::keys::v6::ED25519_PUBLIC,
+            ),
+            // (
+            //     Algorithm::Mldsa,
+            //     RpmFormat::V6,
+            //     common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED,
+            //     common::keys::v6::MLDSA65_ED25519_PUBLIC,
+            // ),
+        ];
 
-        let cmd = String::new();
+        // Verify all packages with rpm-rs (works regardless of distro)
+        for (_alg, _fmt, pkg_path, pubkey_path) in fixture_pkgs {
+            let verifier = Verifier::load_from_asc_file(pubkey_path)?;
+            let package = rpm::Package::open(pkg_path)?;
+            package.verify_signature(verifier)?;
+        }
 
-        //         for (pkg_path, pubkey) in &pkgs {
-        //             let verifier = Verifier::load_from_asc_bytes(pubkey.as_ref())?;
-        //             let package = rpm::Package::open(pkg_path)?;
-        //             package.verify_signature(verifier)?;
+        // Then, verify with each distro's rpm --checksig, filtered by capability
+        for distro in DISTROS {
+            let mut cmd = String::new();
 
-        //             let pkg_cmd = format!(
-        //                 r#"
-        // echo ">>> verify signature with rpm"
-        // rpm -vv --checksig /assets/RPMS/signed/{rpm_file} 2>&1
-        // "#,
-        //                 rpm_file = pkg_path.file_name().unwrap().to_str().unwrap()
-        //             );
-        //             cmd.push_str(&pkg_cmd);
-        //         }
+            for (alg, fmt, pkg_path, _pubkey_path) in fixture_pkgs {
+                if !distro.supports(*alg, *fmt) {
+                    continue;
+                }
 
-        execute_against_supported_distros(&cmd)
+                let rpm_file = Path::new(pkg_path).file_name().unwrap().to_str().unwrap();
+
+                let assets_subdir = match fmt {
+                    RpmFormat::V4 => "RPMS/v4/signed",
+                    RpmFormat::V6 => "RPMS/v6/signed",
+                };
+
+                cmd.push_str(&format!(
+                    r#"
+echo ">>> verify signature with rpm: {rpm_file}"
+rpm -vv --checksig /assets/{assets_subdir}/{rpm_file} 2>&1
+"#,
+                ));
+            }
+
+            if !cmd.is_empty() {
+                podman_container_launcher(&cmd, distro.image, vec![])?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Build an empty RPM using rpm-rs, and install it
@@ -152,27 +246,27 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         let out_file = Path::new(common::CARGO_OUT_DIR).join("empty_rpm_nosig.rpm");
         pkg.write_file(&out_file)?;
 
-        try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
+        try_installation_and_verify_signatures(None, "/out/empty_rpm_nosig.rpm")?;
 
         Ok(())
     }
 
-    /// Build and sign an empty RPM using rpm-rs,install it, test verifying the signatures, etc
+    /// Build and sign an empty RPM using rpm-rs, install it, test verifying the signatures
     #[test]
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
             .build_and_sign(&signer)?;
-        let out_file = Path::new(common::CARGO_OUT_DIR).join("empty_rpm_nosig.rpm");
+        let out_file = Path::new(common::CARGO_OUT_DIR).join("empty_rpm_sig.rpm");
         pkg.write_file(&out_file)?;
 
-        try_installation_and_verify_signatures("/out/empty_rpm_nosig.rpm")?;
+        try_installation_and_verify_signatures(
+            Some((Algorithm::Rsa, RpmFormat::V4)),
+            "/out/empty_rpm_sig.rpm",
+        )?;
 
         Ok(())
     }
@@ -187,47 +281,48 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        try_installation_and_verify_signatures("/out/full_rpm_nosig.rpm")?;
+        try_installation_and_verify_signatures(None, "/out/full_rpm_nosig.rpm")?;
 
         Ok(())
     }
 
-    /// Build and sign an RPM using rpm-rs,install it, test verifying the signatures, etc
+    /// Build and sign an RPM using rpm-rs, install it, test verifying the signatures
     #[test]
     #[serial_test::serial]
     fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key");
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
         let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig.rpm");
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        try_installation_and_verify_signatures("/out/full_rpm_sig.rpm")?;
+        try_installation_and_verify_signatures(
+            Some((Algorithm::Rsa, RpmFormat::V4)),
+            "/out/full_rpm_sig.rpm",
+        )?;
 
         Ok(())
     }
 
-    /// Build and sign an RPM using rpm-rs and a passphrase-required key,install it, test verifying the signatures, etc
+    /// Build and sign an RPM using rpm-rs with a passphrase-protected key, install it, test verifying the signatures
     #[test]
     #[serial_test::serial]
     fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signing_key = common::keys::v4::rsa_private();
-
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())
-            .expect("Must load signer from signing key")
-            .with_key_passphrase(common::keys::v4::RSA3072_PROTECTED_PASSPHRASE);
+        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_3K_PROTECTED_PRIVATE)?
+            .with_key_passphrase(common::keys::v4::RSA_3K_PASSPHRASE);
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
         let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig_protected.rpm");
         pkg.write_file(&out_file)?;
         assert_eq!(1, pkg.metadata.get_epoch()?);
 
-        try_installation_and_verify_signatures("/out/full_rpm_sig_protected.rpm")?;
+        try_installation_and_verify_signatures(
+            Some((Algorithm::Rsa, RpmFormat::V4)),
+            "/out/full_rpm_sig_protected.rpm",
+        )?;
 
         Ok(())
     }
@@ -280,16 +375,17 @@ fn podman_container_launcher(
     // always mount assets and out directory into container
     let var_cache = Path::new(common::CARGO_MANIFEST_DIR).join("dnf-cache");
     let _ = std::fs::create_dir(var_cache.as_path());
-    let var_cache = format!("{}:/var/cache/dnf:z", var_cache.display());
-    let out = format!("{}:/out:z", common::CARGO_OUT_DIR);
-    let assets = format!("{}/tests/assets:/assets:z", common::CARGO_MANIFEST_DIR,);
+    let var_cache = format!("{}:/var/cache/dnf", var_cache.display());
+    let out = format!("{}:/out", common::CARGO_OUT_DIR);
+    let assets = format!("{}/tests/assets:/assets:ro", common::CARGO_MANIFEST_DIR,);
     mappings.extend(vec![out, assets, var_cache]);
-    let mut args = mappings
-        .iter()
-        .fold(vec!["run", "-i", "--rm"], |mut acc, mapping| {
+    let mut args = mappings.iter().fold(
+        vec!["run", "-i", "--rm", "--security-opt", "label=disable"],
+        |mut acc, mapping| {
             acc.extend(vec!["-v", mapping]);
             acc
-        });
+        },
+    );
     args.extend(vec![image, "sh"]);
 
     let mut podman_cmd = std::process::Command::new("podman");
@@ -302,9 +398,7 @@ fn podman_container_launcher(
 
     podman_cmd.stdin(Stdio::piped());
 
-    // partially following:
-    //
-    //  https://access.redhat.com/articles/3359321
+    // partially following: https://access.redhat.com/articles/3359321
     let setup = r#"
 set -e
 
@@ -323,6 +417,10 @@ if grep -Eq "ID=.*(centos|almalinux)" /etc/os-release; then
 
     REPOS="--disablerepo=* --enablerepo=base*"
     PACKAGES="rpm-sign gpg"
+    # sequoia-sq is not available on el8
+    if ! grep -q 'VERSION_ID="8' /etc/os-release; then
+        PACKAGES="$PACKAGES sequoia-sq"
+    fi
 fi
 
 echo "\### install tooling for signing"
