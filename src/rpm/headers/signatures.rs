@@ -65,18 +65,20 @@ impl SignatureHeaderBuilder {
             // need to base64-encode the raw bytes of the signatures
             for sig_bytes in &self.openpgp_signatures {
                 let signature = Verifier::parse_signature(sig_bytes)?;
-                let tag = match signature
+                let legacy_sig_tag = match signature
                     .config()
                     .ok_or(crate::Error::UnknownVersionSignature)?
                     .pub_alg
                 {
-                    PublicKeyAlgorithm::RSA => IndexSignatureTag::RPMSIGTAG_RSA,
+                    PublicKeyAlgorithm::RSA => Some(IndexSignatureTag::RPMSIGTAG_RSA),
                     PublicKeyAlgorithm::ECDSA
                     | PublicKeyAlgorithm::EdDSALegacy
-                    | PublicKeyAlgorithm::Ed25519 => IndexSignatureTag::RPMSIGTAG_DSA,
-                    a => return Err(crate::Error::UnsupportedPGPKeyType(a)),
+                    | PublicKeyAlgorithm::Ed25519 => Some(IndexSignatureTag::RPMSIGTAG_DSA),
+                    _ => None,
                 };
-                legacy_sig = Some((tag, sig_bytes));
+                if let Some(legacy_sig_tag) = legacy_sig_tag {
+                    legacy_sig = Some((legacy_sig_tag, sig_bytes));
+                }
                 openpgp_signatures.push(encode_sig(sig_bytes));
             }
 

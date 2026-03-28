@@ -52,31 +52,82 @@ fn test_rpm_file_signatures_resign() -> Result<(), Box<dyn std::error::Error>> {
     )
 }
 
-// @todo: we could really just use a fixture for this, better than rebuilding?
-/// Test verifying the signature of a package that has been signed
+/// Test parsing packages that were built and signed by RPM
 #[test]
 fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
     let _ = env_logger::try_init();
 
-    // test RSA
+    // v4 RSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v4 ECDSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v4 EdDSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_EDDSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v6 RSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v6 EdDSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_EDDSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v6 ML-DSA
+    let verifier = Verifier::load_from_asc_file(common::keys::v6::MLDSA65_ED25519_PUBLIC)?;
+    let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED)?;
+    package.verify_signature(&verifier)?;
+
+    // v6 multiple signatures (EdDSA + RSA)
+    let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_MULTI_SIGNED)?;
+    let verifier = Verifier::load_from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+    package.verify_signature(&verifier)?;
+    let verifier = Verifier::load_from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
+    package.verify_signature(&verifier)?;
+
+    Ok(())
+}
+
+/// Test verifying the signature of a package that has been signed by rpm-rs
+#[test]
+fn parse_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = env_logger::try_init();
+
+    // RSA
     build_parse_sign_and_verify(
         &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
         &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
         "rsa_signed_pkg.rpm",
     )?;
 
-    // test EdDSA
+    // EdDSA
     build_parse_sign_and_verify(
         &fs::read(common::keys::v4::ED25519_PRIVATE)?,
         &fs::read(common::keys::v4::ED25519_PUBLIC)?,
         "eddsa_signed_pkg.rpm",
     )?;
 
-    // test ECDSA
+    // ECDSA
     build_parse_sign_and_verify(
         &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
         &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
         "ecdsa_signed_pkg.rpm",
+    )?;
+
+    // ML-DSA
+    build_parse_sign_and_verify(
+        &fs::read(common::keys::v6::MLDSA65_ED25519_PRIVATE)?,
+        &fs::read(common::keys::v6::MLDSA65_ED25519_PUBLIC)?,
+        "mldsa_signed_pkg.rpm",
     )?;
 
     Ok(())
