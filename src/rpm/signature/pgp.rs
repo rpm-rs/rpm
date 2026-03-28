@@ -83,7 +83,9 @@ fn validate_algorithm(alg: PublicKeyAlgorithm) -> Result<(), Error> {
         PublicKeyAlgorithm::RSA
         | PublicKeyAlgorithm::EdDSALegacy
         | PublicKeyAlgorithm::Ed25519
-        | PublicKeyAlgorithm::ECDSA => Ok(()),
+        | PublicKeyAlgorithm::ECDSA
+        | PublicKeyAlgorithm::MlDsa65Ed25519
+        | PublicKeyAlgorithm::MlDsa87Ed448 => Ok(()),
         algorithm => Err(Error::UnsupportedPGPKeyType(algorithm)),
     }
 }
@@ -334,6 +336,8 @@ impl Verifier {
             })
             .next()
             .ok_or(Error::NoSignatureFound)?;
+        let cfg = signature.config().ok_or(Error::UnknownVersionSignature)?;
+        validate_algorithm(cfg.pub_alg)?;
         Ok(signature)
     }
 }
