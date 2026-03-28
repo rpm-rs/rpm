@@ -250,7 +250,7 @@ impl Package {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret")?;
-    /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
+    /// let signer = rpm::signature::pgp::Signer::from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
     /// let source_date = 1_600_000_000;
     /// package.sign_with_timestamp(signer, source_date)?;

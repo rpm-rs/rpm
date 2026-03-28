@@ -58,40 +58,40 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     let _ = env_logger::try_init();
 
     // v4 RSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v4 ECDSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v4 EdDSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v4::RPM_BASIC_EDDSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v6 RSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v6 EdDSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_EDDSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v6 ML-DSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v6::MLDSA65_ED25519_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v6::MLDSA65_ED25519_PUBLIC)?;
     let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED)?;
     package.verify_signature(&verifier)?;
 
     // v6 multiple signatures (EdDSA + RSA)
     let package = rpm::Package::open(common::pkgs::v6::RPM_BASIC_MULTI_SIGNED)?;
-    let verifier = Verifier::load_from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
     package.verify_signature(&verifier)?;
-    let verifier = Verifier::load_from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v6::RSA4K_PUBLIC)?;
     package.verify_signature(&verifier)?;
 
     Ok(())
@@ -140,24 +140,37 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
 
     // test RSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
 
     // test EdDSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
 
     // test ECDSA
-    let verifier = Verifier::load_from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
+    let verifier = Verifier::from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
+    ));
+
+    Ok(())
+}
+
+/// Test that verifying with an empty verifier (no keys loaded) fails
+#[test]
+fn test_verify_with_empty_verifier() -> Result<(), Box<dyn std::error::Error>> {
+    let verifier = Verifier::new();
+    let pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
+    assert!(matches!(
+        pkg.verify_signature(&verifier),
+        Err(rpm::Error::KeyNotFoundError { key_ref: _ })
     ));
 
     Ok(())
@@ -178,7 +191,7 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
 
         let cleared_pkg = {
             let mut pkg = unsigned_pkg.clone();
-            let signer: Signer = Signer::load_from_asc_bytes(signing_key)?;
+            let signer: Signer = Signer::from_asc_bytes(signing_key)?;
             pkg.sign(signer)?;
             pkg.clear_signatures()?;
             pkg
@@ -203,13 +216,13 @@ fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
 /// Test an attempt to verify the signature of a package using the wrong key type
 #[test]
 fn test_verify_package_with_wrong_key_type() -> Result<(), Box<dyn std::error::Error>> {
-    let rsa_signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
-    let rsa_verifier = Verifier::load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&rsa_signer)?;
 
-    let eddsa_signer = Signer::load_from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
-    let eddsa_verifier = Verifier::load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+    let eddsa_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let eddsa_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
     let eddsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
         .build_and_sign(&eddsa_signer)?;
 
@@ -241,7 +254,7 @@ fn resign_and_verify_with_keys(
         .metadata
         .signature
         .get_entry_data_as_u32(rpm::IndexSignatureTag::RPMSIGTAG_SIZE)?;
-    let mut signer = Signer::load_from_asc_bytes(signing_key)?;
+    let mut signer = Signer::from_asc_bytes(signing_key)?;
     if let Some(passphrase) = signing_key_passphrase {
         signer = signer.with_key_passphrase(passphrase);
     }
@@ -266,7 +279,7 @@ fn resign_and_verify_with_keys(
         new_header_and_payload_size
     );
 
-    let verifier = Verifier::load_from_asc_bytes(verification_key).unwrap();
+    let verifier = Verifier::from_asc_bytes(verification_key).unwrap();
     package
         .verify_signature(&verifier)
         .expect("failed to verify signature");
@@ -311,7 +324,7 @@ fn build_parse_sign_and_verify(
     assert_eq!(3, pkg.metadata.get_epoch()?);
 
     // sign
-    let signer: Signer = Signer::load_from_asc_bytes(signing_key)?;
+    let signer: Signer = Signer::from_asc_bytes(signing_key)?;
     pkg.sign(signer)?;
 
     let out_file = Path::new(common::CARGO_OUT_DIR).join(pkg_out_path.as_ref());
@@ -319,7 +332,7 @@ fn build_parse_sign_and_verify(
 
     // verify
     let package = rpm::Package::open(&out_file)?;
-    let verifier = Verifier::load_from_asc_bytes(verification_key)?;
+    let verifier = Verifier::from_asc_bytes(verification_key)?;
     package.verify_signature(verifier)?;
 
     Ok(())
@@ -332,13 +345,12 @@ mod keyring {
     #[test]
     fn test_sign_with_keyring_signer() -> Result<(), Box<dyn std::error::Error>> {
         // Load a keyring signer — it defaults to the first key in the keyring
-        let keyring_signer =
-            Signer::load_from_asc_bytes(&fs::read(common::keys::v4::KEYRING_PRIVATE)?)?;
+        let keyring_signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::KEYRING_PRIVATE)?)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring signer test")
             .build_and_sign(&keyring_signer)?;
 
         // Verify with the full keyring — the matching key should be found automatically
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
         pkg.verify_signature(&keyring_verifier)?;
 
         Ok(())
@@ -349,19 +361,44 @@ mod keyring {
     #[test]
     fn test_verify_with_keyring() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
 
         // Sign with RSA key, verify with keyring containing RSA + RSA-protected + Ed25519
-        let rsa_signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
         let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
             .build_and_sign(&rsa_signer)?;
         rsa_pkg.verify_signature(&keyring_verifier)?;
 
         // Sign with Ed25519 key, verify with the same keyring
-        let ed_signer = Signer::load_from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
         let ed_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
             .build_and_sign(&ed_signer)?;
         ed_pkg.verify_signature(&keyring_verifier)?;
+
+        Ok(())
+    }
+
+    /// Sign with individual keys and verify using a verifier built by loading
+    /// each key separately via `load_from_asc_file`.
+    #[test]
+    fn test_verify_with_loaded_keys() -> Result<(), Box<dyn std::error::Error>> {
+        let _ = env_logger::try_init();
+
+        let mut verifier = Verifier::new();
+        verifier.load_from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+        verifier.load_from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+
+        // Sign with RSA key, verify with combined verifier
+        let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "loaded keys test")
+            .build_and_sign(&rsa_signer)?;
+        rsa_pkg.verify_signature(&verifier)?;
+
+        // Sign with Ed25519 key, verify with the same combined verifier
+        let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        let ed_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "loaded keys test")
+            .build_and_sign(&ed_signer)?;
+        ed_pkg.verify_signature(&verifier)?;
 
         Ok(())
     }
@@ -370,9 +407,9 @@ mod keyring {
     #[test]
     fn test_verify_with_keyring_wrong_key() -> Result<(), Box<dyn std::error::Error>> {
         // The v4 keyring contains RSA-4K, RSA-3K-protected, and Ed25519 — but NOT ECDSA
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
 
-        let ecdsa_signer = Signer::load_from_asc_file(common::keys::v4::ECDSA_NISTP256_PRIVATE)?;
+        let ecdsa_signer = Signer::from_asc_file(common::keys::v4::ECDSA_NISTP256_PRIVATE)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
             .build_and_sign(&ecdsa_signer)?;
 
@@ -389,7 +426,7 @@ mod keyring {
     #[test]
     fn test_verify_with_key_selection() -> Result<(), Box<dyn std::error::Error>> {
         // Sign a package with the RSA key
-        let rsa_signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "with_key test")
             .build_and_sign(&rsa_signer)?;
 
@@ -399,7 +436,7 @@ mod keyring {
         let signer_fpr_bytes = hex::decode(&fingerprints[0])?;
 
         // Load the full keyring, then narrow to the matching key
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
         let filtered_verifier = keyring_verifier.with_key(&signer_fpr_bytes)?;
         pkg.verify_signature(&filtered_verifier)?;
 
@@ -409,7 +446,7 @@ mod keyring {
     /// `Verifier::with_key` should fail when the requested fingerprint is not in the keyring.
     #[test]
     fn test_verify_with_key_not_found() -> Result<(), Box<dyn std::error::Error>> {
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
         let bogus_fingerprint = [0xDE, 0xAD, 0xBE, 0xEF];
         assert!(matches!(
             keyring_verifier.with_key(&bogus_fingerprint),
@@ -424,19 +461,19 @@ mod keyring {
     #[test]
     fn test_verify_with_key_selects_wrong_cert() -> Result<(), Box<dyn std::error::Error>> {
         // Sign with Ed25519, but filter the keyring to only the RSA key
-        let ed_signer = Signer::load_from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "with_key test")
             .build_and_sign(&ed_signer)?;
 
         // Get the RSA key's fingerprint from a package signed with it
-        let rsa_signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
         let rsa_pkg = rpm::PackageBuilder::new("bar", "1.0.0", "MIT", "x86_64", "helper")
             .build_and_sign(&rsa_signer)?;
         let rsa_fingerprints = rsa_pkg.signature_fingerprints()?;
         let rsa_fpr_bytes = hex::decode(&rsa_fingerprints[0])?;
 
         // Filter keyring to only the RSA cert, then try to verify the Ed25519-signed package
-        let keyring_verifier = Verifier::load_from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
         let rsa_only_verifier = keyring_verifier.with_key(&rsa_fpr_bytes)?;
         assert!(
             pkg.verify_signature(&rsa_only_verifier).is_err(),
@@ -455,7 +492,7 @@ mod keyring {
     -> Result<(), Box<dyn std::error::Error>> {
         // v6 Ed25519: primary key is certification-only, subkey has signing flag.
         // The signer auto-selects the signing subkey.
-        let signer = Signer::load_from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+        let signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "subkey test")
             .build_and_sign(&signer)?;
 
@@ -465,7 +502,7 @@ mod keyring {
         let subkey_fpr = &sig_fingerprints[0];
 
         // Load the public key and get the primary key fingerprint
-        let verifier = Verifier::load_from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+        let verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
 
         // Get the primary key fingerprint by parsing the public cert directly
         let primary_fpr = {

@@ -77,7 +77,7 @@
 //!     .vendor("corporation or individual")
 //!     .url("www.github.com/repo")
 //!     .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
-//!     .build_and_sign(Signer::load_from_asc_bytes(&raw_secret_key)?)?;
+//!     .build_and_sign(Signer::from_asc_bytes(&raw_secret_key)?)?;
 //! let mut f = std::fs::File::create("/tmp/awesome.rpm")?;
 //! pkg.write(&mut f)?;
 //!
@@ -85,7 +85,7 @@
 //! let raw_pub_key = std::fs::read("tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc")?;
 //! let pkg = rpm::Package::open("/tmp/awesome.rpm")?;
 //! // verifying
-//! pkg.verify_signature(Verifier::load_from_asc_bytes(&raw_pub_key)?)?;
+//! pkg.verify_signature(Verifier::from_asc_bytes(&raw_pub_key)?)?;
 //! # }
 //! # Ok(())
 //! # }
