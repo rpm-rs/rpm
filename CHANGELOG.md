@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
 - `Signer` and `Verifier` now support loading keyring files containing multiple OpenPGP certificates.
 - `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
+- ML-DSA package signatures can now be created and verified.
 
 ### Fixed
 
@@ -30,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PackageBuilder::with_file_contents()` was not respecting `source_date`.
 - A number of issues / discrepancies in package payload writing.
 - A number of issues / discrepancies in the treatment of ghost files.
+- `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
 
 ### Changed
 

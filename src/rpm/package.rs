@@ -372,6 +372,7 @@ impl Package {
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
     //        was present and verified or whether it was not present at all.
+    // https://github.com/rpm-rs/rpm/issues/128
 
     /// Verify the signature as present within the RPM package.
     #[cfg(feature = "signature-meta")]
@@ -390,13 +391,17 @@ impl Package {
 
         // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
         if let Ok(openpgp_signatures) = openpgp_sigs {
+            let mut last_err = None;
             for base64_sig in openpgp_signatures.iter() {
                 let signature = decode_sig(base64_sig)?;
                 signature::echo_signature("signature_header(header only)", &signature);
-                verifier.verify(header_bytes.as_slice(), &signature)?;
+                match verifier.verify(header_bytes.as_slice(), &signature) {
+                    Ok(()) => return Ok(()),
+                    Err(e) => last_err = Some(e),
+                }
             }
 
-            return Ok(());
+            return Err(last_err.unwrap_or(Error::NoSignatureFound));
         } else {
             let rsa_sig = &self
                 .metadata
