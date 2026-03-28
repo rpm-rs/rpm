@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer` and `Verifier` now support loading keyring files containing multiple OpenPGP certificates.
 - `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
 - ML-DSA package signatures can now be created and verified.
+- `Verifier` can now load multiple keys independently - see "Breaking Changes".
 
 ### Fixed
 
@@ -47,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead or else use `HsmSigner<SecretKey>` which exposes a similar API to the original `Signer<SecretKey>` for users who were using custom `SecretKey` implementations with hardware security modules.
 - `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
 - `Signer` fields are no longer public; use the provided constructor methods instead.
+- Renamed `Verifier::load_from_asc`, `load_from_asc_file`, `load_from_asc_bytes` to `from_asc`, `from_asc_file`, `from_asc_bytes`. The `load_from_*` names now refer to new methods that take `&mut self` and append key material to an existing `Verifier`.
+- Renamed `Signer::load_from_asc`, `load_from_asc_file`, `load_from_asc_bytes` to `from_asc`, `from_asc_file`, `from_asc_bytes`.
 - Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
 - Refactored the `FileOptions` functions. Use `FileOptions::new()`, `FileOptions::dir()`, `FileOptions::symlink()`, `FileOptions::ghost()` for a regular file, directory, symbolic link, or "ghost" file, respectively.
 - Renamed file attribute methods on `FileOptionsBuilder` to drop the `is_` prefix:

@@ -144,10 +144,9 @@ impl traits::Signing for Signer {
 impl Signer {
     /// Create a signer from a bare secret key.
     ///
-    /// This constructor does not retain the full key structure, so subkey
-    /// selection and user ID inclusion in signatures are not available.
-    /// Prefer [`Signer::load_from_asc`] or [`Signer::load_from_asc_bytes`]
-    /// when possible.
+    /// This constructor does not retain the full key structure, so subkey selection
+    /// and user ID inclusion in signatures are not available.
+    /// Prefer [`Signer::from_asc`] or [`Signer::from_asc_bytes`] when possible.
     pub fn new(key: SecretKey) -> Result<Self, Error> {
         validate_algorithm(key.algorithm())?;
         Ok(Self {
@@ -158,19 +157,19 @@ impl Signer {
         })
     }
 
-    /// Load the private key for signing from an ascii armored file.
-    pub fn load_from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+    /// Construct a [`Signer`] from an ascii armored file.
+    pub fn from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
         let input = std::fs::read_to_string(path).map_err(Error::Io)?;
-        Self::load_from_asc(&input)
+        Self::from_asc(&input)
     }
 
-    /// Load the private key for signing from ascii armored bytes.
-    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
+    /// Construct a [`Signer`] from ascii armored bytes.
+    pub fn from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
         let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
-        Self::load_from_asc(input)
+        Self::from_asc(input)
     }
 
-    /// Load the private key for signing from an ascii armored string.
+    /// Construct a [`Signer`] from an ascii armored string.
     ///
     /// The input may contain a single certificate or a keyring with multiple certificates.
     /// The first certificate with a supported algorithm is used.
@@ -178,7 +177,7 @@ impl Signer {
     /// If the selected key contains a subkey with the signing capability flag, that subkey
     /// is used for signing by default. Otherwise, the primary key is used.
     /// Use [`Signer::with_signing_key`] to select a specific key by fingerprint.
-    pub fn load_from_asc(input: &str) -> Result<Self, Error> {
+    pub fn from_asc(input: &str) -> Result<Self, Error> {
         let (keys_iter, _) =
             SignedSecretKey::from_string_many(input).map_err(Error::KeyLoadSecretKeyError)?;
 
@@ -228,7 +227,7 @@ impl Signer {
     /// across all certificates in the keyring. The first match is used for signing.
     ///
     /// This method is only effective when the signer was created via
-    /// [`Signer::load_from_asc`] or [`Signer::load_from_asc_bytes`].
+    /// [`Signer::from_asc`] or [`Signer::from_asc_bytes`].
     pub fn with_signing_key(self, fingerprint: &[u8]) -> Result<Self, Error> {
         for signed_key in &self.signed_keys {
             let user_id = signed_key.details.users.first().map(|u| u.id.id().to_vec());
@@ -326,6 +325,13 @@ pub struct Verifier {
 }
 
 impl Verifier {
+    /// Construct a new [`Verifier`] with no keys.
+    pub fn new() -> Self {
+        Self {
+            public_keys: Vec::new(),
+        }
+    }
+
     pub(crate) fn parse_signature(signature: &[u8]) -> Result<pgp::packet::Signature, Error> {
         let mut cursor = io::Cursor::new(signature);
         let parser = pgp::packet::PacketParser::new(&mut cursor);
@@ -339,6 +345,88 @@ impl Verifier {
         let cfg = signature.config().ok_or(Error::UnknownVersionSignature)?;
         validate_algorithm(cfg.pub_alg)?;
         Ok(signature)
+    }
+
+    /// Construct a [`Verifier`] from an ascii armored file.
+    pub fn from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+        let input = std::fs::read_to_string(path).map_err(Error::Io)?;
+        Self::from_asc(&input)
+    }
+
+    /// Construct a [`Verifier`] from ascii armored bytes.
+    pub fn from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
+        let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
+        Self::from_asc(input)
+    }
+
+    /// Construct a [`Verifier`] from an ascii armored string.
+    ///
+    /// The input may contain a single certificate or a keyring with multiple
+    /// certificates. All certificates with supported algorithms are loaded.
+    pub fn from_asc(input: &str) -> Result<Self, Error> {
+        let mut verifier = Self::new();
+        verifier.load_from_asc(input)?;
+        Ok(verifier)
+    }
+
+    /// Append public key(s) from an ascii armored file.
+    pub fn load_from_asc_file(&mut self, path: impl AsRef<std::path::Path>) -> Result<(), Error> {
+        let input = std::fs::read_to_string(path).map_err(Error::Io)?;
+        self.load_from_asc(&input)
+    }
+
+    /// Append public key(s) from ascii armored bytes.
+    pub fn load_from_asc_bytes(&mut self, input: &[u8]) -> Result<(), Error> {
+        let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
+        self.load_from_asc(input)
+    }
+
+    /// Append public key(s) from an ascii armored string.
+    ///
+    /// The input may contain a single certificate or a keyring with multiple
+    /// certificates. All certificates with supported algorithms are appended.
+    pub fn load_from_asc(&mut self, input: &str) -> Result<(), Error> {
+        let (keys_iter, _) =
+            SignedPublicKey::from_string_many(input).map_err(Error::KeyLoadSecretKeyError)?;
+
+        let mut found_any = false;
+        for res in keys_iter {
+            if let Ok(key) = res {
+                if validate_algorithm(key.algorithm()).is_ok() {
+                    self.public_keys.push(key);
+                    found_any = true;
+                }
+            }
+        }
+
+        if !found_any {
+            return Err(Error::KeyLoadSecretKeyError(
+                pgp::errors::Error::NoMatchingPacket { backtrace: None },
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Select a specific certificate by primary key fingerprint.
+    ///
+    /// This filters the loaded certificates to only the one whose primary key
+    /// matches the given fingerprint. Useful when a keyring contains multiple
+    /// certificates and you want to verify against a specific one.
+    pub fn with_key(self, fingerprint: &[u8]) -> Result<Self, Error> {
+        let public_keys: Vec<SignedPublicKey> = self
+            .public_keys
+            .into_iter()
+            .filter(|key| key.fingerprint().as_bytes() == fingerprint)
+            .collect();
+
+        if public_keys.is_empty() {
+            return Err(Error::KeyNotFoundError {
+                key_ref: hex::encode(fingerprint),
+            });
+        }
+
+        Ok(Self { public_keys })
     }
 }
 
@@ -421,69 +509,6 @@ impl traits::Verifying for Verifier {
     }
 }
 
-impl Verifier {
-    /// Load the public key for verification from an ascii armored file.
-    pub fn load_from_asc_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        let input = std::fs::read_to_string(path).map_err(Error::Io)?;
-        Self::load_from_asc(&input)
-    }
-
-    /// Load the public key for verification from ascii armored bytes.
-    pub fn load_from_asc_bytes(input: &[u8]) -> Result<Self, Error> {
-        let input = std::str::from_utf8(input).map_err(Error::KeyLoadUtf8Error)?;
-        Self::load_from_asc(input)
-    }
-
-    /// Load the public key(s) for verification from an ascii armored string.
-    ///
-    /// The input may contain a single certificate or a keyring with multiple
-    /// certificates. All certificates with supported algorithms are loaded.
-    pub fn load_from_asc(input: &str) -> Result<Self, Error> {
-        let (keys_iter, _) =
-            SignedPublicKey::from_string_many(input).map_err(Error::KeyLoadSecretKeyError)?;
-
-        let public_keys: Vec<SignedPublicKey> = keys_iter
-            .filter_map(|res| {
-                let key = res.ok()?;
-                if validate_algorithm(key.algorithm()).is_ok() {
-                    Some(key)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if public_keys.is_empty() {
-            return Err(Error::KeyLoadSecretKeyError(
-                pgp::errors::Error::NoMatchingPacket { backtrace: None },
-            ));
-        }
-
-        Ok(Self { public_keys })
-    }
-
-    /// Select a specific certificate by primary key fingerprint.
-    ///
-    /// This filters the loaded certificates to only the one whose primary key
-    /// matches the given fingerprint. Useful when a keyring contains multiple
-    /// certificates and you want to verify against a specific one.
-    pub fn with_key(self, fingerprint: &[u8]) -> Result<Self, Error> {
-        let public_keys: Vec<SignedPublicKey> = self
-            .public_keys
-            .into_iter()
-            .filter(|key| key.fingerprint().as_bytes() == fingerprint)
-            .collect();
-
-        if public_keys.is_empty() {
-            return Err(Error::KeyNotFoundError {
-                key_ref: hex::encode(fingerprint),
-            });
-        }
-
-        Ok(Self { public_keys })
-    }
-}
-
 /// Signer for a key held on a secure processor (TPM, HSM, ...)
 pub struct HsmSigner<T> {
     secret_key: T,
@@ -560,10 +585,9 @@ pub(crate) mod test {
             );
             let verification_key =
                 include_bytes!("../../../tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc");
-            let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice())
-                .expect("PK parsing failed");
-            let signer =
-                Signer::load_from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
+            let verifier =
+                Verifier::from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
+            let signer = Signer::from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
             (signer, verifier)
         }
 
@@ -575,7 +599,7 @@ pub(crate) mod test {
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
-        /// Verify that `load_from_asc` uses the primary key when there
+        /// Verify that `from_asc` uses the primary key when there
         /// are no subkeys (the typical v4 case).
         #[test]
         fn uses_primary_key_without_subkeys() {
@@ -597,10 +621,9 @@ pub(crate) mod test {
             );
             let verification_key =
                 include_bytes!("../../../tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.asc");
-            let verifier = Verifier::load_from_asc_bytes(verification_key.as_slice())
-                .expect("PK parsing failed");
-            let signer =
-                Signer::load_from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
+            let verifier =
+                Verifier::from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
+            let signer = Signer::from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
             (signer, verifier)
         }
 
@@ -644,8 +667,8 @@ pub(crate) mod test {
             super::sign_verify_roundtrip(&signer, &verifier);
         }
 
-        /// Verify that `with_signing_key` returns an error when given a
-        /// fingerprint that doesn't match any key in the key material.
+        /// Verify that `with_signing_key` returns an error when given a fingerprint that
+        /// doesn't match any key in the key material.
         #[test]
         fn with_signing_key_not_found() {
             let (signer, _verifier) = prep();
@@ -654,8 +677,8 @@ pub(crate) mod test {
             assert!(result.is_err(), "should fail with unknown fingerprint");
         }
 
-        /// Verify that signatures include the `SignersUserID` subpacket
-        /// when the key material contains a user ID.
+        /// Verify that signatures include the `SignersUserID` subpacket when the key
+        /// material contains a user ID.
         #[test]
         fn user_id_included_in_signature() {
             let (signer, _verifier) = prep();
@@ -690,11 +713,11 @@ pub(crate) mod test {
             let keyring = include_bytes!(
                 "../../../tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.secret"
             );
-            Signer::load_from_asc_bytes(keyring.as_slice()).expect("keyring parsing failed")
+            Signer::from_asc_bytes(keyring.as_slice()).expect("keyring parsing failed")
         }
 
-        /// Verify that `with_signing_key` updates user_id to match the
-        /// certificate that owns the selected key.
+        /// Verify that `with_signing_key` updates user_id to match the certificate
+        /// that owns the selected key.
         #[test]
         fn with_signing_key_updates_user_id() {
             let signer = prep_keyring_signer();
@@ -724,8 +747,8 @@ pub(crate) mod test {
             );
         }
 
-        /// Verify that the SignersUserID subpacket in the signature matches
-        /// the certificate selected via `with_signing_key`.
+        /// Verify that the SignersUserID subpacket in the signature matches the certificate
+        /// selected via `with_signing_key`.
         #[test]
         fn with_signing_key_signature_contains_correct_user_id() {
             const PASSPHRASE: &str = "thisisN0Tasecuredpassphrase";

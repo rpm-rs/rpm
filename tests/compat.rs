@@ -205,7 +205,7 @@ rpm -vv --checksig {pkg_path} 2>&1;"#,
 
         // Verify all packages with rpm-rs (works regardless of distro)
         for (_alg, _fmt, pkg_path, pubkey_path) in fixture_pkgs {
-            let verifier = Verifier::load_from_asc_file(pubkey_path)?;
+            let verifier = Verifier::from_asc_file(pubkey_path)?;
             let package = rpm::Package::open(pkg_path)?;
             package.verify_signature(verifier)?;
         }
@@ -262,7 +262,7 @@ rpm -vv --checksig /assets/{assets_subdir}/{rpm_file} 2>&1
     #[serial_test::serial]
     fn test_install_empty_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "an empty package")
             .build_and_sign(&signer)?;
@@ -297,7 +297,7 @@ rpm -vv --checksig /assets/{assets_subdir}/{rpm_file} 2>&1
     #[serial_test::serial]
     fn test_install_full_rpm_with_signature() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
         let out_file = Path::new(common::CARGO_OUT_DIR).join("full_rpm_sig.rpm");
@@ -317,7 +317,7 @@ rpm -vv --checksig /assets/{assets_subdir}/{rpm_file} 2>&1
     #[serial_test::serial]
     fn test_install_full_rpm_with_sig_key_passphrase() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
-        let signer = Signer::load_from_asc_file(common::keys::v4::RSA_3K_PROTECTED_PRIVATE)?
+        let signer = Signer::from_asc_file(common::keys::v4::RSA_3K_PROTECTED_PRIVATE)?
             .with_key_passphrase(common::keys::v4::RSA_3K_PASSPHRASE);
 
         let pkg = build_full_rpm()?.build_and_sign(signer)?;
