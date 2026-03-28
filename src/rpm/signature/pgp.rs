@@ -262,7 +262,7 @@ impl Signer {
                     .salt_len()
                     .expect("Sha256 always has a v6 salt length");
                 let mut salt = vec![0u8; salt_len];
-                getrandom::getrandom(&mut salt).expect("failed to generate random salt");
+                getrandom::fill(&mut salt).expect("failed to generate random salt");
                 SignatureConfig::v6_with_salt(SignatureType::Binary, pub_alg, hash_alg, salt)
             }
             _ => SignatureConfig::v4(SignatureType::Binary, pub_alg, hash_alg),
