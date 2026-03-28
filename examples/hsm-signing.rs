@@ -23,8 +23,8 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let mut rng = rand::thread_rng();
-    let rsa_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
+    let rsa_key =
+        RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).expect("failed to generate a key");
     let rsa_key = pkcs1v15::SigningKey::<sha2::Sha256>::new(rsa_key);
 
     // pgp::adapter::RsaSigner accept any key that implements [`signature::Keypair`] and
