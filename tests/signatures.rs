@@ -1,5 +1,5 @@
 use std::fs;
-use std::{path::Path, time::SystemTime};
+use std::path::Path;
 
 use hex;
 use rpm::{
@@ -131,106 +131,20 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// Test verifying the signature of a package that has been signed by rpm-rs
-#[test]
-fn parse_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = env_logger::try_init();
-
-    // RSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
-        &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
-        "rsa_signed_pkg.rpm",
-    )?;
-
-    // EdDSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v4::ED25519_PRIVATE)?,
-        &fs::read(common::keys::v4::ED25519_PUBLIC)?,
-        "eddsa_signed_pkg.rpm",
-    )?;
-
-    // ECDSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
-        &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
-        "ecdsa_signed_pkg.rpm",
-    )?;
-
-    // v6 RSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v6::RSA_4K_PRIVATE)?,
-        &fs::read(common::keys::v6::RSA_4K_PUBLIC)?,
-        "v6_rsa_signed_pkg.rpm",
-    )?;
-
-    // v6 EdDSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v6::ED25519_PRIVATE)?,
-        &fs::read(common::keys::v6::ED25519_PUBLIC)?,
-        "v6_eddsa_signed_pkg.rpm",
-    )?;
-
-    // v6 ML-DSA
-    build_parse_sign_and_verify(
-        &fs::read(common::keys::v6::MLDSA65_ED25519_PRIVATE)?,
-        &fs::read(common::keys::v6::MLDSA65_ED25519_PUBLIC)?,
-        "v6_mldsa_signed_pkg.rpm",
-    )?;
-
-    Ok(())
-}
-
 /// Test an attempt to verify the signature of a package that is not signed
 #[test]
 fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
-    let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
-
-    // test v4 RSA
+    // v4
     let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
 
-    // test v4 EdDSA
-    let verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
-    assert!(matches!(
-        pkg.verify_signature(verifier),
-        Err(rpm::Error::NoSignatureFound)
-    ));
-
-    // test v4 ECDSA
-    let verifier = Verifier::from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
-    assert!(matches!(
-        pkg.verify_signature(verifier),
-        Err(rpm::Error::NoSignatureFound)
-    ));
-
-    let pkg = rpm::Package::open(common::pkgs::v6::RPM_EMPTY)?;
-
-    // test v6 RSA
-    let verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
-    assert!(matches!(
-        pkg.verify_signature(verifier),
-        Err(rpm::Error::NoSignatureFound)
-    ));
-
-    // test v6 EdDSA
+    // v6
     let verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
-    assert!(matches!(
-        pkg.verify_signature(verifier),
-        Err(rpm::Error::NoSignatureFound)
-    ));
-
-    // test v6 ML-DSA
-    let verifier = Verifier::from_asc_file(common::keys::v6::MLDSA65_ED25519_PUBLIC)?;
-    assert!(matches!(
-        pkg.verify_signature(verifier),
-        Err(rpm::Error::NoSignatureFound)
-    ));
-
-    let verifier = Verifier::from_asc_file(common::keys::v6::KEYRING_PUBLIC)?;
+    let pkg = rpm::Package::open(common::pkgs::v6::RPM_EMPTY)?;
     assert!(matches!(
         pkg.verify_signature(verifier),
         Err(rpm::Error::NoSignatureFound)
@@ -251,106 +165,12 @@ fn test_verify_with_empty_verifier() -> Result<(), Box<dyn std::error::Error>> {
         Err(rpm::Error::KeyNotFoundError { key_ref: _ })
     ));
 
-    let pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_EDDSA_SIGNED)?;
-    assert!(matches!(
-        pkg.verify_signature(&verifier),
-        Err(rpm::Error::KeyNotFoundError { key_ref: _ })
-    ));
-
-    let pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED)?;
-    assert!(matches!(
-        pkg.verify_signature(&verifier),
-        Err(rpm::Error::KeyNotFoundError { key_ref: _ })
-    ));
-
     // v6
     let pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
     assert!(matches!(
         pkg.verify_signature(&verifier),
         Err(rpm::Error::KeyNotFoundError { key_ref: _ })
     ));
-
-    let pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_EDDSA_SIGNED)?;
-    assert!(matches!(
-        pkg.verify_signature(&verifier),
-        Err(rpm::Error::KeyNotFoundError { key_ref: _ })
-    ));
-
-    let pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED)?;
-    assert!(matches!(
-        pkg.verify_signature(&verifier),
-        Err(rpm::Error::KeyNotFoundError { key_ref: _ })
-    ));
-
-    Ok(())
-}
-
-/// Test that clearing signatures restores the package to its unsigned state
-#[test]
-fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
-    /// Sign a package, clear its signatures, and verify the signature header matches unsigned state.
-    #[track_caller]
-    fn sign_clear_and_verify(
-        signing_key: &[u8],
-        verification_key: &[u8],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let unsigned_pkg = rpm::PackageBuilder::new(
-            "roundtrip",
-            "1.0.0",
-            "MIT",
-            "x86_64",
-            "spins round and round",
-        )
-        .build()?;
-
-        let cleared_pkg = {
-            let mut pkg = unsigned_pkg.clone();
-            let signer: Signer = Signer::from_asc_bytes(signing_key)?;
-            pkg.sign(signer)?;
-            pkg.clear_signatures()?;
-            pkg
-        };
-
-        cleared_pkg.verify_digests()?;
-        assert_eq!(
-            cleared_pkg.metadata.signature,
-            unsigned_pkg.metadata.signature
-        );
-
-        // Verification should fail because signatures were cleared
-        let verifier = Verifier::from_asc_bytes(verification_key)?;
-        assert!(matches!(
-            cleared_pkg.verify_signature(verifier),
-            Err(rpm::Error::NoSignatureFound)
-        ));
-
-        Ok(())
-    }
-
-    sign_clear_and_verify(
-        &fs::read(common::keys::v4::ED25519_PRIVATE)?,
-        &fs::read(common::keys::v4::ED25519_PUBLIC)?,
-    )?;
-    sign_clear_and_verify(
-        &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
-        &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
-    )?;
-    sign_clear_and_verify(
-        &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
-        &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
-    )?;
-    sign_clear_and_verify(
-        &fs::read(common::keys::v6::RSA_4K_PRIVATE)?,
-        &fs::read(common::keys::v6::RSA_4K_PUBLIC)?,
-    )?;
-    sign_clear_and_verify(
-        &fs::read(common::keys::v6::ED25519_PRIVATE)?,
-        &fs::read(common::keys::v6::ED25519_PUBLIC)?,
-    )?;
-    sign_clear_and_verify(
-        &fs::read(common::keys::v6::MLDSA65_ED25519_PRIVATE)?,
-        &fs::read(common::keys::v6::MLDSA65_ED25519_PUBLIC)?,
-    )?;
 
     Ok(())
 }
@@ -536,72 +356,26 @@ fn resign_and_verify_with_keys(
     Ok(())
 }
 
-/// Build a package with files, sign it, write it out, re-open it, and verify the signature.
-#[track_caller]
-fn build_parse_sign_and_verify(
-    signing_key: &[u8],
-    verification_key: &[u8],
-    pkg_out_path: impl AsRef<Path>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = env_logger::try_init();
-
-    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
-    let config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
-
-    let mut pkg = rpm::PackageBuilder::new(
-        "roundtrip",
-        "1.0.0",
-        "MIT",
-        "x86_64",
-        "spins round and round",
-    )
-    .using_config(config)
-    .with_file(
-        cargo_file.to_str().unwrap(),
-        rpm::FileOptions::new("/etc/foobar/hugo/bazz.toml")
-            .permissions(0o777)
-            .config(),
-    )?
-    .with_file(
-        cargo_file.to_str().unwrap(),
-        rpm::FileOptions::new("/etc/Cargo.toml"),
-    )?
-    .epoch(3)
-    .pre_install_script("echo preinst")
-    .add_changelog_entry("you", "yada yada", SystemTime::now())
-    .requires(rpm::Dependency::any("rpm-sign".to_string()))
-    .build()?;
-
-    assert_eq!(3, pkg.metadata.get_epoch()?);
-
-    // sign
-    let signer: Signer = Signer::from_asc_bytes(signing_key)?;
-    pkg.sign(signer)?;
-
-    let out_file = Path::new(common::CARGO_OUT_DIR).join(pkg_out_path.as_ref());
-    pkg.write_file(&out_file)?;
-
-    // verify
-    let package = rpm::Package::open(&out_file)?;
-    let verifier = Verifier::from_asc_bytes(verification_key)?;
-    package.verify_signature(verifier)?;
-
-    Ok(())
-}
-
 mod keyring {
     use super::*;
 
     /// Sign with a key from the keyring signer and verify with the keyring verifier.
     #[test]
     fn test_sign_with_keyring_signer() -> Result<(), Box<dyn std::error::Error>> {
-        // Load a keyring signer — it defaults to the first key in the keyring
+        // v4
         let keyring_signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::KEYRING_PRIVATE)?)?;
         let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring signer test")
             .build_and_sign(&keyring_signer)?;
 
-        // Verify with the full keyring — the matching key should be found automatically
         let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
+        pkg.verify_signature(&keyring_verifier)?;
+
+        // v6
+        let keyring_signer = Signer::from_asc_bytes(&fs::read(common::keys::v6::KEYRING_PRIVATE)?)?;
+        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring signer test")
+            .build_and_sign(&keyring_signer)?;
+
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v6::KEYRING_PUBLIC)?;
         pkg.verify_signature(&keyring_verifier)?;
 
         Ok(())
@@ -612,16 +386,29 @@ mod keyring {
     #[test]
     fn test_verify_with_keyring() -> Result<(), Box<dyn std::error::Error>> {
         let _ = env_logger::try_init();
+
+        // v4
         let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
 
-        // Sign with RSA key, verify with keyring containing RSA + RSA-protected + Ed25519
         let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
         let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
             .build_and_sign(&rsa_signer)?;
         rsa_pkg.verify_signature(&keyring_verifier)?;
 
-        // Sign with Ed25519 key, verify with the same keyring
         let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        let ed_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
+            .build_and_sign(&ed_signer)?;
+        ed_pkg.verify_signature(&keyring_verifier)?;
+
+        // v6
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v6::KEYRING_PUBLIC)?;
+
+        let rsa_signer = Signer::from_asc_file(common::keys::v6::RSA_4K_PRIVATE)?;
+        let rsa_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
+            .build_and_sign(&rsa_signer)?;
+        rsa_pkg.verify_signature(&keyring_verifier)?;
+
+        let ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
         let ed_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
             .build_and_sign(&ed_signer)?;
         ed_pkg.verify_signature(&keyring_verifier)?;
@@ -657,7 +444,7 @@ mod keyring {
     /// Verify that a keyring verifier fails when the signing key is NOT in the keyring.
     #[test]
     fn test_verify_with_keyring_wrong_key() -> Result<(), Box<dyn std::error::Error>> {
-        // The v4 keyring contains RSA-4K, RSA-3K-protected, and Ed25519 — but NOT ECDSA
+        // v4: the keyring contains RSA-4K, RSA-3K-protected, and Ed25519 — but NOT ECDSA
         let keyring_verifier = Verifier::from_asc_file(common::keys::v4::KEYRING_PUBLIC)?;
 
         let ecdsa_signer = Signer::from_asc_file(common::keys::v4::ECDSA_NISTP256_PRIVATE)?;
@@ -666,7 +453,19 @@ mod keyring {
 
         assert!(
             pkg.verify_signature(&keyring_verifier).is_err(),
-            "verification should fail when signing key is not in the keyring"
+            "verification should fail when signing key is not in the v4 keyring"
+        );
+
+        // v6: sign with a v4 key that is not in the v6 keyring
+        let keyring_verifier = Verifier::from_asc_file(common::keys::v6::KEYRING_PUBLIC)?;
+
+        let v4_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "keyring test")
+            .build_and_sign(&v4_signer)?;
+
+        assert!(
+            pkg.verify_signature(&keyring_verifier).is_err(),
+            "verification should fail when signing key is not in the v6 keyring"
         );
 
         Ok(())
@@ -892,57 +691,337 @@ fn test_signatures() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test that re-signing replaces the previous signature
+/// Test that sign() appends a signature rather than replacing existing ones
 #[test]
-fn test_resign_replaces_previous_signature() -> Result<(), Box<dyn std::error::Error>> {
-    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+fn test_sign_appends_signature() -> Result<(), Box<dyn std::error::Error>> {
+    // v4
     let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
     let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
 
-    let mut pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "double sign test")
-        .build_and_sign(&rsa_signer)?;
-
-    // Verify RSA signature works
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
     pkg.verify_signature(&rsa_verifier)?;
-
-    // Re-sign with EdDSA
-    pkg.sign(&ed_signer)?;
-
-    // EdDSA signature should now work
-    pkg.verify_signature(&ed_verifier)?;
-
-    // RSA signature should no longer be present
-    assert!(
-        pkg.verify_signature(&rsa_verifier).is_err(),
-        "original RSA signature should be replaced after re-signing with EdDSA"
-    );
-
-    // Should have exactly one signature (the EdDSA one)
     assert_eq!(pkg.signatures()?.len(), 1);
 
-    // Digests should still be valid
+    let sha1_before = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?
+        .to_owned();
+
+    // Append a second signature
+    pkg.sign(&ed_signer)?;
+
+    // Both signatures should be verifiable
+    pkg.verify_signature(&rsa_verifier)?;
+    pkg.verify_signature(&ed_verifier)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
+
+    // SHA1 digest should be preserved
+    let sha1_after = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?;
+    assert_eq!(
+        sha1_before, sha1_after,
+        "SHA1 digest should be preserved when appending a signature"
+    );
+
     pkg.verify_digests()?;
 
-    // v6 variant
-    let v6_rsa_signer = Signer::from_asc_file(common::keys::v6::RSA_4K_PRIVATE)?;
+    // v6
     let v6_rsa_verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
     let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
     let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
 
-    let mut pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "double sign test")
-        .build_and_sign(&v6_rsa_signer)?;
+    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
+    pkg.verify_signature(&v6_rsa_verifier)?;
+    assert_eq!(pkg.signatures()?.len(), 1);
+
+    pkg.sign(&v6_ed_signer)?;
 
     pkg.verify_signature(&v6_rsa_verifier)?;
-    pkg.sign(&v6_ed_signer)?;
     pkg.verify_signature(&v6_ed_verifier)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
 
+    pkg.verify_digests()?;
+
+    Ok(())
+}
+
+/// Test that clear_signatures() + sign() replaces all previous signatures
+#[test]
+fn test_clear_then_sign_replaces() -> Result<(), Box<dyn std::error::Error>> {
+    // v4
+    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
+    pkg.verify_signature(&rsa_verifier)?;
+
+    let sha1_before = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?
+        .to_owned();
+
+    // Clear and re-sign with a different key
+    pkg.clear_signatures()?;
+    pkg.sign(&ed_signer)?;
+
+    // Only the new signature should be present
+    pkg.verify_signature(&ed_verifier)?;
     assert!(
-        pkg.verify_signature(&v6_rsa_verifier).is_err(),
-        "original RSA signature should be replaced after re-signing with EdDSA"
+        pkg.verify_signature(&rsa_verifier).is_err(),
+        "original RSA signature should be gone after clear + re-sign"
+    );
+    assert_eq!(pkg.signatures()?.len(), 1);
+
+    // SHA1 digest should be preserved
+    let sha1_after = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?;
+    assert_eq!(
+        sha1_before, sha1_after,
+        "SHA1 digest should be preserved through clear + re-sign"
     );
 
+    pkg.verify_digests()?;
+
+    // v6
+    let v6_rsa_verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
+    let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+    let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
+    pkg.verify_signature(&v6_rsa_verifier)?;
+
+    // Clear and re-sign with a different key
+    pkg.clear_signatures()?;
+    pkg.sign(&v6_ed_signer)?;
+
+    pkg.verify_signature(&v6_ed_verifier)?;
+    assert!(
+        pkg.verify_signature(&v6_rsa_verifier).is_err(),
+        "original RSA signature should be gone after clear + re-sign"
+    );
     assert_eq!(pkg.signatures()?.len(), 1);
+
+    pkg.verify_digests()?;
+
+    Ok(())
+}
+
+/// Test that signing a package twice with the same key replaces the previous signature
+#[test]
+fn test_sign_twice_with_same_key_replaces() -> Result<(), Box<dyn std::error::Error>> {
+    // v4
+    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    assert_eq!(pkg.signatures()?.len(), 0);
+
+    pkg.sign(&rsa_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 1);
+    pkg.verify_signature(&rsa_verifier)?;
+
+    pkg.sign(&rsa_signer)?;
+    assert_eq!(
+        pkg.signatures()?.len(),
+        1,
+        "duplicate signature should be replaced"
+    );
+    pkg.verify_signature(&rsa_verifier)?;
+
+    pkg.verify_digests()?;
+
+    // v6
+    let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+    let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?;
+    assert_eq!(pkg.signatures()?.len(), 0);
+
+    pkg.sign(&v6_ed_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 1);
+    pkg.verify_signature(&v6_ed_verifier)?;
+
+    pkg.sign(&v6_ed_signer)?;
+    assert_eq!(
+        pkg.signatures()?.len(),
+        1,
+        "duplicate signature should be replaced"
+    );
+    pkg.verify_signature(&v6_ed_verifier)?;
+
+    pkg.verify_digests()?;
+
+    Ok(())
+}
+
+/// Test that clearing signatures restores the package to its unsigned state
+#[test]
+fn test_clear_package_signatures() -> Result<(), Box<dyn std::error::Error>> {
+    /// Sign a package, clear its signatures, and verify the signature header matches unsigned state.
+    #[track_caller]
+    fn sign_clear_and_verify(
+        signing_key: &[u8],
+        verification_key: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let unsigned_pkg = rpm::PackageBuilder::new(
+            "roundtrip",
+            "1.0.0",
+            "MIT",
+            "x86_64",
+            "spins round and round",
+        )
+        .build()?;
+
+        let cleared_pkg = {
+            let mut pkg = unsigned_pkg.clone();
+            let signer: Signer = Signer::from_asc_bytes(signing_key)?;
+            pkg.sign(signer)?;
+            pkg.clear_signatures()?;
+            pkg
+        };
+
+        cleared_pkg.verify_digests()?;
+        assert_eq!(
+            cleared_pkg.metadata.signature,
+            unsigned_pkg.metadata.signature
+        );
+
+        // Verification should fail because signatures were cleared
+        let verifier = Verifier::from_asc_bytes(verification_key)?;
+        assert!(matches!(
+            cleared_pkg.verify_signature(verifier),
+            Err(rpm::Error::NoSignatureFound)
+        ));
+
+        Ok(())
+    }
+
+    sign_clear_and_verify(
+        &fs::read(common::keys::v4::ED25519_PRIVATE)?,
+        &fs::read(common::keys::v4::ED25519_PUBLIC)?,
+    )?;
+    sign_clear_and_verify(
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PRIVATE)?,
+        &fs::read(common::keys::v4::ECDSA_NISTP256_PUBLIC)?,
+    )?;
+    sign_clear_and_verify(
+        &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
+        &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
+    )?;
+    sign_clear_and_verify(
+        &fs::read(common::keys::v6::RSA_4K_PRIVATE)?,
+        &fs::read(common::keys::v6::RSA_4K_PUBLIC)?,
+    )?;
+    sign_clear_and_verify(
+        &fs::read(common::keys::v6::ED25519_PRIVATE)?,
+        &fs::read(common::keys::v6::ED25519_PUBLIC)?,
+    )?;
+    sign_clear_and_verify(
+        &fs::read(common::keys::v6::MLDSA65_ED25519_PRIVATE)?,
+        &fs::read(common::keys::v6::MLDSA65_ED25519_PUBLIC)?,
+    )?;
+
+    Ok(())
+}
+
+/// Test that clear_signatures() preserves digests and file signatures (IMA)
+#[test]
+fn test_clear_signatures_preserves_digests_and_file_signatures()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC_IMA_SIGNED)?;
+
+    // Verify the package has file signatures and digests before clearing
+    let file_sigs_before: Vec<String> = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string_array(rpm::IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)?
+        .into_iter()
+        .map(String::from)
+        .collect();
+    assert!(
+        !file_sigs_before.is_empty(),
+        "IMA-signed package should have file signatures"
+    );
+
+    let file_sig_len_before = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_u32(rpm::IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)?;
+
+    let sha1_before = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?
+        .to_owned();
+
+    let sha256_before = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA256)?
+        .to_owned();
+
+    // Clear OpenPGP signatures
+    pkg.clear_signatures()?;
+
+    // OpenPGP signature should be gone
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_string_array(rpm::IndexSignatureTag::RPMSIGTAG_OPENPGP)
+            .is_err(),
+        "OpenPGP signatures should be cleared"
+    );
+
+    // File signatures (IMA) should be preserved
+    let file_sigs_after: Vec<String> = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string_array(rpm::IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)?
+        .into_iter()
+        .map(String::from)
+        .collect();
+    assert_eq!(
+        file_sigs_before, file_sigs_after,
+        "file signatures should be preserved after clearing OpenPGP signatures"
+    );
+
+    let file_sig_len_after = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_u32(rpm::IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)?;
+    assert_eq!(
+        file_sig_len_before, file_sig_len_after,
+        "file signature length should be preserved after clearing OpenPGP signatures"
+    );
+
+    // Header digests should be preserved
+    let sha1_after = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA1)?;
+    assert_eq!(
+        sha1_before, sha1_after,
+        "SHA1 digest should be preserved after clearing OpenPGP signatures"
+    );
+
+    let sha256_after = pkg
+        .metadata
+        .signature
+        .get_entry_data_as_string(rpm::IndexSignatureTag::RPMSIGTAG_SHA256)?;
+    assert_eq!(
+        sha256_before, sha256_after,
+        "SHA256 digest should be preserved after clearing OpenPGP signatures"
+    );
+
+    // Digests should still be valid
     pkg.verify_digests()?;
 
     Ok(())
@@ -991,6 +1070,54 @@ fn test_tampered_payload_detected() -> Result<(), Box<dyn std::error::Error>> {
         pkg.verify_digests().is_err(),
         "verify_digests should fail after payload tampering (v6)"
     );
+
+    Ok(())
+}
+
+/// Test that tampering with the header is detected by signature verification
+#[test]
+fn test_tampered_header_detected() -> Result<(), Box<dyn std::error::Error>> {
+    #[track_caller]
+    fn tamper_header_and_verify(
+        signing_key_path: &str,
+        verification_key_path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let signer = Signer::from_asc_file(signing_key_path)?;
+        let verifier = Verifier::from_asc_file(verification_key_path)?;
+        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "tamper test")
+            .build_and_sign(&signer)?;
+
+        let offsets = pkg.metadata.get_package_segment_offsets();
+
+        let mut bytes = Vec::new();
+        pkg.write(&mut bytes)?;
+
+        // Tamper with a byte near the end of the header's data store
+        // This test is a little sensitive because of alignment / padding bytes where
+        // corruption isn't necessarily detected.
+        let tamper_offset = offsets.payload as usize - 1;
+        bytes[tamper_offset] ^= 0xFF;
+
+        let tampered_pkg = rpm::Package::parse(&mut bytes.as_slice())?;
+        assert!(
+            tampered_pkg.verify_signature(&verifier).is_err(),
+            "verify_signature should fail after header tampering"
+        );
+
+        Ok(())
+    }
+
+    // v4
+    tamper_header_and_verify(
+        common::keys::v4::RSA_4K_PRIVATE,
+        common::keys::v4::RSA_4K_PUBLIC,
+    )?;
+
+    // v6
+    tamper_header_and_verify(
+        common::keys::v6::ED25519_PRIVATE,
+        common::keys::v6::ED25519_PUBLIC,
+    )?;
 
     Ok(())
 }
@@ -1058,6 +1185,136 @@ fn test_roundtrip_write_read_integrity() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-// @todo:
-//  * check for the existence of certain digests
-//  * check for the existence of RSA / DSA tags when a key of the appropriate type was used
+/// Test that signing with an RSA key produces a legacy RPMSIGTAG_RSA tag,
+/// and signing with an EdDSA/ECDSA key produces a legacy RPMSIGTAG_DSA tag.
+#[test]
+fn test_legacy_signature_tags() -> Result<(), Box<dyn std::error::Error>> {
+    // RSA key -> RPMSIGTAG_RSA present, RPMSIGTAG_DSA absent
+    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&rsa_signer)?;
+
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_RSA)
+            .is_ok(),
+        "RSA-signed package should have RPMSIGTAG_RSA"
+    );
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_DSA)
+            .is_err(),
+        "RSA-signed package should not have RPMSIGTAG_DSA"
+    );
+
+    // EdDSA key -> RPMSIGTAG_DSA present, RPMSIGTAG_RSA absent
+    let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&ed_signer)?;
+
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_DSA)
+            .is_ok(),
+        "EdDSA-signed package should have RPMSIGTAG_DSA"
+    );
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_RSA)
+            .is_err(),
+        "EdDSA-signed package should not have RPMSIGTAG_RSA"
+    );
+
+    // ECDSA key -> RPMSIGTAG_DSA present, RPMSIGTAG_RSA absent
+    let ecdsa_signer = Signer::from_asc_file(common::keys::v4::ECDSA_NISTP256_PRIVATE)?;
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&ecdsa_signer)?;
+
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_DSA)
+            .is_ok(),
+        "ECDSA-signed package should have RPMSIGTAG_DSA"
+    );
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_RSA)
+            .is_err(),
+        "ECDSA-signed package should not have RPMSIGTAG_RSA"
+    );
+
+    // Multi-signed (RSA + EdDSA): the last-added key type determines the legacy tag.
+    // Only one of RPMSIGTAG_RSA or RPMSIGTAG_DSA should be present.
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&rsa_signer)?;
+    pkg.sign(&ed_signer)?;
+
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_DSA)
+            .is_ok(),
+        "last signature (EdDSA) should produce RPMSIGTAG_DSA"
+    );
+    assert!(
+        pkg.metadata
+            .signature
+            .get_entry_data_as_binary(rpm::IndexSignatureTag::RPMSIGTAG_RSA)
+            .is_err(),
+        "RPMSIGTAG_RSA should not be present when last signature is EdDSA"
+    );
+
+    Ok(())
+}
+
+/// Test that a multi-signed package survives a write-read roundtrip with both signatures intact
+#[test]
+fn test_multi_signature_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    // v4: sign with RSA then EdDSA, write, re-read, verify both
+    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&rsa_signer)?;
+    pkg.sign(&ed_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
+
+    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v4.rpm");
+    pkg.write_file(&out_file)?;
+
+    let reopened = rpm::Package::open(&out_file)?;
+    assert_eq!(reopened.signatures()?.len(), 2);
+    reopened.verify_signature(&rsa_verifier)?;
+    reopened.verify_signature(&ed_verifier)?;
+    reopened.verify_digests()?;
+
+    // v6: sign with RSA then EdDSA, write, re-read, verify both
+    let v6_rsa_signer = Signer::from_asc_file(common::keys::v6::RSA_4K_PRIVATE)?;
+    let v6_rsa_verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
+    let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+    let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?;
+    pkg.sign(&v6_rsa_signer)?;
+    pkg.sign(&v6_ed_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
+
+    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v6.rpm");
+    pkg.write_file(&out_file)?;
+
+    let reopened = rpm::Package::open(&out_file)?;
+    assert_eq!(reopened.signatures()?.len(), 2);
+    reopened.verify_signature(&v6_rsa_verifier)?;
+    reopened.verify_signature(&v6_ed_verifier)?;
+    reopened.verify_digests()?;
+
+    Ok(())
+}

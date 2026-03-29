@@ -2,23 +2,29 @@
 
 use super::*;
 
+use std::collections::HashSet;
+use std::default::Default;
+
 use crate::constants::*;
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
 
+use base64::prelude::*;
+use digest::Digest;
 #[cfg(feature = "signature-pgp")]
 use pgp::crypto::public_key::PublicKeyAlgorithm;
-#[cfg(feature = "signature-pgp")]
-use pgp::{base64::Base64Decoder, base64::Base64Reader};
-
-use std::default::Default;
 
 /// base signature header builder
 pub struct SignatureHeaderBuilder {
     openpgp_signatures: Vec<Vec<u8>>,
+    header_sha1: Option<String>,
     header_sha256: Option<String>,
     header_sha3_256: Option<String>,
     content_length: Option<u64>,
+    file_signatures: Option<Vec<String>>,
+    file_signature_length: Option<u32>,
+    verity_signatures: Option<Vec<String>>,
+    verity_signature_algo: Option<u32>,
 }
 
 impl Default for SignatureHeaderBuilder {
@@ -27,19 +33,13 @@ impl Default for SignatureHeaderBuilder {
     }
 }
 
-#[cfg(feature = "signature-pgp")]
 pub(crate) fn decode_sig(signature: &str) -> Result<Vec<u8>, crate::Error> {
-    use std::io::Read;
-
-    let mut decoded_sig = Vec::new();
-    let mut decoder = Base64Decoder::new(Base64Reader::new(signature.as_ref()));
-    decoder.read_to_end(&mut decoded_sig)?;
-    Ok(decoded_sig)
+    BASE64_STANDARD
+        .decode(signature)
+        .map_err(|e| crate::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
 }
 
-#[cfg(feature = "signature-pgp")]
 pub(crate) fn encode_sig(signature: &[u8]) -> String {
-    use base64::prelude::*;
     BASE64_STANDARD.encode(signature)
 }
 
@@ -47,10 +47,76 @@ impl SignatureHeaderBuilder {
     pub fn new() -> Self {
         Self {
             openpgp_signatures: Vec::new(),
+            header_sha1: None,
             header_sha256: None,
             header_sha3_256: None,
             content_length: None,
+            file_signatures: None,
+            file_signature_length: None,
+            verity_signatures: None,
+            verity_signature_algo: None,
         }
+    }
+
+    /// Create a builder that preserves existing data from a signature header.
+    ///
+    /// This includes OpenPGP signatures, header digests, content length,
+    /// file signatures (IMA), and verity signatures. It does NOT include legacy
+    /// header + payload signatures (v3 signatures).
+    pub fn from_existing(header: &Header<IndexSignatureTag>) -> Result<Self, crate::Error> {
+        let mut builder = Self::new();
+        if let Ok(existing_sigs) =
+            header.get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP)
+        {
+            for base64_sig in existing_sigs {
+                builder.openpgp_signatures.push(decode_sig(&base64_sig)?);
+            }
+        } else {
+            // Fall back to legacy binary signature tags
+            if let Ok(sig) = header.get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA) {
+                builder.openpgp_signatures.push(sig.to_vec());
+            } else if let Ok(sig) =
+                header.get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA)
+            {
+                builder.openpgp_signatures.push(sig.to_vec());
+            }
+        }
+        if let Ok(digest) = header.get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1) {
+            builder.header_sha1 = Some(digest.to_owned());
+        }
+        if let Ok(digest) = header.get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256) {
+            builder.header_sha256 = Some(digest.to_owned());
+        }
+        if let Ok(digest) = header.get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256) {
+            builder.header_sha3_256 = Some(digest.to_owned());
+        }
+        if let Ok(size) = header.get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_SIZE) {
+            builder.content_length = Some(size as u64);
+        } else if let Ok(size) = header.get_entry_data_as_u64(IndexSignatureTag::RPMSIGTAG_LONGSIZE)
+        {
+            builder.content_length = Some(size);
+        }
+        if let Ok(sigs) =
+            header.get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
+        {
+            builder.file_signatures = Some(sigs.into_iter().map(String::from).collect());
+        }
+        if let Ok(len) =
+            header.get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH)
+        {
+            builder.file_signature_length = Some(len);
+        }
+        if let Ok(sigs) =
+            header.get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_VERITYSIGNATURES)
+        {
+            builder.verity_signatures = Some(sigs.into_iter().map(String::from).collect());
+        }
+        if let Ok(algo) =
+            header.get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_VERITYSIGNATUREALGO)
+        {
+            builder.verity_signature_algo = Some(algo);
+        }
+        Ok(builder)
     }
 
     /// Construct the complete signature header.
@@ -61,26 +127,42 @@ impl SignatureHeaderBuilder {
         if !self.openpgp_signatures.is_empty() {
             let mut openpgp_signatures = Vec::new();
             let mut legacy_sig = None;
+            let mut seen_fingerprints = HashSet::new();
 
-            // need to base64-encode the raw bytes of the signatures
-            for sig_bytes in &self.openpgp_signatures {
+            // Iterate in reverse so that newer signatures (appended last) take
+            // precedence when deduplicating by issuer fingerprint, and the
+            // legacy signature tag is set from the newest matching signature.
+            for sig_bytes in self.openpgp_signatures.iter().rev() {
                 let signature = Verifier::parse_signature(sig_bytes)?;
-                let legacy_sig_tag = match signature
-                    .config()
-                    .ok_or(crate::Error::UnknownVersionSignature)?
-                    .pub_alg
-                {
-                    PublicKeyAlgorithm::RSA => Some(IndexSignatureTag::RPMSIGTAG_RSA),
-                    PublicKeyAlgorithm::ECDSA
-                    | PublicKeyAlgorithm::EdDSALegacy
-                    | PublicKeyAlgorithm::Ed25519 => Some(IndexSignatureTag::RPMSIGTAG_DSA),
-                    _ => None,
-                };
-                if let Some(legacy_sig_tag) = legacy_sig_tag {
-                    legacy_sig = Some((legacy_sig_tag, sig_bytes));
+
+                // Deduplicate: keep only the newest signature per key
+                if let Some(fp) = signature.issuer_fingerprint().first() {
+                    if !seen_fingerprints.insert(format!("{fp:x}")) {
+                        continue;
+                    }
                 }
+
+                if legacy_sig.is_none() {
+                    let legacy_sig_tag = match signature
+                        .config()
+                        .ok_or(crate::Error::UnknownVersionSignature)?
+                        .pub_alg
+                    {
+                        PublicKeyAlgorithm::RSA => Some(IndexSignatureTag::RPMSIGTAG_RSA),
+                        PublicKeyAlgorithm::ECDSA
+                        | PublicKeyAlgorithm::EdDSALegacy
+                        | PublicKeyAlgorithm::Ed25519 => Some(IndexSignatureTag::RPMSIGTAG_DSA),
+                        _ => None,
+                    };
+                    if let Some(legacy_sig_tag) = legacy_sig_tag {
+                        legacy_sig = Some((legacy_sig_tag, sig_bytes));
+                    }
+                }
+
                 openpgp_signatures.push(encode_sig(sig_bytes));
             }
+            // Restore original order (oldest first)
+            openpgp_signatures.reverse();
 
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_OPENPGP,
@@ -91,6 +173,13 @@ impl SignatureHeaderBuilder {
             if let Some((tag, sig_bytes)) = legacy_sig {
                 entries.push(IndexEntry::new(tag, IndexData::Bin(sig_bytes.clone())));
             }
+        }
+
+        if let Some(digest) = self.header_sha1 {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_SHA1,
+                IndexData::StringTag(digest),
+            ));
         }
 
         if let Some(digest) = self.header_sha256 {
@@ -104,6 +193,34 @@ impl SignatureHeaderBuilder {
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA3_256,
                 IndexData::StringTag(digest),
+            ));
+        }
+
+        if let Some(sigs) = self.verity_signatures {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_VERITYSIGNATURES,
+                IndexData::StringArray(sigs),
+            ));
+        }
+
+        if let Some(algo) = self.verity_signature_algo {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_VERITYSIGNATUREALGO,
+                IndexData::Int32(vec![algo]),
+            ));
+        }
+
+        if let Some(sigs) = self.file_signatures {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_FILESIGNATURES,
+                IndexData::StringArray(sigs),
+            ));
+        }
+
+        if let Some(len) = self.file_signature_length {
+            entries.push(IndexEntry::new(
+                IndexSignatureTag::RPMSIGTAG_FILESIGNATURE_LENGTH,
+                IndexData::Int32(vec![len]),
             ));
         }
 
@@ -129,15 +246,16 @@ impl SignatureHeaderBuilder {
         Ok(header)
     }
 
-    /// Add a sha256 digest of the header bytes
-    pub fn set_sha256_digest(mut self, digest_header_sha256: &str) -> Self {
-        self.header_sha256 = Some(digest_header_sha256.to_owned());
-        self
-    }
-
-    /// Add a sha3-256 digest of the header bytes
-    pub fn set_sha3_256_digest(mut self, digest_header_sha3_256: &str) -> Self {
-        self.header_sha3_256 = Some(digest_header_sha3_256.to_owned());
+    /// Calculate header digests from the given header bytes.
+    ///
+    /// Always calculates SHA-256 and SHA3-256 digests. If a SHA-1 digest was already present
+    /// (e.g. preserved via `from_existing`), it is also recalculated.
+    pub fn calculate_digests(mut self, header_bytes: &[u8]) -> Self {
+        self.header_sha256 = Some(hex::encode(sha2::Sha256::digest(header_bytes)));
+        self.header_sha3_256 = Some(hex::encode(sha3::Sha3_256::digest(header_bytes)));
+        if self.header_sha1.is_some() {
+            self.header_sha1 = Some(hex::encode(sha1::Sha1::digest(header_bytes)));
+        }
         self
     }
 

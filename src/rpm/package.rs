@@ -207,24 +207,17 @@ impl Package {
         Ok(())
     }
 
-    // TODO: this should perhaps modify the header in-place instead?
     /// Generate a fresh, unsigned signature header
     #[cfg(feature = "signature-meta")]
     pub fn clear_signatures(&mut self) -> Result<(), Error> {
-        // create a temporary byte repr of the header and re-create all hashes
+        // create a temporary byte repr of the header
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
-        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
-        let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header_bytes.as_slice()));
-        let mut sig_header_builder = SignatureHeaderBuilder::new()
-            .set_sha256_digest(&header_digest_sha256)
-            .set_sha3_256_digest(&header_digest_sha3_256);
-        if self.metadata.signature.has_v4_size_header() {
-            sig_header_builder = sig_header_builder
-                .set_content_length(header_bytes.len() as u64 + self.content.len() as u64);
-        }
-        self.metadata.signature = sig_header_builder.build()?;
+
+        self.metadata.signature = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
+            .clear_signatures()
+            .calculate_digests(&header_bytes)
+            .build()?;
 
         Ok(())
     }
@@ -266,24 +259,13 @@ impl Package {
         S: signature::Signing<Signature = Vec<u8>>,
     {
         let t = t.try_into().unwrap();
-        // create a temporary byte repr of the header and re-create all hashes
+        // create a temporary byte repr of the header
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
 
-        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
         let header_signature = signer.sign(header_bytes.as_slice(), t)?;
-
-        let mut sig_header_builder = SignatureHeaderBuilder::new();
-
-        if self.metadata.signature.has_v4_size_header() {
-            sig_header_builder = sig_header_builder
-                .set_content_length(header_bytes.len() as u64 + self.content.len() as u64);
-        }
-
-        let sig_header = sig_header_builder
-            .set_sha256_digest(&header_digest_sha256)
-            .set_content_length(header_bytes.len() as u64 + self.content.len() as u64)
+        let sig_header = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
+            .calculate_digests(&header_bytes)
             .add_openpgp_signature(header_signature)
             .build()?;
 
