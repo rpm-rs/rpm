@@ -164,6 +164,11 @@ impl Package {
         let file_entries = self.metadata.get_file_entries()?;
 
         for file_entry in file_entries.iter() {
+            // Ghost files are not present in the payload archive and should not be created
+            if file_entry.flags.contains(FileFlags::GHOST) {
+                continue;
+            }
+
             let mut entry_reader = payload::Reader::new(&mut archive, &file_entries)?;
             if entry_reader.is_trailer() {
                 return Ok(());
@@ -1315,6 +1320,14 @@ impl Iterator for FileIterator<'_> {
         // @todo: probably safe to hand out a reference instead of cloning, just a bit more painful
         let file_entry = self.file_entries[self.count].clone();
         self.count += 1;
+
+        // Ghost files are not in the payload archive, so return them immediately with empty content
+        if file_entry.flags.contains(FileFlags::GHOST) {
+            return Some(Ok(RpmFile {
+                metadata: file_entry,
+                content: Vec::new(),
+            }));
+        }
 
         let reader = payload::Reader::new(&mut self.archive, &self.file_entries);
 
