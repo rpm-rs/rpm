@@ -2,6 +2,7 @@
 
 use super::*;
 
+#[cfg(feature = "signature-pgp")]
 use std::collections::HashSet;
 use std::default::Default;
 
@@ -39,6 +40,7 @@ pub(crate) fn decode_sig(signature: &str) -> Result<Vec<u8>, crate::Error> {
         .map_err(|e| crate::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
 }
 
+#[cfg(feature = "signature-pgp")]
 pub(crate) fn encode_sig(signature: &[u8]) -> String {
     BASE64_STANDARD.encode(signature)
 }
@@ -69,7 +71,7 @@ impl SignatureHeaderBuilder {
             header.get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP)
         {
             for base64_sig in existing_sigs {
-                builder.openpgp_signatures.push(decode_sig(&base64_sig)?);
+                builder.openpgp_signatures.push(decode_sig(base64_sig)?);
             }
         } else {
             // Fall back to legacy binary signature tags
@@ -136,10 +138,10 @@ impl SignatureHeaderBuilder {
                 let signature = Verifier::parse_signature(sig_bytes)?;
 
                 // Deduplicate: keep only the newest signature per key
-                if let Some(fp) = signature.issuer_fingerprint().first() {
-                    if !seen_fingerprints.insert(format!("{fp:x}")) {
-                        continue;
-                    }
+                if let Some(fp) = signature.issuer_fingerprint().first()
+                    && !seen_fingerprints.insert(format!("{fp:x}"))
+                {
+                    continue;
                 }
 
                 if legacy_sig.is_none() {
