@@ -8,7 +8,6 @@ use rpm::*;
 mod common;
 
 #[test]
-#[ignore]
 fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v4::RPM_EMPTY.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC.as_ref())?;
@@ -18,6 +17,11 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v4::RPM_BASIC_IMA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v4::src::RPM_EMPTY_SRC.as_ref())?;
     assert_boundaries(common::pkgs::v4::src::RPM_BASIC_SRC.as_ref())?;
+
+    assert_boundaries(common::pkgs::v6::RPM_EMPTY.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC_MULTI_SIGNED.as_ref())?;
 
     let mut temp = tempfile::NamedTempFile::new()?;
 
@@ -74,15 +78,16 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = [0u8; 10];
         f.read_exact(&mut buf)?;
 
-        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().unwrap() {
-            CompressionType::Gzip => &[0x1f, 0x8b],
-            CompressionType::Zstd => &[0x28, 0xb5, 0x2f, 0xfd],
-            CompressionType::Xz => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
-            CompressionType::Bzip2 => &[0x42, 0x5a],
-            CompressionType::None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
+        match package.metadata.get_payload_compressor().unwrap() {
+            CompressionType::Gzip => assert!(buf.starts_with(&[0x1f, 0x8b])),
+            CompressionType::Zstd => assert!(buf.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])),
+            CompressionType::Xz => assert!(buf.starts_with(&[0xfd, 0x37, 0x7a, 0x58, 0x5a])),
+            CompressionType::Bzip2 => assert!(buf.starts_with(&[0x42, 0x5a])),
+            CompressionType::None => {
+                // CPIO magic "070701" or RPM "stripped" CPIO magic "07070X"
+                assert!(buf.starts_with(b"070701") || buf.starts_with(b"07070X"));
+            }
         };
-
-        assert!(buf.starts_with(payload_magic));
 
         Ok(())
     }
