@@ -114,34 +114,160 @@ pub(crate) fn normalize_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::Error;
 
-    #[test]
-    fn test_normalize_path_already_normalized() {
-        assert_eq!(normalize_path("/usr/bin/foo"), "/usr/bin/foo");
-        assert_eq!(normalize_path("./usr/bin/foo"), "./usr/bin/foo");
-        assert_eq!(normalize_path("/foo"), "/foo");
-        assert_eq!(normalize_path("./foo"), "./foo");
+    mod normalize_path {
+        use super::*;
+
+        #[test]
+        fn test_normalize_path_already_normalized() {
+            assert_eq!(normalize_path("/usr/bin/foo"), "/usr/bin/foo");
+            assert_eq!(normalize_path("./usr/bin/foo"), "./usr/bin/foo");
+            assert_eq!(normalize_path("/foo"), "/foo");
+            assert_eq!(normalize_path("./foo"), "./foo");
+        }
+
+        #[test]
+        fn test_normalize_path_collapse_slashes() {
+            assert_eq!(normalize_path("//usr//bin//foo"), "/usr/bin/foo");
+            assert_eq!(normalize_path(".//usr//bin"), "./usr/bin");
+            assert_eq!(normalize_path("/usr///bin////foo"), "/usr/bin/foo");
+        }
+
+        #[test]
+        fn test_normalize_path_strip_trailing_slash() {
+            assert_eq!(normalize_path("/usr/bin/"), "/usr/bin");
+            assert_eq!(normalize_path("./usr/bin/"), "./usr/bin");
+            assert_eq!(normalize_path("/foo/"), "/foo");
+            assert_eq!(normalize_path("./foo/"), "./foo");
+        }
+
+        #[test]
+        fn test_normalize_path_collapse_and_strip() {
+            assert_eq!(normalize_path("//usr///bin//foo/"), "/usr/bin/foo");
+            assert_eq!(normalize_path(".//etc//"), "./etc");
+            assert_eq!(normalize_path("/usr/bin///"), "/usr/bin");
+        }
     }
 
-    #[test]
-    fn test_normalize_path_collapse_slashes() {
-        assert_eq!(normalize_path("//usr//bin//foo"), "/usr/bin/foo");
-        assert_eq!(normalize_path(".//usr//bin"), "./usr/bin");
-        assert_eq!(normalize_path("/usr///bin////foo"), "/usr/bin/foo");
+    mod reject_control_chars {
+        use super::*;
+
+        #[test]
+        fn test_reject_control_chars() {
+            // ASCII control characters should be rejected
+            assert!(matches!(
+                reject_control_chars("test", "foo\x07bar"),
+                Err(Error::InvalidControlChar { .. })
+            ));
+            assert!(matches!(
+                reject_control_chars("test", "foo\x00bar"),
+                Err(Error::InvalidControlChar { .. })
+            ));
+            assert!(matches!(
+                reject_control_chars("test", "foo\x1b[0m"),
+                Err(Error::InvalidControlChar { .. })
+            ));
+            // DEL (0x7F) should be rejected
+            assert!(matches!(
+                reject_control_chars("test", "foo\x7f"),
+                Err(Error::InvalidControlChar { .. })
+            ));
+        }
+
+        #[test]
+        fn test_reject_control_chars_allows_tab_and_newline() {
+            assert!(reject_control_chars("test", "line1\nline2\ttabbed").is_ok());
+        }
+
+        #[test]
+        fn test_reject_control_chars_allows_normal_text() {
+            assert!(reject_control_chars("test", "hello world").is_ok());
+            assert!(reject_control_chars("test", "").is_ok());
+        }
     }
 
-    #[test]
-    fn test_normalize_path_strip_trailing_slash() {
-        assert_eq!(normalize_path("/usr/bin/"), "/usr/bin");
-        assert_eq!(normalize_path("./usr/bin/"), "./usr/bin");
-        assert_eq!(normalize_path("/foo/"), "/foo");
-        assert_eq!(normalize_path("./foo/"), "./foo");
+    mod validate_name {
+        use super::*;
+
+        #[test]
+        fn test_validate_name_valid() {
+            assert!(validate_name("foo").is_ok());
+            assert!(validate_name("foo-bar").is_ok());
+            assert!(validate_name("foo_bar").is_ok());
+            assert!(validate_name("foo.bar").is_ok());
+            assert!(validate_name("foo+bar").is_ok());
+            assert!(validate_name("_foo").is_ok());
+            assert!(validate_name("%{name}").is_ok());
+        }
+
+        #[test]
+        fn test_validate_name_empty() {
+            assert!(matches!(
+                validate_name(""),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
+
+        #[test]
+        fn test_validate_name_invalid_first_char() {
+            assert!(matches!(
+                validate_name("-foo"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
+
+        #[test]
+        fn test_validate_name_invalid_chars() {
+            assert!(matches!(
+                validate_name("foo bar"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+            assert!(matches!(
+                validate_name("foo@bar"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
     }
 
-    #[test]
-    fn test_normalize_path_collapse_and_strip() {
-        assert_eq!(normalize_path("//usr///bin//foo/"), "/usr/bin/foo");
-        assert_eq!(normalize_path(".//etc//"), "./etc");
-        assert_eq!(normalize_path("/usr/bin///"), "/usr/bin");
+    mod validate_version {
+        use super::*;
+
+        #[test]
+        fn test_validate_version_valid() {
+            assert!(validate_version("version", "1.0.0").is_ok());
+            assert!(validate_version("version", "1.0.0~rc1").is_ok());
+            assert!(validate_version("version", "1.0.0^post1").is_ok());
+            assert!(validate_version("version", "1.0+git123").is_ok());
+        }
+
+        #[test]
+        fn test_validate_version_empty() {
+            assert!(matches!(
+                validate_version("version", ""),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
+
+        #[test]
+        fn test_validate_version_invalid_chars() {
+            // Hyphen not allowed in version (allowed in name)
+            assert!(matches!(
+                validate_version("version", "1.0-beta"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+            assert!(matches!(
+                validate_version("version", "1.0 0"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
+
+        #[test]
+        fn test_validate_version_release() {
+            assert!(matches!(
+                validate_version("release", "1-beta"),
+                Err(Error::InvalidCharacters { .. })
+            ));
+        }
     }
 }

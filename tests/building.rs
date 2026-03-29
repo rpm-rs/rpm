@@ -4,236 +4,164 @@ use rpm::*;
 
 mod common;
 
-/// Ensure control characters (except tab/newline in descriptions) are rejected in package metadata fields.
-#[test]
-fn test_reject_control_chars_in_metadata() {
-    // Control character in name
-    let result = PackageBuilder::new("foo\x07bar", "1.0.0", "MIT", "x86_64", "test").build();
-    assert!(result.is_err(), "should reject control chars in name");
+mod validation {
+    use super::*;
 
-    // Control character in version
-    let result = PackageBuilder::new("foo", "1.0\x01.0", "MIT", "x86_64", "test").build();
-    assert!(result.is_err(), "should reject control chars in version");
+    /// Verify that pre_build_validation performs validation on the package name
+    #[test]
+    fn test_builder_rejects_invalid_name() {
+        // But not in name
+        let result = PackageBuilder::new("foo\t", "1.0.0", "MIT", "x86_64", "test").build();
+        assert!(result.is_err(), "should reject special chars (tab) in name");
 
-    // Control character in summary
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test\x1b[0m").build();
-    assert!(
-        result.is_err(),
-        "should reject control chars (ANSI escape) in summary"
-    );
+        let result = PackageBuilder::new("foo\n", "1.0.0", "MIT", "x86_64", "test").build();
+        assert!(
+            result.is_err(),
+            "should reject special chars (newline) in name"
+        );
+    }
 
-    // Tab and newline are allowed in description
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
-        .description("line1\nline2\ttabbed")
-        .build();
-    assert!(
-        result.is_ok(),
-        "tabs and newlines should be allowed in description"
-    );
-
-    // Control character in dependency name
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
-        .requires(rpm::Dependency::any("bad\x00dep"))
-        .build();
-    assert!(
-        result.is_err(),
-        "should reject control chars in dependency name"
-    );
-
-    // Control character in changelog
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
-        .add_changelog_entry("author\x07 <a@b.c>", "entry", 1_600_000_000)
-        .build();
-    assert!(
-        result.is_err(),
-        "should reject control chars in changelog name"
-    );
-
-    // DEL (0x7F) should be rejected in name
-    let result = PackageBuilder::new("foo\x7f", "1.0.0", "MIT", "x86_64", "test").build();
-    assert!(result.is_err(), "should reject DEL in name");
-}
-
-/// Validate that package names allow only permitted characters and reject invalid ones.
-#[test]
-fn test_validate_name_characters() {
-    // Valid names
-    assert!(
-        PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "t")
+    /// Verify that pre_build_validation rejects control chars in various builder metadata fields.
+    #[test]
+    fn test_builder_rejects_control_chars_in_metadata() {
+        // Tab and newline are allowed in description
+        PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
+            .description("line1\nline2\ttabbed")
             .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo-bar", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo_bar", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo.bar", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo+bar", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("_foo", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("%{name}", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
+            .expect("tabs and newlines should be allowed in description");
 
-    // Invalid: whitespace in name
-    let result = PackageBuilder::new("foo bar", "1.0.0", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject whitespace in name");
+        // Control character in summary
+        let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test\x1b[0m").build();
+        assert!(
+            result.is_err(),
+            "should reject control chars (ANSI escape) in summary"
+        );
 
-    // Invalid: empty name
-    let result = PackageBuilder::new("", "1.0.0", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject empty name");
+        // Control character in dependency name
+        let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
+            .requires(rpm::Dependency::any("bad\x00dep"))
+            .build();
+        assert!(
+            result.is_err(),
+            "should reject control chars in dependency name"
+        );
+    }
 
-    // Invalid: starts with hyphen
-    let result = PackageBuilder::new("-foo", "1.0.0", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject name starting with hyphen");
+    /// Verify that pre_build_validation rejects control chars in file-level metadata.
+    #[test]
+    fn test_builder_rejects_control_chars_in_file_metadata() {
+        let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
-    // Invalid: special characters
-    let result = PackageBuilder::new("foo@bar", "1.0.0", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject @ in name");
-}
+        // Control character in file owner
+        let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
+            .with_file(
+                &cargo_file,
+                FileOptions::new("/etc/test.toml").user("bad\x01user"),
+            )
+            .unwrap()
+            .build();
+        assert!(result.is_err(), "should reject control chars in file user");
+    }
 
-/// Validate that version and release strings allow only permitted characters and reject invalid ones.
-#[test]
-fn test_validate_version_characters() {
-    // Valid versions
-    assert!(
-        PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo", "1.0.0~rc1", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo", "1.0.0^post1", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
-    assert!(
-        PackageBuilder::new("foo", "1.0+git123", "MIT", "x86_64", "t")
-            .build()
-            .is_ok()
-    );
+    /// Verify that pre_build_validation rejects control chars in changelog metadata.
+    #[test]
+    fn test_builder_rejects_control_chars_in_changelogs() {
+        // Control character in changelog author
+        let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
+            .add_changelog_entry("author\x07 <a@b.c>", "entry", 1_600_000_000)
+            .build();
+        assert!(
+            result.is_err(),
+            "should reject control chars in changelog name"
+        );
 
-    // Invalid: hyphen in version (allowed in name but not version)
-    let result = PackageBuilder::new("foo", "1.0-beta", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject hyphen in version");
+        // Control character in changelog entry
+        let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
+            .add_changelog_entry("author <a@b.c>", "entry \x07", 1_600_000_000)
+            .build();
+        assert!(
+            result.is_err(),
+            "should reject control chars in changelog body"
+        );
+    }
 
-    // Invalid: whitespace in version
-    let result = PackageBuilder::new("foo", "1.0 0", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject whitespace in version");
+    /// Verify that each `with_*` method rejects mismatched `FileOptions` variants.
+    #[test]
+    fn test_file_options_validation() {
+        let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
-    // Invalid: empty version
-    let result = PackageBuilder::new("foo", "", "MIT", "x86_64", "t").build();
-    assert!(result.is_err(), "should reject empty version");
+        // with_dir_entry rejects non-Dir mode
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_dir_entry(FileOptions::new("/var/log/foo"));
+        assert!(
+            err.is_err(),
+            "with_dir_entry should reject regular file options"
+        );
 
-    // Invalid: release with hyphen
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "t")
-        .release("1-beta")
-        .build();
-    assert!(result.is_err(), "should reject hyphen in release");
-}
+        // with_symlink rejects non-SymbolicLink mode
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_symlink(FileOptions::new("/usr/bin/link"));
+        assert!(
+            err.is_err(),
+            "with_symlink should reject regular file options"
+        );
 
-/// Ensure control characters are rejected in file-level metadata such as owner names.
-#[test]
-fn test_reject_control_chars_in_file_metadata() {
-    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+        // with_symlink rejects empty target
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_symlink(FileOptions::new("/usr/bin/link").mode(FileMode::symbolic_link(0o777)));
+        assert!(
+            err.is_err(),
+            "with_symlink should reject empty symlink target"
+        );
 
-    // Control character in file owner
-    let result = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test")
-        .with_file(
-            &cargo_file,
-            FileOptions::new("/etc/test.toml").user("bad\x01user"),
-        )
-        .unwrap()
-        .build();
-    assert!(result.is_err(), "should reject control chars in file user");
-}
+        // with_ghost rejects non-ghost options
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_ghost(FileOptions::new("/var/log/foo"));
+        assert!(err.is_err(), "with_ghost should reject non-ghost options");
 
-/// Verify that each `with_*` method rejects mismatched `FileOptions` variants.
-#[test]
-fn test_file_options_validation() {
-    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
+        // with_file rejects Dir mode
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+            cargo_file.to_str().unwrap(),
+            FileOptions::dir("/var/log/foo"),
+        );
+        assert!(err.is_err(), "with_file should reject directory options");
 
-    // with_dir_entry rejects non-Dir mode
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_dir_entry(FileOptions::new("/var/log/foo"));
-    assert!(
-        err.is_err(),
-        "with_dir_entry should reject regular file options"
-    );
+        // with_file rejects ghost flag
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+            cargo_file.to_str().unwrap(),
+            FileOptions::ghost("/var/log/foo"),
+        );
+        assert!(err.is_err(), "with_file should reject ghost options");
 
-    // with_symlink rejects non-SymbolicLink mode
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_symlink(FileOptions::new("/usr/bin/link"));
-    assert!(
-        err.is_err(),
-        "with_symlink should reject regular file options"
-    );
+        // with_file_contents rejects Dir mode
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_file_contents("content", FileOptions::dir("/var/log/foo"));
+        assert!(
+            err.is_err(),
+            "with_file_contents should reject directory options"
+        );
 
-    // with_symlink rejects empty target
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_symlink(FileOptions::new("/usr/bin/link").mode(FileMode::symbolic_link(0o777)));
-    assert!(
-        err.is_err(),
-        "with_symlink should reject empty symlink target"
-    );
+        // with_file_contents rejects ghost flag
+        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
+            .with_file_contents("content", FileOptions::ghost("/var/log/foo"));
+        assert!(
+            err.is_err(),
+            "with_file_contents should reject ghost options"
+        );
+    }
 
-    // with_ghost rejects non-ghost options
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_ghost(FileOptions::new("/var/log/foo"));
-    assert!(err.is_err(), "with_ghost should reject non-ghost options");
+    /// Adding the same path explicitly twice should produce an error.
+    #[test]
+    fn test_duplicate_explicit_add_still_errors() {
+        let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
-    // with_file rejects Dir mode
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
-        cargo_file.to_str().unwrap(),
-        FileOptions::dir("/var/log/foo"),
-    );
-    assert!(err.is_err(), "with_file should reject directory options");
+        let result = PackageBuilder::new("test-dup", "1.0.0", "MIT", "x86_64", "test")
+            .with_file(&cargo_file, FileOptions::new("/etc/test.toml"))
+            .unwrap()
+            .with_file(&cargo_file, FileOptions::new("/etc/test.toml"));
 
-    // with_file rejects ghost flag
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
-        cargo_file.to_str().unwrap(),
-        FileOptions::ghost("/var/log/foo"),
-    );
-    assert!(err.is_err(), "with_file should reject ghost options");
-
-    // with_file_contents rejects Dir mode
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_file_contents("content", FileOptions::dir("/var/log/foo"));
-    assert!(
-        err.is_err(),
-        "with_file_contents should reject directory options"
-    );
-
-    // with_file_contents rejects ghost flag
-    let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-        .with_file_contents("content", FileOptions::ghost("/var/log/foo"));
-    assert!(
-        err.is_err(),
-        "with_file_contents should reject ghost options"
-    );
+        assert!(result.is_err(), "duplicate explicit add should error");
+    }
 }
 
 /// Round-trip a package using all `with_*` entry types and verify their metadata is preserved.
@@ -443,19 +371,6 @@ fn test_with_dir_overlapping_bulk_first_wins() -> Result<(), Box<dyn std::error:
     assert!(!init_entry.flags.contains(FileFlags::DOC));
 
     Ok(())
-}
-
-/// Adding the same path explicitly twice should produce an error.
-#[test]
-fn test_duplicate_explicit_add_still_errors() {
-    let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
-
-    let result = PackageBuilder::new("test-dup", "1.0.0", "MIT", "x86_64", "test")
-        .with_file(&cargo_file, FileOptions::new("/etc/test.toml"))
-        .unwrap()
-        .with_file(&cargo_file, FileOptions::new("/etc/test.toml"));
-
-    assert!(result.is_err(), "duplicate explicit add should error");
 }
 
 /// File-only flags like CONFIG applied via the `customize` callback should be stripped from directory entries.
