@@ -94,6 +94,29 @@ let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testk
     .with_key(hex::decode("D996AEDC0D64D1E621B95AD2E964F9FB30D073B5")?)?;
 ```
 
+#### Inspect package signatures
+
+```rust
+use rpm::signature::pgp::SignatureVersion;
+
+let pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
+
+for sig in pkg.signatures()? {
+    println!("Version: {:?}", sig.version());
+    println!("Algorithm: {:?}", sig.algorithm());
+    println!("Hash algorithm: {:?}", sig.hash_algorithm());
+    if let Some(fp) = sig.fingerprint() {
+        println!("Fingerprint: {}", fp);
+    }
+    if let Some(kid) = sig.key_id() {
+        println!("Key ID: {}", kid);
+    }
+    if sig.version() == SignatureVersion::V6 {
+        println!("This is a v6 signature");
+    }
+}
+```
+
 #### Build new package
 
 ```rust

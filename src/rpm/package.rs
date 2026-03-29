@@ -338,36 +338,40 @@ impl Package {
         }
     }
 
-    /// Return the key ids (issuers) of the signature as hexadecimal strings.
+    /// Return parsed information about each OpenPGP header signature in the package.
+    ///
+    /// Does not return legacy header + payload signatures (v3 signatures).
+    ///
+    /// Returns an empty `Vec` if the package is unsigned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::Package::open("my-package.rpm")?;
+    ///
+    /// for sig in pkg.signatures()? {
+    ///     println!("Version: {:?}", sig.version());
+    ///     println!("Algorithm: {:?}", sig.algorithm());
+    ///     if let Some(fp) = sig.fingerprint() {
+    ///         println!("Fingerprint: {fp}");
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "signature-pgp")]
-    pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
-        let mut key_ids = Vec::new();
-        for sig in self.parse_signature_packets()? {
-            let ids: Vec<String> = sig.issuer_key_id().iter().map(|x| format!("{x}")).collect();
-            if ids.len() != 1 {
-                return Err(Error::UnexpectedIssuerCount(ids.len().try_into().unwrap()));
-            }
-            key_ids.extend(ids);
-        }
-        Ok(key_ids)
-    }
+    pub fn signatures(&self) -> Result<Vec<signature::pgp::SignatureInfo>, Error> {
+        let packets = match self.parse_signature_packets() {
+            Ok(packets) => packets,
+            Err(Error::NoSignatureFound) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
 
-    /// Return the fingerprints (issuers) of the signature as hexadecimal strings.
-    #[cfg(feature = "signature-pgp")]
-    pub fn signature_fingerprints(&self) -> Result<Vec<String>, Error> {
-        let mut fingerprints = Vec::new();
-        for sig in self.parse_signature_packets()? {
-            let fps: Vec<String> = sig
-                .issuer_fingerprint()
-                .iter()
-                .map(|x| format!("{x:x}"))
-                .collect();
-            if fps.len() != 1 {
-                return Err(Error::UnexpectedIssuerCount(fps.len().try_into().unwrap()));
-            }
-            fingerprints.extend(fps);
-        }
-        Ok(fingerprints)
+        Ok(packets
+            .iter()
+            .map(signature::pgp::SignatureInfo::from_pgp_signature)
+            .collect())
     }
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest

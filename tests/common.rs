@@ -195,11 +195,11 @@ pub mod keys {
     }
 
     pub mod v6 {
-        pub const RSA4K_PUBLIC: &str = concat!(
+        pub const RSA_4K_PUBLIC: &str = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc"
         );
-        pub const RSA4K_PRIVATE: &str = concat!(
+        pub const RSA_4K_PRIVATE: &str = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret"
         );

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `PackageBuilder::default_file_attrs()` and `PackageBuilder::default_dir_attrs()` for setting default ownership and permissions, similar to `%defattr` in RPM spec files.
-- `Package::signature_key_fingerprints()`
+- `Package::signatures()` for fetching RPM header signatures from the package. Does not include legacy header + payload signatures.
 - The ability to mark files as `%missingok`
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `is_config_noreplace()` is replaced by chaining `config().noreplace()`.
   `missingok()` is now a standalone method (it is an independent RPM attribute, not
   just a sub-attribute of `%config`). New methods: `doc()`, `artifact()`, `noreplace()`.
+- Removed `Package::signature_key_ids()` - `Package::signatures()` is a more useful API.
 
 ## 0.19.0
 
