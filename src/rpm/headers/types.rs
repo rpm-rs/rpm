@@ -532,9 +532,12 @@ impl Dependency {
 
     /// Create a dependency on an rpm feature, required to install this package
     pub fn rpmlib(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
+        // The reason why it counterintuitively uses <= is so that the range is closed, as >=
+        // would be making promise that it will work forever. It should be read as "this package
+        // won't work on versions less than $version"
         Self::new(
             format!("rpmlib({})", dep_name.into()),
-            DependencyFlags::RPMLIB | DependencyFlags::EQUAL,
+            DependencyFlags::RPMLIB | DependencyFlags::LESS | DependencyFlags::EQUAL,
             version.into(),
         )
     }
