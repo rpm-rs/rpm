@@ -57,7 +57,7 @@ let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v6/rpm-testk
 
 let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
 pkg.sign(signer)?;
-pkg.write_file("./with_signature.rpm")?;
+pkg.write_to("./with_signature.rpm")?;
 
 let pkg = rpm::Package::open("./with_signature.rpm")?;
 pkg.verify_signature(verifier)?;
@@ -196,5 +196,9 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .vcs("git:repo=example_repo:branch=example_branch:sha=example_sha")
     .build_and_sign(signer)?;
 
-pkg.write_file("./awesome.rpm")?;
+// Write to a specific file
+pkg.write_to("./awesome.rpm")?;
+
+// Or write to a directory with auto-generated filename (`target/awesome-0.1.0-1.x86_64.rpm`)
+pkg.write_to("./target")?;
 ```

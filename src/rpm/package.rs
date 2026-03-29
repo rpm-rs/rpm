@@ -99,6 +99,44 @@ impl Package {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
+    /// Write the RPM package to a file or directory
+    ///
+    /// If `path` is an existing directory, the package will be written with an auto-generated
+    /// filename based on the package NEVRA (name-version-release.arch.rpm).
+    /// Otherwise, `path` is treated as a file path (ensuring it has a .rpm extension).
+    ///
+    /// Returns the actual path where the package was written.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test").build()?;
+    ///
+    /// // Write to a directory with auto-generated name
+    /// let path = pkg.write_to("/tmp")?;
+    /// // Creates: /tmp/foo-1.0.0-1.x86_64.rpm
+    ///
+    /// // Write to a specific file
+    /// let path = pkg.write_to("/tmp/custom-name.rpm")?;
+    /// // Creates: /tmp/custom-name.rpm
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn write_to(&self, path: impl AsRef<Path>) -> Result<PathBuf, Error> {
+        let path = path.as_ref();
+        let filename = format!("{}.rpm", self.metadata.get_nevra()?.nvra());
+
+        let output_path = if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
+            path.join(filename)
+        } else {
+            path.with_extension("rpm")
+        };
+
+        self.write_file(&output_path)?;
+        Ok(output_path)
+    }
+
     /// Iterate over the file contents of the package payload
     ///
     /// # Examples

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
 - ML-DSA package signatures can now be created and verified.
 - `Verifier` can now load multiple keys independently - see "Breaking Changes".
+- `Package::write_to()` writes a package to a file or directory. If given a directory, auto-generates the filename from package NEVRA.
 
 ### Fixed
 
