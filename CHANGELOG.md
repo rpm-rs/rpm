@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A number of issues / discrepancies in package payload writing.
 - A number of issues / discrepancies in the treatment of ghost files.
 - `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
+- `Package::sign()` and `Package::sign_with_timestamps()` now append to `RPMSIGTAG_OPENPGPSIGNATURES` instead of replacing the signature header.
+- `Package::sign()`, `Package::sign_with_timestamps()`, and `Package::clear_signatures()` now preserve file IMA signatures.
 
 ### Changed
 
