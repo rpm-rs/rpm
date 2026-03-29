@@ -164,6 +164,77 @@ mod validation {
     }
 }
 
+mod write_to {
+    use super::*;
+
+    /// Test write_to() with a directory path - should auto-generate filename
+    #[test]
+    fn test_write_to_directory() -> Result<(), Box<dyn std::error::Error>> {
+        let pkg = PackageBuilder::new("test-write", "1.2.3", "MIT", "x86_64", "test package")
+            .release("4.fc40")
+            .build()?;
+
+        let temp_dir = tempfile::tempdir()?;
+        let output_path = pkg.write_to(temp_dir.path())?;
+
+        // Should create a file with the NVRA name
+        assert_eq!(
+            output_path.file_name().unwrap().to_str().unwrap(),
+            "test-write-1.2.3-4.fc40.x86_64.rpm"
+        );
+        assert!(output_path.exists());
+
+        // Verify we can read it back
+        let parsed = Package::open(&output_path)?;
+        assert_eq!(parsed.metadata.get_name()?, "test-write");
+        assert_eq!(parsed.metadata.get_version()?, "1.2.3");
+
+        Ok(())
+    }
+
+    /// Test write_to() with a file path - should use the provided path with .rpm extension
+    #[test]
+    fn test_write_to_file() -> Result<(), Box<dyn std::error::Error>> {
+        let pkg = PackageBuilder::new("test-write", "1.0.0", "MIT", "noarch", "test").build()?;
+
+        let temp_dir = tempfile::tempdir()?;
+        let custom_path = temp_dir.path().join("custom-name");
+        let output_path = pkg.write_to(&custom_path)?;
+
+        // Should add .rpm extension
+        assert_eq!(
+            output_path.file_name().unwrap().to_str().unwrap(),
+            "custom-name.rpm"
+        );
+        assert!(output_path.exists());
+
+        // Verify we can read it back
+        let parsed = Package::open(&output_path)?;
+        assert_eq!(parsed.metadata.get_name()?, "test-write");
+
+        Ok(())
+    }
+
+    /// Test write_to() with a path that already has .rpm extension
+    #[test]
+    fn test_write_to_file_with_extension() -> Result<(), Box<dyn std::error::Error>> {
+        let pkg = PackageBuilder::new("test-write", "1.0.0", "MIT", "noarch", "test").build()?;
+
+        let temp_dir = tempfile::tempdir()?;
+        let custom_path = temp_dir.path().join("my-package.rpm");
+        let output_path = pkg.write_to(&custom_path)?;
+
+        // Should keep the .rpm extension
+        assert_eq!(
+            output_path.file_name().unwrap().to_str().unwrap(),
+            "my-package.rpm"
+        );
+        assert!(output_path.exists());
+
+        Ok(())
+    }
+}
+
 /// Round-trip a package using all `with_*` entry types and verify their metadata is preserved.
 #[test]
 fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
