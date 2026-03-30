@@ -1319,11 +1319,14 @@ impl PackageBuilder {
             base_names.push(entry.base_name.to_owned());
             // Ghost files have certain verify flags cleared
             let verify = if is_ghost {
-                entry.verify_flags
-                    & !(FileVerifyFlags::FILEDIGEST
-                        | FileVerifyFlags::FILESIZE
-                        | FileVerifyFlags::LINKTO
-                        | FileVerifyFlags::MTIME)
+                FileVerifyFlags::from_bits_retain(
+                    entry.verify_flags.bits()
+                        & !(FileVerifyFlags::FILEDIGEST
+                            | FileVerifyFlags::FILESIZE
+                            | FileVerifyFlags::LINKTO
+                            | FileVerifyFlags::MTIME)
+                            .bits(),
+                )
             } else {
                 entry.verify_flags
             };

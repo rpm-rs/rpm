@@ -592,6 +592,17 @@ bitflags! {
     }
 }
 
+impl FileVerifyFlags {
+    /// Default file verification flags used by RPM.
+    ///
+    /// RPM sets all 32 bits to 1 by default (0xffffffff), which includes
+    /// not only the explicitly defined flags above, but also reserved bits
+    /// used internally by rpm for rpmVerifyAttrs, rpmVerifyFlags, and rpmQueryFlags.
+    pub fn all_flags() -> Self {
+        Self::from_bits_retain(0xffffffff)
+    }
+}
+
 bitflags! {
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
     pub struct FileFlags: u32 {
