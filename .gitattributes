@@ -1,0 +1,17 @@
+# RPM is a Unix format - use LF line endings on all platforms.
+# This ensures consistency and prevents test failures on Windows where
+# include_bytes!() would read CRLF if Git converted them.
+
+# Auto-detect text files and normalize to LF
+* text=auto eol=lf
+
+# Binary files - do not touch
+*.rpm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gz binary
+*.tar.gz binary
+*.bz2 binary
+*.xz binary
+*.zst binary
