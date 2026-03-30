@@ -318,7 +318,7 @@ fn test_with_dir_basic() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .build()?;
 
@@ -358,7 +358,7 @@ fn test_with_dir_explicit_override_before_bulk() -> Result<(), Box<dyn std::erro
     // Add __init__.py explicitly with config flag, then bulk-add the directory.
     // The explicit entry should win (bulk skips existing).
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .with_file(
             &init_file,
             FileOptions::new("/usr/lib/mymodule/__init__.py").config(),
@@ -391,7 +391,7 @@ fn test_with_dir_explicit_override_after_bulk() -> Result<(), Box<dyn std::error
     // Bulk-add first, then override __init__.py explicitly.
     // The explicit entry should replace the bulk-added one.
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
         .with_file(
             &init_file,
@@ -422,7 +422,7 @@ fn test_with_dir_overlapping_bulk_first_wins() -> Result<(), Box<dyn std::error:
 
     // Two bulk adds of the same directory — first one wins
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.config())?
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.doc())?
         .build()?;
@@ -452,7 +452,7 @@ fn test_with_dir_strips_flags_from_dirs() -> Result<(), Box<dyn std::error::Erro
     // Customize callback adds CONFIG — should be stripped from the directory entry
     // but preserved on the file entries
     let pkg = PackageBuilder::new("test-dir", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o.config())?
         .build()?;
 
@@ -673,7 +673,7 @@ fn test_default_attrs_with_dir() -> Result<(), Box<dyn std::error::Error>> {
     let source_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES/module");
 
     let pkg = PackageBuilder::new("test-defaults", "1.0.0", "MIT", "x86_64", "test")
-        .source_date(1_600_000_000)
+        .using_config(BuildConfig::default().source_date(1_600_000_000))
         .default_file_attrs(Some(0o644), Some("fileuser".into()), None)
         .default_dir_attrs(Some(0o755), Some("diruser".into()), None)
         .with_dir(&source_dir, "/usr/lib/mymodule", |o| o)?
@@ -700,6 +700,7 @@ fn test_default_attrs_with_dir() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 #[test]
 fn test_epoch_handling() -> Result<(), Box<dyn std::error::Error>> {
     use rpm::*;

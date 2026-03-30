@@ -3,6 +3,10 @@
 pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 pub const CARGO_OUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target");
 
+/// SOURCE_DATE_EPOCH used for building fixture packages (from build_packages.sh)
+/// This timestamp is April 9, 2023 19:29:19 UTC
+pub const FIXTURE_SOURCE_DATE: u32 = 1681068559;
+
 pub mod pkgs {
     pub mod v4 {
         pub const RPM_EMPTY: &str = concat!(
