@@ -700,3 +700,54 @@ fn test_default_attrs_with_dir() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+#[test]
+fn test_epoch_handling() -> Result<(), Box<dyn std::error::Error>> {
+    use rpm::*;
+
+    // Test 1: No epoch set (default) - should NOT have EPOCH tag
+    let pkg1 = PackageBuilder::new("test", "1.0", "MIT", "noarch", "test").build()?;
+    let mut buf1 = Vec::new();
+    pkg1.write(&mut buf1)?;
+    let parsed1 = Package::parse(&mut buf1.as_slice())?;
+    assert!(
+        !parsed1
+            .metadata
+            .header
+            .entry_is_present(IndexTag::RPMTAG_EPOCH),
+        "Package without epoch() should not have EPOCH tag"
+    );
+
+    // Test 2: Explicit epoch 0 - should HAVE EPOCH tag with value 0
+    let pkg2 = PackageBuilder::new("test", "1.0", "MIT", "noarch", "test")
+        .epoch(0)
+        .build()?;
+    let mut buf2 = Vec::new();
+    pkg2.write(&mut buf2)?;
+    let parsed2 = Package::parse(&mut buf2.as_slice())?;
+    assert!(
+        parsed2
+            .metadata
+            .header
+            .entry_is_present(IndexTag::RPMTAG_EPOCH),
+        "Package with epoch(0) should have EPOCH tag"
+    );
+    assert_eq!(parsed2.metadata.get_epoch()?, 0);
+
+    // Test 3: Explicit epoch 1 - should HAVE EPOCH tag with value 1
+    let pkg3 = PackageBuilder::new("test", "1.0", "MIT", "noarch", "test")
+        .epoch(1)
+        .build()?;
+    let mut buf3 = Vec::new();
+    pkg3.write(&mut buf3)?;
+    let parsed3 = Package::parse(&mut buf3.as_slice())?;
+    assert!(
+        parsed3
+            .metadata
+            .header
+            .entry_is_present(IndexTag::RPMTAG_EPOCH),
+        "Package with epoch(1) should have EPOCH tag"
+    );
+    assert_eq!(parsed3.metadata.get_epoch()?, 1);
+
+    Ok(())
+}
