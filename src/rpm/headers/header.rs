@@ -1045,4 +1045,58 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn test_from_entries_sorts_tags() {
+        // Create entries in non-sorted order
+        let entries = vec![
+            IndexEntry::new(
+                IndexTag::RPMTAG_VERSION,
+                IndexData::StringTag("1.0.0".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_NAME,
+                IndexData::StringTag("test".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_RELEASE,
+                IndexData::StringTag("1".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_ARCH,
+                IndexData::StringTag("x86_64".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_LICENSE,
+                IndexData::StringTag("MIT".to_string()),
+            ),
+        ];
+
+        // Verify they're not sorted
+        let tags_before: Vec<u32> = entries.iter().map(|e| e.tag).collect();
+        assert!(
+            !tags_before.windows(2).all(|w| w[0] <= w[1]),
+            "Input should not be sorted"
+        );
+
+        // Create header with from_entries
+        let header = Header::from_entries(entries, IndexTag::RPMTAG_HEADERIMMUTABLE);
+
+        // Extract tags from the created header (skip the region tag at index 0)
+        let tags_after: Vec<u32> = header.index_entries.iter().skip(1).map(|e| e.tag).collect();
+
+        // Verify they're now sorted
+        assert!(
+            tags_after.windows(2).all(|w| w[0] <= w[1]),
+            "Tags should be sorted: {:?}",
+            tags_after
+        );
+
+        // Verify the specific expected order
+        assert_eq!(tags_after[0], IndexTag::RPMTAG_NAME as u32);
+        assert_eq!(tags_after[1], IndexTag::RPMTAG_VERSION as u32);
+        assert_eq!(tags_after[2], IndexTag::RPMTAG_RELEASE as u32);
+        assert_eq!(tags_after[3], IndexTag::RPMTAG_LICENSE as u32);
+        assert_eq!(tags_after[4], IndexTag::RPMTAG_ARCH as u32);
+    }
 }
