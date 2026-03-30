@@ -1424,6 +1424,8 @@ impl PackageBuilder {
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
+        // Sort dependency arrays by name to match rpm's behavior
+        self.provides.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.provides.into_iter() {
             provide_names.push(d.name);
             provide_flags.push(d.flags.bits());
@@ -1434,6 +1436,7 @@ impl PackageBuilder {
         let mut obsolete_flags = Vec::new();
         let mut obsolete_versions = Vec::new();
 
+        self.obsoletes.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.name);
             obsolete_flags.push(d.flags.bits());
@@ -1444,6 +1447,7 @@ impl PackageBuilder {
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
+        self.requires.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.requires.into_iter() {
             require_names.push(d.name);
             require_flags.push(d.flags.bits());
@@ -1454,6 +1458,7 @@ impl PackageBuilder {
         let mut conflicts_flags = Vec::new();
         let mut conflicts_versions = Vec::new();
 
+        self.conflicts.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.conflicts.into_iter() {
             conflicts_names.push(d.name);
             conflicts_flags.push(d.flags.bits());
@@ -1464,6 +1469,7 @@ impl PackageBuilder {
         let mut recommends_flags = Vec::new();
         let mut recommends_versions = Vec::new();
 
+        self.recommends.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.recommends.into_iter() {
             recommends_names.push(d.name);
             recommends_flags.push(d.flags.bits());
@@ -1474,6 +1480,7 @@ impl PackageBuilder {
         let mut suggests_flags = Vec::new();
         let mut suggests_versions = Vec::new();
 
+        self.suggests.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.suggests.into_iter() {
             suggests_names.push(d.name);
             suggests_flags.push(d.flags.bits());
@@ -1484,6 +1491,7 @@ impl PackageBuilder {
         let mut enhances_flags = Vec::new();
         let mut enhances_versions = Vec::new();
 
+        self.enhances.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.enhances.into_iter() {
             enhances_names.push(d.name);
             enhances_flags.push(d.flags.bits());
@@ -1494,6 +1502,7 @@ impl PackageBuilder {
         let mut supplements_flags = Vec::new();
         let mut supplements_versions = Vec::new();
 
+        self.supplements.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.supplements.into_iter() {
             supplements_names.push(d.name);
             supplements_flags.push(d.flags.bits());
