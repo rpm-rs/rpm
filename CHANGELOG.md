@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FileVerifyFlags::default()` now correctly sets all 32 bits (0xffffffff) to match RPM's behavior, including reserved bits.
 - Package dependency lists are now sorted alphabetically by name to match RPM's ordering.
 - v6 packages now correctly include `RPMTAG_SOURCENEVR` and exclude the v4-only `RPMTAG_PAYLOADSHA256ALGO` tag.
+- Auto-generated provides now match RPM's behavior.
+  - `NAME(ISA)` provides/requires now use ISA format (`x86-64` instead of `x86_64`)
+  - `NAME(ISA)` provides/requires are omitted for `noarch`, version uses full EVR format (`[epoch:]version-release`)
+  - `config(NAME)` provides/requires are auto-generated when the package contains `%config` files.
 - `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
 - `Package::sign()` and `Package::sign_with_timestamps()` now append to `RPMSIGTAG_OPENPGPSIGNATURES` instead of replacing the signature header.
 - `Package::sign()`, `Package::sign_with_timestamps()`, and `Package::clear_signatures()` now preserve file IMA signatures.

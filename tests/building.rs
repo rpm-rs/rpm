@@ -235,6 +235,87 @@ mod write_to {
     }
 }
 
+/// Test that auto-generated provides and requires match RPM's behavior:
+/// - NAME = EVR provide (always)
+/// - NAME(ISA) = EVR provide (only for non-noarch)
+/// - config(NAME) = EVR provide/require (only when %config files exist)
+/// - EVR format includes epoch when set
+#[test]
+fn test_auto_provides_and_requires() -> Result<(), Box<dyn std::error::Error>> {
+    let sources_dir = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES");
+    let config_file = sources_dir.join("example_config.toml");
+
+    // 1. x86_64 package with no config files
+    let pkg = PackageBuilder::new("testpkg", "1.0", "MIT", "x86_64", "test")
+        .release("2.fc40")
+        .build()?;
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    let provides = parsed.metadata.get_provides()?;
+    assert!(provides.contains(&Dependency::eq("testpkg", "1.0-2.fc40")));
+    assert!(provides.contains(&Dependency::eq("testpkg(x86-64)", "1.0-2.fc40")));
+    assert!(!provides.iter().any(|d| d.name.starts_with("config(")));
+
+    let requires = parsed.metadata.get_requires()?;
+    assert!(!requires.iter().any(|d| d.name.starts_with("config(")));
+
+    // 2. noarch package - should NOT have NAME(ISA) provide
+    let pkg = PackageBuilder::new("testpkg", "1.0", "MIT", "noarch", "test")
+        .release("1")
+        .build()?;
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    let provides = parsed.metadata.get_provides()?;
+    assert!(provides.contains(&Dependency::eq("testpkg", "1.0-1")));
+    assert_eq!(provides.len(), 1, "noarch should only have NAME provide");
+
+    // 3. Package with epoch - EVR should include epoch
+    let pkg = PackageBuilder::new("testpkg", "2.0", "MIT", "x86_64", "test")
+        .epoch(3)
+        .release("1")
+        .build()?;
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    let provides = parsed.metadata.get_provides()?;
+    assert!(provides.contains(&Dependency::eq("testpkg", "3:2.0-1")));
+    assert!(provides.contains(&Dependency::eq("testpkg(x86-64)", "3:2.0-1")));
+
+    // 4. Package with config file - should auto-generate config() deps
+    let pkg = PackageBuilder::new("testpkg", "1.0", "MIT", "noarch", "test")
+        .release("1")
+        .with_file(&config_file, FileOptions::new("/etc/testpkg.conf").config())?
+        .build()?;
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    let provides = parsed.metadata.get_provides()?;
+    assert!(provides.contains(&Dependency::config("testpkg", "1.0-1")));
+
+    let requires = parsed.metadata.get_requires()?;
+    assert!(requires.contains(&Dependency::config("testpkg", "1.0-1")));
+
+    // 5. Package with epoch 0 explicitly set - should include "0:" prefix
+    let pkg = PackageBuilder::new("testpkg", "1.0", "MIT", "noarch", "test")
+        .epoch(0)
+        .release("1")
+        .build()?;
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    let provides = parsed.metadata.get_provides()?;
+    assert!(provides.contains(&Dependency::eq("testpkg", "0:1.0-1")));
+
+    Ok(())
+}
+
 /// Round-trip a package using all `with_*` entry types and verify their metadata is preserved.
 #[test]
 fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
