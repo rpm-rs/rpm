@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PackageBuilder::with_file_contents()` was not respecting `source_date`.
 - A number of issues / discrepancies in package payload writing.
 - A number of issues / discrepancies in the treatment of ghost files.
+- `FileVerifyFlags::default()` now correctly sets all 32 bits (0xffffffff) to match RPM's behavior, including reserved bits.
+- Package dependency lists are now sorted alphabetically by name to match RPM's ordering.
+- v6 packages now correctly include `RPMTAG_SOURCENEVR` and exclude the v4-only `RPMTAG_PAYLOADSHA256ALGO` tag.
 - `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
 - `Package::sign()` and `Package::sign_with_timestamps()` now append to `RPMSIGTAG_OPENPGPSIGNATURES` instead of replacing the signature header.
 - `Package::sign()`, `Package::sign_with_timestamps()`, and `Package::clear_signatures()` now preserve file IMA signatures.
