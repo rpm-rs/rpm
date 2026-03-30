@@ -14,7 +14,7 @@ use super::compressor::Compressor;
 use super::headers::*;
 use super::payload;
 use crate::errors::*;
-use crate::{Timestamp, constants::*};
+use crate::{Evr, Timestamp, constants::*};
 
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -1401,12 +1401,23 @@ impl PackageBuilder {
         }
         payload::trailer(&mut archive)?;
 
-        self.provides
-            .push(Dependency::eq(self.name.clone(), self.version.clone()));
-        self.provides.push(Dependency::eq(
-            format!("{}({})", self.name.clone(), self.arch.clone()),
-            self.version.clone(),
-        ));
+        // Auto-provide version uses EVR format: [epoch:]version-release
+        let epoch_str = self.epoch.map(|e| e.to_string()).unwrap_or_default();
+        let evr = Evr::new(&epoch_str, &self.version, &self.release).to_string();
+
+        self.provides.push(Dependency::eq(self.name.clone(), &evr));
+        // Add NAME(ISA) provide for non-noarch packages, matching RPM's %_isa macro behavior.
+        // RPM converts the canonical arch name to an ISA string (e.g. x86_64 -> x86-64).
+        if let Some(isa) = arch_to_isa(&self.arch) {
+            self.provides
+                .push(Dependency::eq(format!("{}({})", self.name, isa), &evr));
+        }
+
+        // If any file has the config flag, auto-generate config(NAME) provides and requires
+        if file_flags.iter().any(|f| f & FileFlags::CONFIG.bits() != 0) {
+            self.provides.push(Dependency::config(&self.name, &evr));
+            self.requires.push(Dependency::config(&self.name, &evr));
+        }
 
         if self.config.format == RpmFormat::V4 {
             self.requires
@@ -2054,5 +2065,51 @@ impl PackageBuilder {
         let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
 
         Ok((lead, header, payload))
+    }
+}
+
+/// Convert a canonical RPM architecture name to its ISA (Instruction Set Architecture) string.
+///
+/// This is conceptually similar to RPM's `installplatform` dependency generator script.
+///
+/// RPM uses ISA strings in auto-generated provides like `NAME(ISA)`. The ISA is formed as
+/// `ISANAME-ISABITS` (e.g. `x86-64` for `x86_64`). Returns `None` for `noarch` and
+/// unrecognized architectures.
+fn arch_to_isa(arch: &str) -> Option<&'static str> {
+    match arch {
+        // x86
+        "x86_64" | "amd64" | "ia32e" => Some("x86-64"),
+        "i386" | "i486" | "i586" | "i686" | "athlon" | "geode" => Some("x86-32"),
+        // ARM
+        "aarch64" => Some("aarch-64"),
+        "armv7hl" | "armv7hnl" => Some("armv7hl-32"),
+        // Power
+        "ppc64" | "ppc64p7" => Some("ppc-64"),
+        "ppc64le" => Some("ppc-64"),
+        "ppc" => Some("ppc-32"),
+        // s390
+        "s390x" => Some("s390-64"),
+        "s390" => Some("s390-32"),
+        // RISC-V
+        "riscv64" => Some("riscv-64"),
+        // LoongArch
+        "loongarch64" => Some("loongarch-64"),
+        // MIPS
+        "mips64" | "mips64el" => Some("mips-64"),
+        "mips" | "mipsel" => Some("mips-32"),
+        "mips64r6" | "mips64r6el" => Some("mipsr6-64"),
+        "mipsr6" | "mipsr6el" => Some("mipsr6-32"),
+        // SPARC
+        "sparc64" | "sparc64v" => Some("sparc-64"),
+        "sparc" | "sparcv8" | "sparcv9" | "sparcv9v" => Some("sparc-32"),
+        // Other
+        "ia64" => Some("ia-64"),
+        "alpha" | "alphaev5" | "alphaev56" | "alphaev6" | "alphaev67" | "alphapca56" => {
+            Some("alpha-64")
+        }
+        "m68k" => Some("m68k-32"),
+        "e2k" | "e2kv4" | "e2kv5" | "e2kv6" | "e2kv7" => Some("e2k-64"),
+        // noarch and unknown
+        _ => None,
     }
 }
