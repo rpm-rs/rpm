@@ -182,6 +182,7 @@ pub struct PackageBuilder {
     suggests: Vec<Dependency>,
     enhances: Vec<Dependency>,
     supplements: Vec<Dependency>,
+    order_with_requires: Vec<Dependency>,
 
     pre_inst_script: Option<Scriptlet>,
     post_inst_script: Option<Scriptlet>,
@@ -1107,6 +1108,18 @@ impl PackageBuilder {
         self
     }
 
+    /// Add an ordering hint for package installation/upgrade.
+    ///
+    /// OrderWithRequires specifies dependencies that should be used for ordering during
+    /// installation/upgrade, but does not add them to the regular Requires list.
+    /// This is useful for breaking dependency cycles while maintaining proper installation order.
+    ///
+    /// See: `OrderWithRequires` from specfile syntax
+    pub fn order_with_requires(mut self, dep: Dependency) -> Self {
+        self.order_with_requires.push(dep);
+        self
+    }
+
     /// Build the package
     pub fn build(self) -> Result<Package, Error> {
         let is_v4 = self.config.format == RpmFormat::V4;
@@ -1519,6 +1532,17 @@ impl PackageBuilder {
             supplements_names.push(d.name);
             supplements_flags.push(d.flags.bits());
             supplements_versions.push(d.version);
+        }
+
+        let mut order_names = Vec::new();
+        let mut order_flags = Vec::new();
+        let mut order_versions = Vec::new();
+
+        self.order_with_requires.sort_by(|a, b| a.name.cmp(&b.name));
+        for d in self.order_with_requires.into_iter() {
+            order_names.push(d.name);
+            order_flags.push(d.flags.bits());
+            order_versions.push(d.version);
         }
 
         // Compute SOURCENEVR for v6 packages (do it early because the values get moved)
@@ -1942,6 +1966,21 @@ impl PackageBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_SUPPLEMENTFLAGS,
                 IndexData::Int32(supplements_flags),
+            ));
+        }
+
+        if !order_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERNAME,
+                IndexData::StringArray(order_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERVERSION,
+                IndexData::StringArray(order_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERFLAGS,
+                IndexData::Int32(order_flags),
             ));
         }
 
