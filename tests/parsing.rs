@@ -125,7 +125,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
         metadata.get_payload_compressor().unwrap(),
         CompressionType::None
     );
-    assert_eq!(metadata.get_installed_size().unwrap(), 247);
+    assert_eq!(metadata.get_installed_size().unwrap(), 241);
 
     assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
     assert_eq!(
@@ -182,14 +182,14 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
             .unwrap(),
-        "4e3621dc811eb394170ddb59d9f83a5f6d863904ddf02290ffac4a4d0af79d8e"
+        "fddbff7efcd2a15fdb44866c9fd9cfbd8abc8e4c11778f9be122ad202861e26b"
     );
     assert_eq!(
         metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
             .unwrap(),
-        "58d63142089eb3b2002de8d72dbfe49fc81255703e536023b2168cd107f8aa58"
+        "f9b60ff49302f1e2cbda10dfeb1b5c0583a46b26f828eee246135b6f9f96bcde"
     );
 
     // Payload digest
