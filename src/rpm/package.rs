@@ -661,9 +661,11 @@ impl PackageMetadata {
     /// See: [crate::Nevra]
     #[inline]
     pub fn get_nevra(&'_ self) -> Result<Nevra<'_>, Error> {
+        // Epoch defaults to 0 if not present
+        let epoch = self.get_epoch().unwrap_or(0);
         Ok(Nevra::new(
             Cow::Borrowed(self.get_name()?),
-            Cow::Owned(self.get_epoch()?.to_string()),
+            Cow::Owned(epoch.to_string()),
             Cow::Borrowed(self.get_version()?),
             Cow::Borrowed(self.get_release()?),
             Cow::Borrowed(self.get_arch()?),
