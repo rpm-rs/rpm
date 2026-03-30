@@ -1509,6 +1509,20 @@ impl PackageBuilder {
             supplements_versions.push(d.version);
         }
 
+        // Compute SOURCENEVR for v6 packages (do it early because the values get moved)
+        let source_nevr = if self.config.format == RpmFormat::V6 {
+            Some(if let Some(epoch_val) = self.epoch {
+                format!(
+                    "{}-{}:{}-{}",
+                    self.name, epoch_val, self.version, self.release
+                )
+            } else {
+                format!("{}-{}-{}", self.name, self.version, self.release)
+            })
+        } else {
+            None
+        };
+
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
             // If the SOURCERPM tag is set, then the package is seen as a binary rpm.
@@ -1577,10 +1591,10 @@ impl PackageBuilder {
         ];
 
         // Only add epoch if explicitly set (even if 0)
-        if let Some(epoch) = self.epoch {
+        if let Some(e) = self.epoch {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_EPOCH,
-                IndexData::Int32(vec![epoch]),
+                IndexData::Int32(vec![e]),
             ));
         }
 
@@ -1723,17 +1737,26 @@ impl PackageBuilder {
                     IndexData::StringArray(vec![payload_sha256]),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOADSHA256ALGO,
-                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
-                ),
-                IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256ALT,
                     IndexData::StringArray(vec![raw_archive_sha256.to_string()]),
                 ),
             ]);
+            // PAYLOADSHA256ALGO is obsolete and not used in v6 packages
+            if self.config.format == RpmFormat::V4 {
+                actual_records.push(IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSHA256ALGO,
+                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
+                ));
+            }
         }
 
         if self.config.format == RpmFormat::V6 {
+            if let Some(nevr) = source_nevr {
+                actual_records.push(IndexEntry::new(
+                    IndexTag::RPMTAG_SOURCENEVR,
+                    IndexData::StringTag(nevr),
+                ));
+            }
             actual_records.extend([
                 IndexEntry::new(IndexTag::RPMTAG_RPMFORMAT, IndexData::Int32(vec![6])),
                 IndexEntry::new(
