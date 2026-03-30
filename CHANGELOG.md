@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
 - `PackageBuilder::with_dir_entry()` as a shortcut to adding a directory entry on the RPM (doesn't add contents).
 - `PackageBuilder::with_dir()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir()`.
+- `PackageBuilder::order_with_requires()` for specifying ordering hints during package installation/upgrade without adding actual dependencies (similar to `OrderWithRequires` in spec files).
+- `BuildConfig::source_date()` for setting a fixed timestamp for reproducible builds.
 - `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
 - `Signer` and `Verifier` now support loading keyring files containing multiple OpenPGP certificates.
 - `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
@@ -61,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `missingok()` is now a standalone method (it is an independent RPM attribute, not
   just a sub-attribute of `%config`). New methods: `doc()`, `artifact()`, `noreplace()`.
 - Removed `Package::signature_key_ids()` - `Package::signatures()` is a more useful API.
+- Moved `source_date()` from `PackageBuilder` to `BuildConfig`.
 
 ## 0.19.0
 

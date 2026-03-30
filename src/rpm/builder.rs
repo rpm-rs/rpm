@@ -34,6 +34,7 @@ pub enum RpmFormat {
 pub struct BuildConfig {
     format: RpmFormat,
     compression: CompressionWithLevel,
+    source_date: Option<Timestamp>,
 }
 
 impl From<RpmFormat> for BuildConfig {
@@ -57,6 +58,7 @@ impl BuildConfig {
         Self {
             format: RpmFormat::V4,
             compression: CompressionWithLevel::default(),
+            source_date: None,
         }
     }
 
@@ -65,7 +67,36 @@ impl BuildConfig {
         Self {
             format: RpmFormat::V6,
             compression: CompressionWithLevel::default(),
+            source_date: None,
         }
+    }
+
+    /// Set a fixed timestamp for reproducible builds.
+    ///
+    /// When set, this timestamp will be used for:
+    /// - Build time (`RPMTAG_BUILDTIME`)
+    /// - File modification times (`RPMTAG_FILEMTIMES`)
+    /// - Package signature timestamp
+    ///
+    /// This is equivalent to setting the `SOURCE_DATE_EPOCH` environment variable
+    /// for tools like `rpmbuild`, enabling reproducible/deterministic package builds.
+    ///
+    /// It is recommended to use the timestamp of the last commit in your VCS.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let build_config = rpm::BuildConfig::default().source_date(1_600_000_000);
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .using_config(build_config)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
+        self.source_date = Some(t.try_into().unwrap());
+        self
     }
 
     /// Set the compression type and/or level to be used for the payload of the built package
@@ -175,7 +206,6 @@ pub struct PackageBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    source_date: Option<Timestamp>,
     build_host: Option<String>,
 
     /// Default ownership and permissions for regular file entries (like `%defattr` in spec files).
@@ -319,27 +349,6 @@ impl PackageBuilder {
     /// ```
     pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
         self.build_host = Some(build_host.as_ref().to_owned());
-        self
-    }
-
-    /// Set source date (usually the date of the latest commit in VCS) used
-    /// to clamp modification time of included files and build time of the package.
-    ///
-    /// `dt` is number of seconds since the UNIX Epoch.
-    ///
-    /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// // It's recommended to use timestamp of last commit in your VCS
-    /// let source_date = 1_600_000_000;
-    /// // Do not forget
-    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
-    ///     .source_date(source_date)
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
-        self.source_date = Some(t.try_into().unwrap());
         self
     }
 
@@ -563,7 +572,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::Raw(content.into()),
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -601,7 +610,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -643,7 +652,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -685,7 +694,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -765,7 +774,7 @@ impl PackageBuilder {
         }
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             dir_options,
             true,
         )?;
@@ -786,7 +795,7 @@ impl PackageBuilder {
                 let options = customize(FileOptions::symlink(&dest, link_target.to_string_lossy()));
                 self.add_data(
                     ContentSource::None,
-                    self.source_date.unwrap_or(Timestamp::now()),
+                    self.config.source_date.unwrap_or(Timestamp::now()),
                     options.into(),
                     true,
                 )?;
@@ -1138,7 +1147,7 @@ impl PackageBuilder {
     where
         S: signature::Signing<Signature = Vec<u8>>,
     {
-        let source_date = self.source_date;
+        let source_date = self.config.source_date;
         let now = Timestamp::now();
         let signature_timestamp = match source_date {
             Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
@@ -1297,7 +1306,7 @@ impl PackageBuilder {
             // The device ID of the filesystem *containing* the file (st_dev), normalized to 1 or 0.
             // Real files are always on a device (1), but ghost files have no backing file so their st_dev is 0.
             file_devices.push(if is_ghost { 0 } else { 1 });
-            let mtime = match self.source_date {
+            let mtime = match self.config.source_date {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
@@ -1602,7 +1611,7 @@ impl PackageBuilder {
         }
 
         let now = Timestamp::now();
-        let build_time = match self.source_date {
+        let build_time = match self.config.source_date {
             Some(t) if t < now => t,
             _ => now,
         };

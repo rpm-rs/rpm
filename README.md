@@ -122,10 +122,11 @@ for sig in pkg.signatures()? {
 ```rust
 use rpm::signature::pgp::Signer;
 
-let build_config = rpm::BuildConfig::default().compression(rpm::CompressionType::Gzip);
+// For reproducible builds, set source_date to the timestamp of the last commit in your VCS
+let build_config = rpm::BuildConfig::default()
+    .compression(rpm::CompressionType::Gzip)
+    .source_date(1_600_000_000);
 let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?;
-// It's recommended to use timestamp of last commit in your VCS
-let source_date = 1_600_000_000;
 let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some awesome package")
     .using_config(build_config)
     // set default ownership and permissions for files and directories, similar to %defattr
@@ -175,8 +176,6 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
             .flags(ScriptletFlags::EXPAND)
             .prog(vec!["/bin/blah/bash", "-c"])
     )
-    // If you don't need reproducible builds, you can remove the following line
-    .source_date(source_date)
     .build_host(gethostname::gethostname().to_str().unwrap_or("host"))
     .add_changelog_entry(
         "Max Mustermann <max@example.com> - 0.1-29",
