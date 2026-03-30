@@ -128,7 +128,7 @@ pub struct PackageBuilder {
     config: BuildConfig,
 
     name: String,
-    epoch: u32,
+    epoch: Option<u32>,
     version: String,
     license: String,
     arch: String,
@@ -206,7 +206,7 @@ impl PackageBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, summary: &str) -> Self {
         Self {
             name: name.to_string(),
-            epoch: 0,
+            epoch: None,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
@@ -242,7 +242,7 @@ impl PackageBuilder {
     /// However, because of this, the epoch of a package must never decrease, and shouldn't be set
     /// unless required.
     pub fn epoch(mut self, epoch: u32) -> Self {
-        self.epoch = epoch;
+        self.epoch = Some(epoch);
         self
     }
 
@@ -1521,7 +1521,6 @@ impl PackageBuilder {
                 IndexData::StringArray(vec!["C".to_string()]),
             ),
             IndexEntry::new(IndexTag::RPMTAG_NAME, IndexData::StringTag(self.name)),
-            IndexEntry::new(IndexTag::RPMTAG_EPOCH, IndexData::Int32(vec![self.epoch])),
             IndexEntry::new(
                 IndexTag::RPMTAG_RPMVERSION,
                 IndexData::StringTag(format!("rpm-rs {}", env!("CARGO_PKG_VERSION"))),
@@ -1560,7 +1559,11 @@ impl PackageBuilder {
             // If it's legacy and safe to drop entirely let's do so. rpmbuild still writes it in the header though.
             IndexEntry::new(
                 IndexTag::RPMTAG_GROUP,
-                IndexData::I18NString(vec!["Unspecified".to_string()]),
+                IndexData::I18NString(vec![
+                    self.group
+                        .clone()
+                        .unwrap_or_else(|| "Unspecified".to_string()),
+                ]),
             ),
             IndexEntry::new(IndexTag::RPMTAG_ARCH, IndexData::StringTag(self.arch)),
             IndexEntry::new(
@@ -1572,6 +1575,14 @@ impl PackageBuilder {
                 IndexData::StringTag("cpio".to_string()),
             ),
         ];
+
+        // Only add epoch if explicitly set (even if 0)
+        if let Some(epoch) = self.epoch {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_EPOCH,
+                IndexData::Int32(vec![epoch]),
+            ));
+        }
 
         let now = Timestamp::now();
         let build_time = match self.source_date {
@@ -1935,6 +1946,13 @@ impl PackageBuilder {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_VENDOR,
                 IndexData::StringTag(vendor),
+            ));
+        }
+
+        if let Some(packager) = self.packager {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PACKAGER,
+                IndexData::StringTag(packager),
             ));
         }
 
