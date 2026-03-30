@@ -38,8 +38,10 @@ fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Err
     let original = original.as_ref();
 
     let Ok(metadata) = original.metadata() else {
-        // If the target does not exist (or accurately we can't metadata it),
-        // don't create symlink on Windows since it will fail anyways.
+        // Windows symlink creation requires the target to exist and be accessible.
+        // Relative symlinks (e.g., "../dir") or targets outside the extraction directory
+        // will fail, so we silently skip them to allow extraction to continue.
+        // This matches RPM's behavior where symlinks are informational metadata.
         return Ok(());
     };
 
@@ -172,6 +174,15 @@ impl Package {
     /// The if the directory is nested, its parent directories must already exist. If the
     /// directory itself already exists, the operation will fail. All extracted files will be
     /// dropped relative to the provided directory (it will not install any files).
+    ///
+    /// ## Platform-specific behavior
+    ///
+    /// **Windows**: Symbolic links are only created if their target exists at extraction time.
+    /// Symlinks with relative targets (e.g., `../dir`) or targets outside the extraction
+    /// directory will be silently skipped. This is because Windows symlink creation requires
+    /// the target to exist and be accessible.
+    ///
+    /// **Unix**: All symbolic links are created regardless of whether their target exists.
     ///
     /// # Examples
     ///
