@@ -53,8 +53,7 @@ pub struct FileCaps(String);
 impl FileCaps {
     pub fn new(input: String) -> Result<Self, Error> {
         validate_caps_text(&input)?;
-
-        Ok(Self(input))
+        Ok(Self(normalize_caps_text(&input)))
     }
 }
 
@@ -69,8 +68,7 @@ impl FromStr for FileCaps {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         validate_caps_text(s)?;
-
-        Ok(Self(s.to_owned()))
+        Ok(Self(normalize_caps_text(s)))
     }
 }
 
@@ -116,6 +114,61 @@ fn validate_suffix(s: &str) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+/// Normalize a validated capability string to canonical form:
+/// - Empty string becomes "="
+/// - Capabilities are sorted by their index in the CAPS array
+/// - Permission letters (e, i, p) are sorted alphabetically
+fn normalize_caps_text(s: &str) -> String {
+    let s = s.trim();
+    if s.is_empty() {
+        return "=".to_owned();
+    }
+
+    // Each whitespace-separated clause has the form: capset=suffix
+    let mut clauses: Vec<String> = Vec::new();
+    for part in s.split_whitespace() {
+        let op_index = part.find(['+', '-', '=']).unwrap();
+        let capset = &part[..op_index];
+        let suffix = &part[op_index..];
+
+        // Sort capabilities by their position in the CAPS array
+        let sorted_capset = if capset.is_empty() || capset.eq_ignore_ascii_case("all") {
+            capset.to_owned()
+        } else {
+            let mut caps: Vec<&str> = capset.split(',').collect();
+            caps.sort_by_key(|c| {
+                CAPS.iter()
+                    .position(|known| known.eq_ignore_ascii_case(c))
+                    .unwrap_or(usize::MAX)
+            });
+            caps.join(",")
+        };
+
+        // Sort permission letters in the suffix alphabetically
+        let mut normalized_suffix = String::new();
+        let mut i = 0;
+        let suffix_bytes = suffix.as_bytes();
+        while i < suffix_bytes.len() {
+            let op = suffix_bytes[i] as char;
+            normalized_suffix.push(op);
+            i += 1;
+            let mut perms: Vec<char> = Vec::new();
+            while i < suffix_bytes.len() && matches!(suffix_bytes[i], b'e' | b'i' | b'p') {
+                perms.push(suffix_bytes[i] as char);
+                i += 1;
+            }
+            perms.sort();
+            for p in perms {
+                normalized_suffix.push(p);
+            }
+        }
+
+        clauses.push(format!("{}{}", sorted_capset, normalized_suffix));
+    }
+
+    clauses.join(" ")
 }
 
 pub fn validate_caps_text(s: &str) -> Result<(), Error> {

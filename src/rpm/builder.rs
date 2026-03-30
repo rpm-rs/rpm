@@ -652,7 +652,7 @@ impl PackageBuilder {
         }
 
         self.add_data(
-            ContentSource::None,
+            ContentSource::Raw(options.symlink.clone().into_bytes()),
             self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
@@ -1316,7 +1316,7 @@ impl PackageBuilder {
             // Only meaningful for block/character device special files; always 0 otherwise.
             file_rdevs.push(0);
             // The device ID of the filesystem *containing* the file (st_dev), normalized to 1 or 0.
-            // Real files are always on a device (1), but ghost files have no backing file so their st_dev is 0.
+            // Ghost files have no backing file, so their st_dev is 0.
             file_devices.push(if is_ghost { 0 } else { 1 });
             let mtime = match self.config.source_date {
                 Some(d) if d < entry.modified_at => d,
@@ -1361,20 +1361,11 @@ impl PackageBuilder {
                 continue;
             }
 
-            // On a real filesystem, directories always have at least 2 hard links:
-            // one from the parent and one from their own "." self-reference.
-            // RPM follows this convention in the nlink field.
-            let nlink: u32 = if entry.mode.file_type() == FileType::Dir {
-                2
-            } else {
-                1
-            };
-
             let mut writer = if !uses_large_files {
                 payload::Builder::new(cpio_path)
                     .mode(entry.mode.into())
                     .ino(ino_index)
-                    .nlink(nlink)
+                    .nlink(1)
                     .mtime(mtime.into())
                     .uid(self.uid.unwrap_or(0))
                     .gid(self.gid.unwrap_or(0))
@@ -1439,20 +1430,27 @@ impl PackageBuilder {
                 .push(Dependency::rpmlib("FileCaps", "4.6.1-1".to_owned()));
         }
 
-        if uses_large_files {
+        if uses_large_files && !self.files.is_empty() {
             self.requires
                 .push(Dependency::rpmlib("LargeFiles", "4.12.0-1".to_owned()));
         }
 
-        // TODO: as per https://rpm-software-management.github.io/rpm/manual/users_and_groups.html,
-        // at some point in the future this might make sense as hard requirements, but since it's a new feature,
-        // they have to be weak requirements to avoid breaking things.
+        // user() and group() virtual provides require RPM >= 4.19 (sysusers support).
+        // V4 RPMs may target older distros, so use Recommends there for compatibility.
         for user in &users_to_create {
-            self.recommends.push(Dependency::user(user));
+            if self.config.format == RpmFormat::V6 {
+                self.requires.push(Dependency::user(user));
+            } else {
+                self.recommends.push(Dependency::user(user));
+            }
         }
 
         for group in &groups_to_create {
-            self.recommends.push(Dependency::group(group));
+            if self.config.format == RpmFormat::V6 {
+                self.requires.push(Dependency::group(group));
+            } else {
+                self.recommends.push(Dependency::group(group));
+            }
         }
 
         let mut provide_names = Vec::new();
@@ -1706,10 +1704,6 @@ impl PackageBuilder {
                     IndexData::StringArray(file_langs),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_FILEDIGESTALGO,
-                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
-                ),
-                IndexEntry::new(
                     IndexTag::RPMTAG_FILEVERIFYFLAGS,
                     IndexData::Int32(file_verify_flags),
                 ),
@@ -1737,6 +1731,12 @@ impl PackageBuilder {
                 )])
             }
         }
+
+        // RPM always adds this tag, even if the package has no files. We will do the same.
+        actual_records.push(IndexEntry::new(
+            IndexTag::RPMTAG_FILEDIGESTALGO,
+            IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
+        ));
 
         actual_records.extend([
             IndexEntry::new(
@@ -1840,24 +1840,25 @@ impl PackageBuilder {
             }
         }
 
-        let compression_details = match self.config.compression {
-            CompressionWithLevel::None => None,
-            CompressionWithLevel::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
-            CompressionWithLevel::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
-            CompressionWithLevel::Xz(level) => Some(("xz".to_owned(), level.to_string())),
-            CompressionWithLevel::Bzip2(level) => Some(("bzip2".to_owned(), level.to_string())),
+        // RPM always writes payloadflags unconditionally. That is a little silly, but we will do the same
+        let (compression_name, compression_flags) = match self.config.compression {
+            CompressionWithLevel::None => (None, String::new()),
+            CompressionWithLevel::Gzip(level) => (Some("gzip".to_owned()), level.to_string()),
+            CompressionWithLevel::Zstd(level) => (Some("zstd".to_owned()), level.to_string()),
+            CompressionWithLevel::Xz(level) => (Some("xz".to_owned()), level.to_string()),
+            CompressionWithLevel::Bzip2(level) => (Some("bzip2".to_owned()), level.to_string()),
         };
 
-        if let Some((compression_name, compression_level)) = compression_details {
+        if let Some(compression_name) = compression_name {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 IndexData::StringTag(compression_name),
             ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADFLAGS,
-                IndexData::StringTag(compression_level),
-            ));
         }
+        actual_records.push(IndexEntry::new(
+            IndexTag::RPMTAG_PAYLOADFLAGS,
+            IndexData::StringTag(compression_flags),
+        ));
 
         if !self.changelog_names.is_empty() {
             actual_records.push(IndexEntry::new(

@@ -195,7 +195,7 @@ impl FileOptions {
                 user: None,
                 group: None,
                 symlink: "".to_string(),
-                mode: FileMode::regular(0o664),
+                mode: FileMode::regular(0o644),
                 flag: FileFlags::empty(),
                 use_default_permissions: true,
                 caps: None,
@@ -258,7 +258,8 @@ impl FileOptions {
     ///
     /// Use with [`PackageBuilder::with_ghost()`].
     ///
-    /// Default permissions are 0o644.
+    /// Default permissions are 0 (no permission bits), matching RPM's behavior for
+    /// ghost files that don't exist on disk.
     pub fn ghost(dest: impl Into<String>) -> FileOptionsBuilder {
         FileOptionsBuilder {
             inner: FileOptions {
@@ -266,7 +267,7 @@ impl FileOptions {
                 user: None,
                 group: None,
                 symlink: "".to_string(),
-                mode: FileMode::regular(0o644),
+                mode: FileMode::regular(0),
                 flag: FileFlags::GHOST,
                 use_default_permissions: true,
                 caps: None,

@@ -761,13 +761,13 @@ mod fixtures {
             files[12].metadata,
             FileEntry {
                 path: PathBuf::from("/opt/rpm-file-attrs/ghost"),
-                mode: FileMode::regular(0o644),
+                mode: FileMode::regular(0),
                 ownership: FileOwnership {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
                 modified_at: Timestamp(1681068559),
-                size: 6,
+                size: 0,
                 flags: FileFlags::GHOST,
                 digest: None,
                 caps: Some("".to_owned()),
