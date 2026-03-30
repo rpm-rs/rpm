@@ -43,14 +43,6 @@ pub mod pkgs {
                 env!("CARGO_MANIFEST_DIR"),
                 "/tests/assets/SRPMS/v4/rpm-basic-2.3.4-5.el9.src.rpm"
             );
-            pub const RPM_BASIC_SRC_RSA_SIGNED: &str = concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/tests/assets/SRPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.src.rpm"
-            );
-            pub const RPM_BASIC_SRC_EDDSA_SIGNED: &str = concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/tests/assets/SRPMS/v4/signed/rpm-basic-with-ed25517-2.3.4-5.el9.src.rpm"
-            );
         }
     }
 
@@ -133,13 +125,17 @@ pub mod pkgs {
                 env!("CARGO_MANIFEST_DIR"),
                 "/tests/assets/SRPMS/v6/rpm-basic-2.3.4-5.el9.src.rpm"
             );
-            pub const RPM_BASIC_SRC_RSA_SIGNED: &str = concat!(
+            pub const RPM_FILE_ATTRS_SRC: &str = concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/assets/SRPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.src.rpm"
+                "/tests/assets/SRPMS/v6/rpm-file-attrs-1.0-1.src.rpm"
             );
-            pub const RPM_BASIC_SRC_EDDSA_SIGNED: &str = concat!(
+            pub const RPM_FILE_TYPES_SRC: &str = concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/assets/SRPMS/v6/signed/rpm-basic-with-ed25519-2.3.4-5.el9.src.rpm"
+                "/tests/assets/SRPMS/v6/rpm-file-types-1.0-1.src.rpm"
+            );
+            pub const RPM_HARDLINKS_SRC: &str = concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/assets/SRPMS/v6/rpm-hardlinks-1.0-1.src.rpm"
             );
         }
     }
