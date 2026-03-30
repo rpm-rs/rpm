@@ -120,8 +120,10 @@ fn validate_suffix(s: &str) -> Result<(), Error> {
 
 pub fn validate_caps_text(s: &str) -> Result<(), Error> {
     let s = s.trim();
+    // Empty string is valid and equivalent to "=" (no capabilities)
+    // This matches RPM's %caps() behavior
     if s.is_empty() {
-        return Err(Error::InvalidFileCaps("Empty text".to_owned()));
+        return Ok(());
     }
 
     for part in s.split_whitespace() {
@@ -175,14 +177,10 @@ mod tests {
 
     #[test]
     fn test_validate_caps_text() {
-        assert_eq!(
-            validate_caps_text("").unwrap_err().to_string(),
-            "Empty text"
-        );
-        assert_eq!(
-            validate_caps_text(" ").unwrap_err().to_string(),
-            "Empty text"
-        );
+        // Empty string is valid (equivalent to "=")
+        validate_caps_text("").unwrap();
+        validate_caps_text(" ").unwrap();
+
         assert_eq!(
             validate_caps_text("cap_chown").unwrap_err().to_string(),
             "`+/-/=` not found"
