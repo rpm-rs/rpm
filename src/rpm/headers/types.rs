@@ -199,7 +199,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -221,7 +221,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -245,7 +245,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 use_default_permissions: false,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -270,7 +270,15 @@ impl FileOptions {
                 flag: FileFlags::GHOST,
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                // Ghost files can't verify content-related attributes since they don't exist in the payload
+                verify_flags: FileVerifyFlags::from_bits_retain(
+                    FileVerifyFlags::all_flags().bits()
+                        & !(FileVerifyFlags::FILEDIGEST
+                            | FileVerifyFlags::FILESIZE
+                            | FileVerifyFlags::LINKTO
+                            | FileVerifyFlags::MTIME)
+                            .bits(),
+                ),
             },
         }
     }
@@ -294,7 +302,7 @@ impl FileOptions {
                 flag: FileFlags::GHOST,
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
