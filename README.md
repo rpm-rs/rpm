@@ -68,12 +68,12 @@ pkg.verify_signature(verifier)?;
 ```rust
 use rpm::signature::pgp::Signer;
 
-let subkey_fingerprint = hex::decode("1F9A6321E1C5B4600BC2F6D8130FD47580C5CC7701DD8BE59983C1F79325EBF9")?;
+let subkey_fingerprint = hex::decode("715619ae2365d909eb991ff97a509cd76a0bac92f0e17c1c2525812852cedfc5")?;
 
 let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?
     .with_signing_key(&subkey_fingerprint)?;
 
-let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
 pkg.sign(signer)?;
 ```
 
@@ -91,7 +91,7 @@ pkg.verify_signature(verifier)?;
 
 // You can also narrow down to a specific certificate by fingerprint:
 let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?
-    .with_key(hex::decode("D996AEDC0D64D1E621B95AD2E964F9FB30D073B5")?)?;
+    .with_key(&hex::decode("d996aedc0d64d1e621b95ad2e964f9fb30d073b5")?)?;
 ```
 
 #### Inspect package signatures
