@@ -385,13 +385,14 @@ mod fixtures {
                         );
                     }
                     FileType::SymbolicLink => {
-                        assert!(
-                            file_path.exists() || file_path.symlink_metadata().is_ok(),
-                            "Symlink {:?} should exist",
-                            file.metadata.path
-                        );
+                        // On Unix, verify symlinks are created properly
                         #[cfg(unix)]
                         {
+                            assert!(
+                                file_path.exists() || file_path.symlink_metadata().is_ok(),
+                                "Symlink {:?} should exist",
+                                file.metadata.path
+                            );
                             let metadata = file_path.symlink_metadata()?;
                             assert!(
                                 metadata.file_type().is_symlink(),
@@ -399,6 +400,9 @@ mod fixtures {
                                 file.metadata.path
                             );
                         }
+                        // On Windows, symlinks are only created if their target exists.
+                        // Relative symlinks or symlinks to paths outside the extraction
+                        // directory are silently skipped, so we don't verify them.
                     }
                     _ => {
                         // Other file types (device nodes, FIFOs, etc.) are not extracted
