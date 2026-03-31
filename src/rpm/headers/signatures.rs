@@ -6,6 +6,7 @@ use super::*;
 use std::collections::HashSet;
 use std::default::Default;
 
+use crate::RpmFormat;
 use crate::constants::*;
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
@@ -17,6 +18,7 @@ use pgp::crypto::public_key::PublicKeyAlgorithm;
 
 /// base signature header builder
 pub struct SignatureHeaderBuilder {
+    format: Option<RpmFormat>,
     openpgp_signatures: Vec<Vec<u8>>,
     header_sha1: Option<String>,
     header_sha256: Option<String>,
@@ -26,6 +28,7 @@ pub struct SignatureHeaderBuilder {
     file_signature_length: Option<u32>,
     verity_signatures: Option<Vec<String>>,
     verity_signature_algo: Option<u32>,
+    reserved_space: Option<u32>,
 }
 
 impl Default for SignatureHeaderBuilder {
@@ -46,8 +49,15 @@ pub(crate) fn encode_sig(signature: &[u8]) -> String {
 }
 
 impl SignatureHeaderBuilder {
+    /// The default amount of reserved space (in bytes) for later adding signatures.
+    /// Requires the format to be set; otherwise the reserved space is not written.
+    ///
+    /// RPM uses a default of %__gpg_reserved_space (4096) + 32 bytes
+    const DEFAULT_RESERVED_SPACE: u32 = 4128;
+
     pub fn new() -> Self {
         Self {
+            format: None,
             openpgp_signatures: Vec::new(),
             header_sha1: None,
             header_sha256: None,
@@ -57,7 +67,14 @@ impl SignatureHeaderBuilder {
             file_signature_length: None,
             verity_signatures: None,
             verity_signature_algo: None,
+            reserved_space: Some(Self::DEFAULT_RESERVED_SPACE),
         }
+    }
+
+    /// Set the RPM format version, which determines the reserved space tag used.
+    pub fn format(mut self, format: RpmFormat) -> Self {
+        self.format = Some(format);
+        self
     }
 
     /// Create a builder that preserves existing data from a signature header.
@@ -117,6 +134,17 @@ impl SignatureHeaderBuilder {
             header.get_entry_data_as_u32(IndexSignatureTag::RPMSIGTAG_VERITYSIGNATUREALGO)
         {
             builder.verity_signature_algo = Some(algo);
+        }
+        // Detect format and preserve reserved space from existing header.
+        // v6 uses RPMSIGTAG_RESERVED (999), v4 uses RPMSIGTAG_RESERVEDSPACE (1008).
+        if let Ok(data) = header.get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RESERVED) {
+            builder.format = Some(RpmFormat::V6);
+            builder.reserved_space = Some(data.len() as u32);
+        } else if let Ok(data) =
+            header.get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RESERVEDSPACE)
+        {
+            builder.format = Some(RpmFormat::V4);
+            builder.reserved_space = Some(data.len() as u32);
         }
         Ok(builder)
     }
@@ -238,6 +266,19 @@ impl SignatureHeaderBuilder {
                     IndexData::Int64(vec![len]),
                 ));
             }
+        }
+
+        // Write reserved space for later adding signatures without rewriting the package.
+        // v4 uses RPMSIGTAG_RESERVEDSPACE (1008), v6 uses RPMSIGTAG_RESERVED (999).
+        if let (Some(size), Some(fmt)) = (self.reserved_space, self.format) {
+            let tag = match fmt {
+                RpmFormat::V4 => IndexSignatureTag::RPMSIGTAG_RESERVEDSPACE,
+                RpmFormat::V6 => IndexSignatureTag::RPMSIGTAG_RESERVED,
+            };
+            entries.push(IndexEntry::new(
+                tag,
+                IndexData::Bin(vec![0u8; size as usize]),
+            ));
         }
 
         let header = Header::<IndexSignatureTag>::from_entries(
