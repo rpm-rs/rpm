@@ -199,13 +199,18 @@ impl SignatureHeaderBuilder {
                 IndexData::StringArray(openpgp_signatures),
             ));
 
-            // the legacy signature tags are produced from the last signature in the list
-            if let Some((tag, sig_bytes)) = legacy_sig {
+            // the legacy signature tags are produced from the last valid signature in the list
+            if self.format != Some(RpmFormat::V6)
+                && let Some((tag, sig_bytes)) = legacy_sig
+            {
                 entries.push(IndexEntry::new(tag, IndexData::Bin(sig_bytes.clone())));
             }
         }
 
-        if let Some(digest) = self.header_sha1 {
+        // SHA-1 is only expected for v4 packages
+        if self.format != Some(RpmFormat::V6)
+            && let Some(digest) = self.header_sha1
+        {
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA1,
                 IndexData::StringTag(digest),
@@ -219,7 +224,10 @@ impl SignatureHeaderBuilder {
             ));
         }
 
-        if let Some(digest) = self.header_sha3_256 {
+        // SHA3-256 is only expected for v6 packages
+        if self.format != Some(RpmFormat::V4)
+            && let Some(digest) = self.header_sha3_256
+        {
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_SHA3_256,
                 IndexData::StringTag(digest),
@@ -254,7 +262,10 @@ impl SignatureHeaderBuilder {
             ));
         }
 
-        if let Some(len) = self.content_length {
+        // Size tags are only expected for v4 packages
+        if self.format != Some(RpmFormat::V6)
+            && let Some(len) = self.content_length
+        {
             if let Ok(len) = u32::try_from(len) {
                 entries.push(IndexEntry::new(
                     IndexSignatureTag::RPMSIGTAG_SIZE,
@@ -291,12 +302,17 @@ impl SignatureHeaderBuilder {
 
     /// Calculate header digests from the given header bytes.
     ///
-    /// Always calculates SHA-256 and SHA3-256 digests. If a SHA-1 digest was already present
-    /// (e.g. preserved via `from_existing`), it is also recalculated.
+    /// Always calculates SHA-256. SHA3-256 is only calculated for v6 packages.
+    /// SHA-1 is only recalculated for v4 packages if it was already present
+    /// (e.g. preserved via `from_existing`).
     pub fn calculate_digests(mut self, header_bytes: &[u8]) -> Self {
         self.header_sha256 = Some(hex::encode(sha2::Sha256::digest(header_bytes)));
-        self.header_sha3_256 = Some(hex::encode(sha3::Sha3_256::digest(header_bytes)));
-        if self.header_sha1.is_some() {
+        // SHA3-256 is only expected for v6 packages
+        if self.format != Some(RpmFormat::V4) {
+            self.header_sha3_256 = Some(hex::encode(sha3::Sha3_256::digest(header_bytes)));
+        }
+        // SHA-1 is only expected for v4 packages
+        if self.format != Some(RpmFormat::V6) {
             self.header_sha1 = Some(hex::encode(sha1::Sha1::digest(header_bytes)));
         }
         self
