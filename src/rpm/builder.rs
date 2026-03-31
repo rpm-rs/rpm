@@ -1122,17 +1122,16 @@ impl PackageBuilder {
 
     /// Build the package
     pub fn build(self) -> Result<Package, Error> {
-        let is_v4 = self.config.format == RpmFormat::V4;
+        let fmt = self.config.format;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
-
         let sig_header = {
-            let mut builder = SignatureHeaderBuilder::new();
+            let mut builder = SignatureHeaderBuilder::new().format(fmt);
 
             // V6 packages shouldn't populate the content length header.
-            if is_v4 {
+            if fmt == RpmFormat::V4 {
                 builder = builder.set_content_length(header.len() as u64 + content.len() as u64);
             }
 

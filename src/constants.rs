@@ -431,8 +431,14 @@ pub enum IndexSignatureTag {
     /// Index Records and Header store, stored as a hex-encoded string.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
-    /// A silly tag for a date.
-    RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as u32,
+    /// Reserved space in the signature header for later adding signatures without
+    /// rewriting the entire package. Used in v6 packages. Placed at the top of the
+    /// signature range (999) so it's always the last tag.
+    RPMSIGTAG_RESERVED = 999,
+
+    /// Reserved space in the signature header for v4 packages.
+    /// Shares tag number 1008 with RPMTAG_INSTALLTIME.
+    RPMSIGTAG_RESERVEDSPACE = 1008,
 
     //////////////////////////////////////////
     /* Various legacy tags - all deprecated */
