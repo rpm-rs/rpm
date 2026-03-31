@@ -150,6 +150,23 @@ where
         Ok(())
     }
 
+    /// Returns all entries in this header with fully resolved data.
+    ///
+    /// This method returns a vector of (tag, IndexData) pairs where all lazy-loaded
+    /// data (strings, binaries) has been resolved from the store. Entries are
+    /// guaranteed to be sorted by tag number.
+    ///
+    /// This is primarily useful for debugging and testing purposes.
+    pub fn get_all_entries(&self) -> Result<Vec<(u32, IndexData)>, Error> {
+        self.index_entries
+            .iter()
+            .map(|entry| {
+                let data = self.resolve_entry_data(entry)?;
+                Ok((entry.tag, data))
+            })
+            .collect()
+    }
+
     pub fn entry_is_present(&self, tag: T) -> bool {
         self.index_entries
             .iter()
@@ -853,7 +870,7 @@ impl<T: Tag> fmt::Display for IndexEntry<T> {
 
 /// Data as present in a [`IndexEntry`](self::IndexEntry) .
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum IndexData {
+pub enum IndexData {
     Null,
     Char(Vec<u8>),
     Int8(Vec<u8>),
