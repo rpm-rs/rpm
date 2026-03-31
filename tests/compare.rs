@@ -31,7 +31,6 @@ const EXPECTED_DIFFERENCES: &[u32] = &[
     IndexTag::RPMTAG_MIMEDICT as u32,
     // Signature tags (sign the entire package including buildtime/buildhost)
     IndexSignatureTag::RPMSIGTAG_SIZE as u32,
-    // IndexSignatureTag::RPMSIGTAG_PAYLOADSIZE as u32,
     IndexSignatureTag::RPMSIGTAG_SHA1 as u32,
     IndexSignatureTag::RPMSIGTAG_SHA256 as u32,
     IndexSignatureTag::RPMSIGTAG_SHA3_256 as u32,
