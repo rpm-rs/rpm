@@ -1124,7 +1124,7 @@ fn test_tampered_header_detected() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test that sign, write, read-back preserves both signature and digest validity
 #[test]
-fn test_roundtrip_write_read_integrity() -> Result<(), Box<dyn std::error::Error>> {
+fn test_signature_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     /// Build, sign, write, re-open, and verify both digests and signature.
     #[track_caller]
     fn roundtrip(
@@ -1181,6 +1181,52 @@ fn test_roundtrip_write_read_integrity() -> Result<(), Box<dyn std::error::Error
         common::keys::v6::MLDSA65_ED25519_PUBLIC,
         "roundtrip_v6_mldsa.rpm",
     )?;
+
+    Ok(())
+}
+
+/// Test that a multi-signed package survives a write-read roundtrip with both signatures intact
+#[test]
+fn test_multi_signature_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    // v4: sign with RSA then EdDSA, write, re-read, verify both
+    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+    let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+    let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
+    pkg.sign(&rsa_signer)?;
+    pkg.sign(&ed_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
+
+    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v4.rpm");
+    pkg.write_file(&out_file)?;
+
+    let reopened = rpm::Package::open(&out_file)?;
+    assert_eq!(reopened.signatures()?.len(), 2);
+    reopened.verify_signature(&rsa_verifier)?;
+    reopened.verify_signature(&ed_verifier)?;
+    reopened.verify_digests()?;
+
+    // v6: sign with RSA then EdDSA, write, re-read, verify both
+    let v6_rsa_signer = Signer::from_asc_file(common::keys::v6::RSA_4K_PRIVATE)?;
+    let v6_rsa_verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
+    let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+    let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+
+    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?;
+    pkg.sign(&v6_rsa_signer)?;
+    pkg.sign(&v6_ed_signer)?;
+    assert_eq!(pkg.signatures()?.len(), 2);
+
+    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v6.rpm");
+    pkg.write_file(&out_file)?;
+
+    let reopened = rpm::Package::open(&out_file)?;
+    assert_eq!(reopened.signatures()?.len(), 2);
+    reopened.verify_signature(&v6_rsa_verifier)?;
+    reopened.verify_signature(&v6_ed_verifier)?;
+    reopened.verify_digests()?;
 
     Ok(())
 }
@@ -1273,48 +1319,107 @@ fn test_legacy_signature_tags() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test that a multi-signed package survives a write-read roundtrip with both signatures intact
+/// Test that building and signing a v4 package produces the expected signature header tags
 #[test]
-fn test_multi_signature_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
-    // v4: sign with RSA then EdDSA, write, re-read, verify both
-    let rsa_signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
-    let rsa_verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
-    let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
-    let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+fn test_v4_signed_package_signature_tags() -> Result<(), Box<dyn std::error::Error>> {
+    let signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
+    let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "v4 sig tags test")
+        .using_config(rpm::BuildConfig::v4())
+        .build_and_sign(&signer)?;
+    let sig = &pkg.metadata.signature;
 
-    let mut pkg = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?;
-    pkg.sign(&rsa_signer)?;
-    pkg.sign(&ed_signer)?;
-    assert_eq!(pkg.signatures()?.len(), 2);
+    // v4 should have: SHA-1, SHA-256, size, reserved space, and legacy RSA
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA1),
+        "v4 signed package should have RPMSIGTAG_SHA1"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA256),
+        "v4 signed package should have RPMSIGTAG_SHA256"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SIZE),
+        "v4 signed package should have RPMSIGTAG_SIZE"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RESERVEDSPACE),
+        "v4 signed package should have RPMSIGTAG_RESERVEDSPACE"
+    );
+    assert!(
+        // we add SIGTAG_OPENPGP for v4 packages - it doesn't hurt and it simplifies the code
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_OPENPGP),
+        "we expect to have RPMSIGTAG_OPENPGP"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RSA),
+        "v4 RSA-signed package should have RPMSIGTAG_RSA"
+    );
 
-    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v4.rpm");
-    pkg.write_file(&out_file)?;
+    // v4 should NOT have: SHA3-256 or v6-style reserved tag
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA3_256),
+        "v4 signed package should not have RPMSIGTAG_SHA3_256"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RESERVED),
+        "v4 signed package should not have RPMSIGTAG_RESERVED"
+    );
 
-    let reopened = rpm::Package::open(&out_file)?;
-    assert_eq!(reopened.signatures()?.len(), 2);
-    reopened.verify_signature(&rsa_verifier)?;
-    reopened.verify_signature(&ed_verifier)?;
-    reopened.verify_digests()?;
+    Ok(())
+}
 
-    // v6: sign with RSA then EdDSA, write, re-read, verify both
-    let v6_rsa_signer = Signer::from_asc_file(common::keys::v6::RSA_4K_PRIVATE)?;
-    let v6_rsa_verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
-    let v6_ed_signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
-    let v6_ed_verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
+/// Test that building and signing a v6 package produces the expected signature header tags
+#[test]
+fn test_v6_signed_package_signature_tags() -> Result<(), Box<dyn std::error::Error>> {
+    let signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
+    let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "v6 sig tags test")
+        .using_config(rpm::BuildConfig::v6())
+        .build_and_sign(&signer)?;
+    let sig = &pkg.metadata.signature;
 
-    let mut pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?;
-    pkg.sign(&v6_rsa_signer)?;
-    pkg.sign(&v6_ed_signer)?;
-    assert_eq!(pkg.signatures()?.len(), 2);
+    // v6 should have: SHA-256, SHA3-256, v6 reserved tag, and OpenPGP
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA256),
+        "v6 signed package should have RPMSIGTAG_SHA256"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA3_256),
+        "v6 signed package should have RPMSIGTAG_SHA3_256"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RESERVED),
+        "v6 signed package should have RPMSIGTAG_RESERVED"
+    );
+    assert!(
+        sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_OPENPGP),
+        "v6 signed package should have RPMSIGTAG_OPENPGP"
+    );
 
-    let out_file = Path::new(common::CARGO_OUT_DIR).join("multi_sig_roundtrip_v6.rpm");
-    pkg.write_file(&out_file)?;
-
-    let reopened = rpm::Package::open(&out_file)?;
-    assert_eq!(reopened.signatures()?.len(), 2);
-    reopened.verify_signature(&v6_rsa_verifier)?;
-    reopened.verify_signature(&v6_ed_verifier)?;
-    reopened.verify_digests()?;
+    // v6 should NOT have: SHA-1, size, v4 reserved space, or legacy RSA/DSA tags
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SHA1),
+        "v6 signed package should not have RPMSIGTAG_SHA1"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_SIZE),
+        "v6 signed package should not have RPMSIGTAG_SIZE"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_LONGSIZE),
+        "v6 signed package should not have RPMSIGTAG_LONGSIZE"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RESERVEDSPACE),
+        "v6 signed package should not have RPMSIGTAG_RESERVEDSPACE"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_RSA),
+        "v6 signed package should not have RPMSIGTAG_RSA"
+    );
+    assert!(
+        !sig.entry_is_present(rpm::IndexSignatureTag::RPMSIGTAG_DSA),
+        "v6 signed package should not have RPMSIGTAG_DSA"
+    );
 
     Ok(())
 }

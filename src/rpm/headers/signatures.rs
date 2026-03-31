@@ -194,6 +194,8 @@ impl SignatureHeaderBuilder {
             // Restore original order (oldest first)
             openpgp_signatures.reverse();
 
+            // OpenPGP signature tag is added unconditionally because it makes the code simpler
+            // and causes no harm.
             entries.push(IndexEntry::new(
                 IndexSignatureTag::RPMSIGTAG_OPENPGP,
                 IndexData::StringArray(openpgp_signatures),
