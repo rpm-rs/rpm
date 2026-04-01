@@ -46,6 +46,11 @@ build_spec() {
 
     mkdir -p "$rpmdir" "$srpmdir"
 
+    local fmt_opts=()
+    if [[ "$fmt" == "4" ]]; then
+        fmt_opts+=( --define "_use_weak_usergroup_deps 1" )
+    fi
+
     rpmbuild \
         --define "_topdir $(pwd)" \
         --define "_rpmdir ${rpmdir}" \
@@ -54,6 +59,7 @@ build_spec() {
         --define "_binary_payload ${payload}" \
         --define "_source_payload ${payload}" \
         "${REPRODUCIBLE_OPTS[@]}" \
+        "${fmt_opts[@]}" \
         -ba "$spec"
 
     rm -rf ./BUILD/
