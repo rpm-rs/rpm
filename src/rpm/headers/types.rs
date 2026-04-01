@@ -195,11 +195,11 @@ impl FileOptions {
                 user: None,
                 group: None,
                 symlink: "".to_string(),
-                mode: FileMode::regular(0o664),
+                mode: FileMode::regular(0o644),
                 flag: FileFlags::empty(),
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -221,7 +221,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -245,7 +245,7 @@ impl FileOptions {
                 flag: FileFlags::empty(),
                 use_default_permissions: false,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -258,7 +258,8 @@ impl FileOptions {
     ///
     /// Use with [`PackageBuilder::with_ghost()`].
     ///
-    /// Default permissions are 0o644.
+    /// Default permissions are 0 (no permission bits), matching RPM's behavior for
+    /// ghost files that don't exist on disk.
     pub fn ghost(dest: impl Into<String>) -> FileOptionsBuilder {
         FileOptionsBuilder {
             inner: FileOptions {
@@ -266,11 +267,19 @@ impl FileOptions {
                 user: None,
                 group: None,
                 symlink: "".to_string(),
-                mode: FileMode::regular(0o644),
+                mode: FileMode::regular(0),
                 flag: FileFlags::GHOST,
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                // Ghost files can't verify content-related attributes since they don't exist in the payload
+                verify_flags: FileVerifyFlags::from_bits_retain(
+                    FileVerifyFlags::all_flags().bits()
+                        & !(FileVerifyFlags::FILEDIGEST
+                            | FileVerifyFlags::FILESIZE
+                            | FileVerifyFlags::LINKTO
+                            | FileVerifyFlags::MTIME)
+                            .bits(),
+                ),
             },
         }
     }
@@ -294,7 +303,7 @@ impl FileOptions {
                 flag: FileFlags::GHOST,
                 use_default_permissions: true,
                 caps: None,
-                verify_flags: FileVerifyFlags::all(),
+                verify_flags: FileVerifyFlags::all_flags(),
             },
         }
     }
@@ -532,9 +541,12 @@ impl Dependency {
 
     /// Create a dependency on an rpm feature, required to install this package
     pub fn rpmlib(dep_name: impl Into<String>, version: impl Into<String>) -> Self {
+        // The reason why it counterintuitively uses <= is so that the range is closed, as >=
+        // would be making promise that it will work forever. It should be read as "this package
+        // won't work on versions less than $version"
         Self::new(
             format!("rpmlib({})", dep_name.into()),
-            DependencyFlags::RPMLIB | DependencyFlags::EQUAL,
+            DependencyFlags::RPMLIB | DependencyFlags::LESS | DependencyFlags::EQUAL,
             version.into(),
         )
     }

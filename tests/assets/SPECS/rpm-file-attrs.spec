@@ -25,7 +25,6 @@ echo "artifact" > %{buildroot}/opt/%{name}/artifact
 echo "config" > %{buildroot}/opt/%{name}/config
 echo "config_noreplace" > %{buildroot}/opt/%{name}/config_noreplace
 echo "doc" > %{buildroot}/opt/%{name}/doc
-echo "ghost" > %{buildroot}/opt/%{name}/ghost
 echo "license" > %{buildroot}/opt/%{name}/license
 echo "missingok" > %{buildroot}/opt/%{name}/missingok
 echo "readme" > %{buildroot}/opt/%{name}/readme
@@ -39,6 +38,12 @@ echo "different-owner-and-group" > %{buildroot}/opt/%{name}/different-owner-and-
 echo "empty_caps" > %{buildroot}/opt/%{name}/empty_caps
 echo "empty_caps2" > %{buildroot}/opt/%{name}/empty_caps2
 echo "with_caps" > %{buildroot}/opt/%{name}/with_caps
+
+# for verify flags testing
+echo "verify_some" > %{buildroot}/opt/%{name}/verify_some
+echo "verify_not" > %{buildroot}/opt/%{name}/verify_not
+echo "verify_all" > %{buildroot}/opt/%{name}/verify_all
+echo "verify_none" > %{buildroot}/opt/%{name}/verify_none
 
 %files
 /opt/%{name}/normal
@@ -66,3 +71,9 @@ echo "with_caps" > %{buildroot}/opt/%{name}/with_caps
 %attr(0655,root,root) %caps(=) /opt/%{name}/empty_caps
 %attr(0655,root,root) %caps()  /opt/%{name}/empty_caps2
 %attr(0655,root,root) %caps(cap_sys_admin,cap_sys_ptrace=pe) /opt/%{name}/with_caps
+
+# verify flags
+%verify(md5 size mtime) /opt/%{name}/verify_some
+%verify(not md5 size) /opt/%{name}/verify_not
+%verify(md5 size mode mtime rdev user group link) /opt/%{name}/verify_all
+%verify(not md5 size mode mtime rdev user group link) /opt/%{name}/verify_none

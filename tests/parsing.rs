@@ -1,14 +1,16 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use pretty_assertions::assert_eq;
 use rpm::*;
 
 mod common;
 
+/// Verify that the lead, signature header, header, and payload boundaries
+/// of each fixture RPM (v4, v6, signed, unsigned, constructed) point to
+/// valid magic bytes for their respective segment types.
 #[test]
-#[ignore]
 fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v4::RPM_EMPTY.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC.as_ref())?;
@@ -16,8 +18,13 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v4::RPM_BASIC_ECDSA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC_RSA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v4::RPM_BASIC_IMA_SIGNED.as_ref())?;
-    assert_boundaries(common::pkgs::v4::RPM_EMPTY_SRC.as_ref())?;
-    assert_boundaries(common::pkgs::v4::RPM_BASIC_SRC.as_ref())?;
+    assert_boundaries(common::pkgs::v4::src::RPM_EMPTY_SRC.as_ref())?;
+    assert_boundaries(common::pkgs::v4::src::RPM_BASIC_SRC.as_ref())?;
+
+    assert_boundaries(common::pkgs::v6::RPM_EMPTY.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED.as_ref())?;
+    assert_boundaries(common::pkgs::v6::RPM_BASIC_MULTI_SIGNED.as_ref())?;
 
     let mut temp = tempfile::NamedTempFile::new()?;
 
@@ -31,8 +38,7 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "signature-meta")]
     {
         use rpm::signature::pgp::Signer;
-        let signing_key = common::keys::v4::rsa_private();
-        let signer = Signer::load_from_asc_bytes(signing_key.as_ref())?;
+        let signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
         let constructed_pkg_with_sig =
             rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "")
                 .build_and_sign(signer)?;
@@ -75,15 +81,16 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = [0u8; 10];
         f.read_exact(&mut buf)?;
 
-        let payload_magic: &[u8] = match package.metadata.get_payload_compressor().unwrap() {
-            CompressionType::Gzip => &[0x1f, 0x8b],
-            CompressionType::Zstd => &[0x28, 0xb5, 0x2f, 0xfd],
-            CompressionType::Xz => &[0xfd, 0x37, 0x7a, 0x58, 0x5a],
-            CompressionType::Bzip2 => &[0x42, 0x5a],
-            CompressionType::None => &[0x30, 0x37, 0x30, 0x37, 0x30, 0x31], // CPIO archive magic #
+        match package.metadata.get_payload_compressor().unwrap() {
+            CompressionType::Gzip => assert!(buf.starts_with(&[0x1f, 0x8b])),
+            CompressionType::Zstd => assert!(buf.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])),
+            CompressionType::Xz => assert!(buf.starts_with(&[0xfd, 0x37, 0x7a, 0x58, 0x5a])),
+            CompressionType::Bzip2 => assert!(buf.starts_with(&[0x42, 0x5a])),
+            CompressionType::None => {
+                // CPIO magic "070701" or RPM "stripped" CPIO magic "07070X"
+                assert!(buf.starts_with(b"070701") || buf.starts_with(b"07070X"));
+            }
         };
-
-        assert!(buf.starts_with(payload_magic));
 
         Ok(())
     }
@@ -91,10 +98,10 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Parse the rpm-file-attrs fixture and verify metadata
 #[test]
-#[ignore]
 fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_FILE_ATTRS)?;
+    let package = Package::open(common::pkgs::v6::RPM_FILE_ATTRS)?;
     let metadata = &package.metadata;
 
     assert_eq!(metadata.is_source_package(), false);
@@ -118,395 +125,29 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
         metadata.get_payload_compressor().unwrap(),
         CompressionType::None
     );
-    assert_eq!(metadata.get_installed_size().unwrap(), 201);
+    assert_eq!(metadata.get_installed_size().unwrap(), 241);
+
+    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(
+        metadata.get_source_rpm().unwrap(),
+        "rpm-file-attrs-1.0-1.src.rpm"
+    );
+    assert_eq!(
+        metadata.get_file_digest_algorithm().unwrap(),
+        DigestAlgorithm::Sha2_256
+    );
 
     assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
-    assert!(matches!(
-        metadata.get_payload_compressor().unwrap(),
-        CompressionType::None
-    ));
     assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+    assert!(matches!(
+        metadata.get_packager(),
+        Err(Error::TagNotFound(_))
+    ));
+    assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
 
-    // assert_eq!(
-    //     metadata.get_file_entries().unwrap(),
-    //     vec![
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs"),
-    //             mode: FileMode::dir(0o755),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 0,
-    //             flags: FileFlags::empty(),
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/artifact"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 9,
-    //             flags: FileFlags::ARTIFACT,
-    //             digest: Some(FileDigest {
-    //                 digest: "5b3513f580c8397212ff2c8f459c199efc0c90e4354a5f3533adf0a3fff3a530"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/config"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 7,
-    //             flags: FileFlags::CONFIG,
-    //             digest: Some(FileDigest {
-    //                 digest: "f612b89bcdbc401379f644d7e48572e3470f77dcd4c39416405d80952ad7089e"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/config_noreplace"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 17,
-    //             flags: FileFlags::CONFIG | FileFlags::NOREPLACE,
-    //             digest: Some(FileDigest {
-    //                 digest: "65aef2d1dcd07b86831d536703f71f74916d81189bd69a168dad2ce1815a5136"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/different-owner-and-group"),
-    //             mode: FileMode::Regular { permissions: 0o655 },
-    //             ownership: FileOwnership {
-    //                 user: "jane".to_owned(),
-    //                 group: "bob".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559,),
-    //             size: 26,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "6e19af479b7cdab8d446f20a1e0368afe4c8fb01421efcbdb1ff4c72b4a7b1de"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             },),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/dir"),
-    //             mode: FileMode::dir(0o755),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559,),
-    //             size: 0,
-    //             flags: FileFlags::empty(),
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/dir/normal"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 14,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "378c7c38d6e7208fcca00a748a4e94272f4ae3a2b99c1b85a9d25179d187f13d"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             },),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/doc"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 4,
-    //             flags: FileFlags::DOC,
-    //             digest: Some(FileDigest {
-    //                 digest: "30a4ab973ef8fd561d930d55502df855108ca0b081454b0e761d5141f3778780"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/empty_caps"),
-    //             mode: FileMode::Regular { permissions: 0o655 },
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 11,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "f2e132eb12bc8635acd67bb066d4df2dfbde5b508223ef682632000616646431"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("=".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/empty_caps2"),
-    //             mode: FileMode::Regular { permissions: 0o655 },
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 12,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "ebc4ec9a7a5e144dad5a7bca3e93d8565b71e8938cbb78b6c5e067af478b20bc"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("=".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/example-binary"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 15,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "1c48d874093f64b1571fc4df5e900e1e36764d1c78019332fafbe144921e4886"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/example-confidential-file"),
-    //             mode: FileMode::Regular { permissions: 0o600 },
-    //             ownership: FileOwnership {
-    //                 user: "jane".to_owned(),
-    //                 group: "jane".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 26,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "712e0fa274215e73c83de99659471615d53cd52177fdd6906ca3309b2989ebcd"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/ghost"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 6,
-    //             flags: FileFlags::GHOST,
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/license"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 8,
-    //             flags: FileFlags::LICENSE,
-    //             digest: Some(FileDigest {
-    //                 digest: "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/missingok"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 10,
-    //             flags: FileFlags::MISSINGOK,
-    //             digest: Some(FileDigest {
-    //                 digest: "d977a3636e681e2c767015b261b1fac79e5d651dafe66caf5449428ed2873970"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/normal"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 7,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "83d7d4df18591f6a966c7999355338c625e5a2f7c9cb0c35f11d3ed9f725e022"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/readme"),
-    //             mode: FileMode::regular(0o644),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 7,
-    //             flags: FileFlags::README,
-    //             digest: Some(FileDigest {
-    //                 digest: "00d75b5176b48ccc71d91bcc1d7b90fc2820429b1629b77fd1d5f4c5dcee4f6d"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/symlink"),
-    //             mode: FileMode::SymbolicLink { permissions: 0o777 },
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 6,
-    //             flags: FileFlags::empty(),
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "normal".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/symlink_dir"),
-    //             mode: FileMode::dir(0o755),
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 0,
-    //             flags: FileFlags::empty(),
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/symlink_dir/dir"),
-    //             mode: FileMode::SymbolicLink { permissions: 0o777 },
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 6,
-    //             flags: FileFlags::empty(),
-    //             digest: None,
-    //             caps: Some("".to_owned()),
-    //             linkto: "../dir".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //         FileEntry {
-    //             path: PathBuf::from("/opt/rpm-file-attrs/with_caps"),
-    //             mode: FileMode::Regular { permissions: 0o655 },
-    //             ownership: FileOwnership {
-    //                 user: "root".to_owned(),
-    //                 group: "root".to_owned(),
-    //             },
-    //             modified_at: Timestamp(1681068559),
-    //             size: 10,
-    //             flags: FileFlags::empty(),
-    //             digest: Some(FileDigest {
-    //                 digest: "cabc71f9ccd28c9887e9fc608c4420ad5b4b9a44d7146143cd77015b4b259a62"
-    //                     .to_owned(),
-    //                 algo: DigestAlgorithm::Sha2_256,
-    //             }),
-    //             caps: Some("cap_sys_ptrace,cap_sys_admin=ep".to_owned()),
-    //             linkto: "".to_owned(),
-    //             ima_signature: None,
-    //         },
-    //     ]
-    // );
+    // File metadata and content assertions are in payload.rs::test_files_file_attrs
+    assert_eq!(metadata.get_file_entries().unwrap().len(), 25);
+    assert_eq!(metadata.get_file_paths().unwrap().len(), 25);
     assert!(metadata.get_changelog_entries().unwrap().is_empty());
 
     assert_eq!(
@@ -517,431 +158,74 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             Dependency::eq("rpm-file-attrs".to_owned(), "1.0-1".to_owned()),
         ]
     );
-    // assert_eq!(
-    //     metadata.get_requires().unwrap(),
-    //     vec![
-    //         Dependency::config("rpm-file-attrs", "1.0-1"),
-    //         Dependency::rpmlib("CompressedFileNames", "3.0.4-1"),
-    //         Dependency::rpmlib("FileCaps", "4.6.1-1"),
-    //         Dependency::rpmlib("FileDigests", "4.6.0-1"),
-    //         Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"),
-    //     ]
-    // );
+    assert_eq!(
+        metadata.get_requires().unwrap(),
+        vec![
+            Dependency::config("rpm-file-attrs", "1.0-1"),
+            Dependency::group("bob"),
+            Dependency::group("jane"),
+            Dependency::rpmlib("FileCaps", "4.6.1-1"),
+            Dependency::rpmlib("LargeFiles", "4.12.0-1"),
+            Dependency::user("jane"),
+        ]
+    );
     assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
     assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
     assert_eq!(metadata.get_supplements().unwrap(), vec![]);
     assert_eq!(metadata.get_suggests().unwrap(), vec![]);
     assert_eq!(metadata.get_enhances().unwrap(), vec![]);
-    // These are soft requirements because of the build-time policy when these packages were created on Fedora 39
-    // Probably if built on some later version they would be hard requirements?
-    // https://github.com/rpm-software-management/rpm/blob/bb4aaaa2e8e4bdfc02f9d98ab2982074051c4eb2/docs/manual/users_and_groups.md?plain=1#L36C11-L36C11
+    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+
+    // Signature header checksums (v6 package)
     assert_eq!(
-        metadata.get_recommends().unwrap(),
-        vec![
-            Dependency::group("bob"),
-            Dependency::group("jane"),
-            Dependency::user("jane"),
-        ]
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "fddbff7efcd2a15fdb44866c9fd9cfbd8abc8e4c11778f9be122ad202861e26b"
+    );
+    assert_eq!(
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
+            .unwrap(),
+        "f9b60ff49302f1e2cbda10dfeb1b5c0583a46b26f828eee246135b6f9f96bcde"
+    );
+
+    // Payload digest
+    assert_eq!(
+        metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+            .unwrap(),
+        vec!["0a467f76e04a3f0c4dd9309c4d7c7f02e26f680aac6653c29b80e4c75eecaa7f"]
     );
 
     Ok(())
 }
 
+/// Parse the rpm-file-types fixture and verify metadata, focusing on unusual
+/// file names (spaces, special characters) and binary content (PNG image).
 #[test]
-#[ignore]
-fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_BASIC)?;
+fn test_file_types() -> Result<(), Box<dyn std::error::Error>> {
+    let package = Package::open(common::pkgs::v6::RPM_FILE_TYPES)?;
     let metadata = &package.metadata;
 
-    // TODO: make these correct and available
-    //     assert_eq!(metadata.signature.index_entries.len(), 7);
-    //     assert_eq!(metadata.signature.index_entries[0].num_items, 16);
-    //     assert_eq!(metadata.signature.index_header.data_section_size, 1156);
-
-    //     assert_eq!(
-    //         metadata.get_package_segment_offsets(),
-    //         PackageSegmentOffsets {
-    //             lead: 0,
-    //             signature_header: 96,
-    //             header: 1384,
-    //             payload: 148172
-    //         }
-    //     );
-
-    //     let mut buf = Vec::new();
-
-    //     package.metadata.lead.write(&mut buf)?;
-    //     assert_eq!(96, buf.len());
-
-    //     let lead = Lead::parse(&buf)?;
-    //     assert!(package.metadata.lead == lead);
-
-    //     buf = Vec::new();
-    //     package.metadata.signature.write_signature(&mut buf)?;
-    //     let signature = Header::parse_signature(&mut buf.as_slice())?;
-
-    //     assert_eq!(
-    //         package.metadata.signature.index_header,
-    //         signature.index_header
-    //     );
-
-    //     for i in 0..signature.index_entries.len() {
-    //         assert_eq!(
-    //             signature.index_entries[i],
-    //             package.metadata.signature.index_entries[i]
-    //         );
-    //     }
-    //     assert_eq!(
-    //         package.metadata.signature.index_entries,
-    //         signature.index_entries
-    //     );
-
-    //     buf = Vec::new();
-    //     package.metadata.header.write(&mut buf)?;
-    //     let header = Header::parse(&mut buf.as_slice())?;
-    //     assert_eq!(package.metadata.header, header);
-
-    //     buf = Vec::new();
-    //     package.write(&mut buf)?;
-    //     let second_pkg = Package::parse(&mut buf.as_slice())?;
-    //     assert_eq!(package.content.len(), second_pkg.content.len());
-    //     assert!(package.metadata == second_pkg.metadata);
-
     assert_eq!(metadata.is_source_package(), false);
-    assert_eq!(metadata.get_name().unwrap(), "rpm-basic");
-    assert_eq!(metadata.get_epoch().unwrap(), 1);
-    assert_eq!(metadata.get_version().unwrap(), "2.3.4");
-    assert_eq!(metadata.get_release().unwrap(), "5.el9");
+    assert_eq!(metadata.get_name().unwrap(), "rpm-file-types");
+    assert_eq!(metadata.get_epoch().unwrap(), 0);
+    assert_eq!(metadata.get_version().unwrap(), "1.0");
+    assert_eq!(metadata.get_release().unwrap(), "1");
     assert_eq!(metadata.get_arch().unwrap(), "noarch");
     assert_eq!(
         metadata.get_description().unwrap(),
-        "This package attempts to exercise basic features of RPM packages."
+        "A package for exercising RPM handling of different file content types\nand unusual file paths."
     );
     assert_eq!(
         metadata.get_summary().unwrap(),
-        "A package for exercising basic features of RPM"
+        "Test RPM handling of various file content types and paths"
     );
-    assert_eq!(metadata.get_license().unwrap(), "MPL-2.0");
-    assert_eq!(
-        metadata.get_url().unwrap(),
-        "http://www.savewalterwhite.com/"
-    );
-    assert_eq!(metadata.get_packager().unwrap(), "Walter White");
-    assert_eq!(metadata.get_vendor().unwrap(), "Los Pollos Hermanos");
-    assert_eq!(metadata.get_group().unwrap(), "Development/Tools");
-    assert_eq!(metadata.get_vcs().unwrap(), "https://github.com/rpm-rs/rpm");
-    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
-
-    assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
-
-    assert_eq!(
-        metadata.get_file_paths().unwrap(),
-        vec![
-            PathBuf::from("/etc/rpm-basic/example_config.toml"),
-            PathBuf::from("/usr/bin/rpm-basic"),
-            PathBuf::from("/usr/lib/rpm-basic"),
-            PathBuf::from("/usr/lib/rpm-basic/module"),
-            PathBuf::from("/usr/lib/rpm-basic/module/__init__.py"),
-            PathBuf::from("/usr/lib/rpm-basic/module/hello.py"),
-            PathBuf::from("/usr/share/doc/rpm-basic"),
-            PathBuf::from("/usr/share/doc/rpm-basic/README"),
-            PathBuf::from("/usr/share/rpm-basic/example_data.xml"),
-            PathBuf::from("/var/log/rpm-basic/basic.log"),
-            PathBuf::from("/var/tmp/rpm-basic"),
-        ]
-    );
-    assert_eq!(
-        metadata.get_file_entries().unwrap(),
-        vec![
-            FileEntry {
-                path: PathBuf::from("/etc/rpm-basic/example_config.toml"),
-                mode: FileMode::regular(0o644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 31,
-                flags: FileFlags::CONFIG,
-                digest: Some(FileDigest {
-                    digest: "53a79039d2d619dd41cd04d550d94c531ec634cda9457f25031c141d8e4820e8"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256,
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/bin/rpm-basic"),
-                mode: FileMode::regular(0o0644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 118,
-                flags: FileFlags::empty(),
-                digest: Some(FileDigest {
-                    digest: "a2919ab787acdb6f6ae85a8f18c4e983745988ac6c1cd0ec75c8971196d2953c"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/lib/rpm-basic"),
-                mode: FileMode::dir(0o0755),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::empty(),
-                digest: None,
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/lib/rpm-basic/module"),
-                mode: FileMode::dir(0o0755),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::empty(),
-                digest: None,
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/lib/rpm-basic/module/__init__.py"),
-                mode: FileMode::regular(0o0644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::empty(),
-                digest: Some(FileDigest {
-                    digest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256,
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/lib/rpm-basic/module/hello.py"),
-                mode: FileMode::regular(0o0644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 53,
-                flags: FileFlags::empty(),
-                digest: Some(FileDigest {
-                    digest: "b184c98581244d04ffbe7e17af060daf515a1e79f869d5ac6fffb8276ea61ca1"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256,
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/share/doc/rpm-basic"),
-                mode: FileMode::dir(0o755),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::empty(),
-                digest: None,
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/share/doc/rpm-basic/README"),
-                mode: FileMode::regular(0o644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 31,
-                flags: FileFlags::DOC,
-                digest: Some(FileDigest {
-                    digest: "7b4da30e634d1513f7524f07bd2598967d7c9ef65a623bae31709a8ddb7c4277"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256,
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/usr/share/rpm-basic/example_data.xml"),
-                mode: FileMode::regular(0o644),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 95,
-                flags: FileFlags::empty(),
-                digest: Some(FileDigest {
-                    digest: "951d8433ea613c80a0515341edccc5b59f78ad6ed71b12127c0a3407d04b250e"
-                        .to_owned(),
-                    algo: DigestAlgorithm::Sha2_256
-                }),
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/var/log/rpm-basic/basic.log"),
-                mode: FileMode::regular(0),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::GHOST,
-                digest: None,
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-            FileEntry {
-                path: PathBuf::from("/var/tmp/rpm-basic"),
-                mode: FileMode::dir(0o0755),
-                ownership: FileOwnership {
-                    user: "root".to_owned(),
-                    group: "root".to_owned()
-                },
-                modified_at: Timestamp(1681068559),
-                size: 0,
-                flags: FileFlags::empty(),
-                digest: None,
-                caps: None,
-                linkto: "".to_owned(),
-                ima_signature: None,
-            },
-        ]
-    );
-
-    assert_eq!(
-        metadata.get_changelog_entries().unwrap(),
-        vec![
-            ChangelogEntry {
-                name: "Walter White <ww@savewalterwhite.com> - 3.3.3-3".to_owned(),
-                timestamp: 1623672000,
-                description: "- I'm not in the meth business. I'm in the empire business."
-                    .to_owned()
-            },
-            ChangelogEntry {
-                name: "Gustavo Fring <gus@lospolloshermanos.com> - 2.2.2-2".to_owned(),
-                timestamp: 1619352000,
-                description: "- Never Make The Same Mistake Twice.".to_owned()
-            },
-            ChangelogEntry {
-                name: "Mike Ehrmantraut <mike@lospolloshermanos.com> - 1.1.1-1".to_owned(),
-                timestamp: 1617192000,
-                description: "- Just because you shot Jesse James, don't make you Jesse James."
-                    .to_owned()
-            },
-        ]
-    );
-
-    assert_eq!(
-        metadata.get_provides().unwrap(),
-        vec![
-            Dependency::any("/usr/bin/ls"),
-            Dependency::any("aaronpaul"),
-            Dependency::any("breaking(bad)"),
-            Dependency::config("rpm-basic", "1:2.3.4-5.el9"),
-            Dependency::eq("rpm-basic", "1:2.3.4-5.el9"),
-            Dependency::eq("shock", "33")
-        ]
-    );
-    // assert_eq!(
-    //     metadata.get_requires().unwrap(),
-    //     vec![
-    //         Dependency::script_pre("/usr/sbin/ego"),
-    //         Dependency::config("rpm-basic", "1:2.3.4-5.el9"),
-    //         Dependency::greater_eq("methylamine", "1.0.0-1"),
-    //         Dependency::less_eq("morality", "2"),
-    //         Dependency::script_post("regret"),
-    //         Dependency::rpmlib("CompressedFileNames", "3.0.4-1"),
-    //         Dependency::rpmlib("FileDigests", "4.6.0-1"),
-    //         Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"),
-    //     ]
-    // );
-    assert_eq!(
-        metadata.get_conflicts().unwrap(),
-        vec![Dependency::greater("hank", "35")]
-    );
-    assert_eq!(
-        metadata.get_obsoletes().unwrap(),
-        vec![
-            Dependency::less("gusfring", "32.1-0"),
-            Dependency::less("tucosalamanca", "444"),
-        ]
-    );
-    assert_eq!(
-        metadata.get_supplements().unwrap(),
-        vec![Dependency::eq("comedy", "0:11.1-4")]
-    );
-    assert_eq!(
-        metadata.get_suggests().unwrap(),
-        vec![Dependency::any("chilipowder")]
-    );
-    assert_eq!(
-        metadata.get_enhances().unwrap(),
-        vec![Dependency::greater("purity", "9000")]
-    );
-    assert_eq!(
-        metadata.get_recommends().unwrap(),
-        vec![
-            Dependency::any("SaulGoodman(CriminalLawyer)"),
-            Dependency::greater("huel", "9:11.0-0"),
-        ]
-    );
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_EMPTY)?;
-    let metadata = &package.metadata;
-
-    assert_eq!(metadata.is_source_package(), false);
-    assert_eq!(metadata.get_name().unwrap(), "rpm-empty");
-    assert!(metadata.get_epoch().is_err());
-    assert_eq!(metadata.get_version().unwrap(), "0");
-    assert_eq!(metadata.get_release().unwrap(), "0");
-    assert_eq!(metadata.get_arch().unwrap(), "x86_64");
-    assert_eq!(metadata.get_description().unwrap(), "");
-    assert_eq!(metadata.get_summary().unwrap(), "\"\"");
-    assert_eq!(metadata.get_license().unwrap(), "LGPL");
+    assert_eq!(metadata.get_license().unwrap(), "MIT");
     assert_eq!(metadata.get_group().unwrap(), "Unspecified");
 
     assert_eq!(metadata.get_build_host().unwrap(), "localhost");
@@ -951,125 +235,478 @@ fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
         metadata.get_payload_compressor().unwrap(),
         CompressionType::None
     );
-    assert_eq!(metadata.get_installed_size().unwrap(), 0);
+    assert_eq!(metadata.get_installed_size().unwrap(), 2048);
+
+    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(
+        metadata.get_source_rpm().unwrap(),
+        "rpm-file-types-1.0-1.src.rpm"
+    );
+    assert_eq!(
+        metadata.get_file_digest_algorithm().unwrap(),
+        DigestAlgorithm::Sha2_256
+    );
 
     assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
-    assert!(matches!(
-        metadata.get_payload_compressor().unwrap(),
-        CompressionType::None
-    ));
     assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+    assert!(matches!(
+        metadata.get_packager(),
+        Err(Error::TagNotFound(_))
+    ));
+    assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
 
-    assert!(metadata.get_file_paths()?.is_empty());
-    assert!(metadata.get_file_entries()?.is_empty());
+    // File metadata and content assertions are in payload.rs::test_files_file_types
+    assert_eq!(metadata.get_file_entries().unwrap().len(), 3);
+    assert_eq!(metadata.get_file_paths().unwrap().len(), 3);
     assert!(metadata.get_changelog_entries().unwrap().is_empty());
 
     assert_eq!(
         metadata.get_provides().unwrap(),
-        vec![
-            Dependency::eq("rpm-empty", "0-0"),
-            Dependency::eq("rpm-empty(x86-64)", "0-0"),
-        ]
+        vec![Dependency::eq("rpm-file-types", "0:1.0-1")]
     );
     assert_eq!(
         metadata.get_requires().unwrap(),
+        vec![Dependency::rpmlib("LargeFiles", "4.12.0-1")]
+    );
+    assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
+    assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
+    assert_eq!(metadata.get_supplements().unwrap(), vec![]);
+    assert_eq!(metadata.get_suggests().unwrap(), vec![]);
+    assert_eq!(metadata.get_enhances().unwrap(), vec![]);
+    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+
+    // Signature header checksums (v6 package)
+    assert_eq!(
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "7874f3b5b4cce3bfb26c3899ffdb5c3f13aeaec4f2b45e9f47e212776a0037fa"
+    );
+    assert_eq!(
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
+            .unwrap(),
+        "dc8a28fd295c68837f45a81be188b869d52cdec557048629656f81f18909788f"
+    );
+
+    // Payload digest
+    assert_eq!(
+        metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+            .unwrap(),
+        vec!["247ac97e28b950c53f1fa3b34d9eb55d53100d12f60c785b2b8ce6c497fd3231"]
+    );
+
+    Ok(())
+}
+
+/// Parse v4 and v6 rpm-basic fixtures and verify metadata fields.
+#[test]
+fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
+    let v4 = Package::open(common::pkgs::v4::RPM_BASIC)?;
+    let v6 = Package::open(common::pkgs::v6::RPM_BASIC)?;
+
+    for package in [&v4, &v6] {
+        let metadata = &package.metadata;
+
+        assert_eq!(metadata.is_source_package(), false);
+        assert_eq!(metadata.get_name().unwrap(), "rpm-basic");
+        assert_eq!(metadata.get_epoch().unwrap(), 1);
+        assert_eq!(metadata.get_version().unwrap(), "2.3.4");
+        assert_eq!(metadata.get_release().unwrap(), "5.el9");
+        assert_eq!(metadata.get_arch().unwrap(), "noarch");
+        assert_eq!(
+            metadata.get_description().unwrap(),
+            "This package attempts to exercise basic features of RPM packages."
+        );
+        assert_eq!(
+            metadata.get_summary().unwrap(),
+            "A package for exercising basic features of RPM"
+        );
+        assert_eq!(metadata.get_license().unwrap(), "MPL-2.0");
+        assert_eq!(
+            metadata.get_url().unwrap(),
+            "http://www.savewalterwhite.com/"
+        );
+        assert_eq!(metadata.get_packager().unwrap(), "Walter White");
+        assert_eq!(metadata.get_vendor().unwrap(), "Los Pollos Hermanos");
+        assert_eq!(metadata.get_group().unwrap(), "Development/Tools");
+        assert_eq!(metadata.get_vcs().unwrap(), "https://github.com/rpm-rs/rpm");
+        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+
+        assert_eq!(metadata.get_build_host().unwrap(), "localhost");
+        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+
+        assert_eq!(
+            metadata.get_payload_compressor().unwrap(),
+            CompressionType::None
+        );
+
+        // File metadata and content assertions are in payload.rs::test_basic_package_files
+        assert_eq!(metadata.get_file_entries().unwrap().len(), 11);
+        assert_eq!(metadata.get_file_paths().unwrap().len(), 11);
+
+        assert_eq!(
+            metadata.get_changelog_entries().unwrap(),
+            vec![
+                ChangelogEntry {
+                    name: "Walter White <ww@savewalterwhite.com> - 3.3.3-3".to_owned(),
+                    timestamp: 1623672000,
+                    description: "- I'm not in the meth business. I'm in the empire business."
+                        .to_owned()
+                },
+                ChangelogEntry {
+                    name: "Gustavo Fring <gus@lospolloshermanos.com> - 2.2.2-2".to_owned(),
+                    timestamp: 1619352000,
+                    description: "- Never Make The Same Mistake Twice.".to_owned()
+                },
+                ChangelogEntry {
+                    name: "Mike Ehrmantraut <mike@lospolloshermanos.com> - 1.1.1-1".to_owned(),
+                    timestamp: 1617192000,
+                    description: "- Just because you shot Jesse James, don't make you Jesse James."
+                        .to_owned()
+                },
+            ]
+        );
+
+        assert_eq!(
+            metadata.get_provides().unwrap(),
+            vec![
+                Dependency::any("/usr/bin/ls"),
+                Dependency::any("aaronpaul"),
+                Dependency::any("breaking(bad)"),
+                Dependency::config("rpm-basic", "1:2.3.4-5.el9"),
+                Dependency::eq("rpm-basic", "1:2.3.4-5.el9"),
+                Dependency::eq("shock", "33")
+            ]
+        );
+        assert_eq!(
+            metadata.get_conflicts().unwrap(),
+            vec![Dependency::greater("hank", "35")]
+        );
+        assert_eq!(
+            metadata.get_obsoletes().unwrap(),
+            vec![
+                Dependency::less("gusfring", "32.1-0"),
+                Dependency::less("tucosalamanca", "444"),
+            ]
+        );
+        assert_eq!(
+            metadata.get_supplements().unwrap(),
+            vec![Dependency::eq("comedy", "0:11.1-4")]
+        );
+        assert_eq!(
+            metadata.get_suggests().unwrap(),
+            vec![Dependency::any("chilipowder")]
+        );
+        assert_eq!(
+            metadata.get_enhances().unwrap(),
+            vec![Dependency::greater("purity", "9000")]
+        );
+        assert_eq!(
+            metadata.get_recommends().unwrap(),
+            vec![
+                Dependency::any("SaulGoodman(CriminalLawyer)"),
+                Dependency::greater("huel", "9:11.0-0"),
+            ]
+        );
+
+        // Both v4 and v6 have SHA256 header checksum
+        assert!(
+            metadata
+                .signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+                .is_ok()
+        );
+    }
+
+    // Signature header checksums - v4 has SHA1, v6 has SHA3_256
+    assert_eq!(
+        v4.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "3899d2a1cba29b927bb75acdf4f6741e0035746bb0292daf378dbc0e19e102cc"
+    );
+    assert_eq!(
+        v4.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)
+            .unwrap(),
+        "7059f15df48653aef7f01c66de941daded095dd0"
+    );
+
+    assert_eq!(
+        v6.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "96e5e2b8bd9d481507d219e74f6266380e7d2fd60c43c16f9636949b0bc55391"
+    );
+    assert_eq!(
+        v6.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
+            .unwrap(),
+        "13c481f44babdabd4cc4bbfbf4e387f01cb341714d562f21666f5119291469e6"
+    );
+
+    // Payload digests differ between v4 and v6
+    assert_eq!(
+        v4.metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+            .unwrap(),
+        vec!["ed47768313fc0fa57e170ba6118990df05dd0d0cb31da091a10251796528aa5b"]
+    );
+    assert_eq!(
+        v6.metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+            .unwrap(),
+        vec!["34e41a24b89600ecd770b8420439325392155a9e44117518ea22b0643a94ea58"]
+    );
+
+    // v4 and v6 have different rpmlib requires
+    assert_eq!(
+        v4.metadata.get_requires().unwrap(),
+        vec![
+            Dependency::script_pre("/usr/sbin/ego"),
+            Dependency::config("rpm-basic", "1:2.3.4-5.el9"),
+            Dependency::greater_eq("methylamine", "1.0.0-1"),
+            Dependency::less_eq("morality", "2"),
+            Dependency::script_post("regret"),
+            Dependency::rpmlib("CompressedFileNames", "3.0.4-1"),
+            Dependency::rpmlib("FileDigests", "4.6.0-1"),
+            Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"),
+        ]
+    );
+    assert_eq!(
+        v6.metadata.get_requires().unwrap(),
+        vec![
+            Dependency::script_pre("/usr/sbin/ego"),
+            Dependency::config("rpm-basic", "1:2.3.4-5.el9"),
+            Dependency::greater_eq("methylamine", "1.0.0-1"),
+            Dependency::less_eq("morality", "2"),
+            Dependency::script_post("regret"),
+            Dependency::rpmlib("LargeFiles", "4.12.0-1"),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Parse v4 and v6 rpm-empty fixtures and verify metadata for a minimal
+/// package with no files, no changelogs, and only auto-generated provides.
+#[test]
+fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
+    let v4 = Package::open(common::pkgs::v4::RPM_EMPTY)?;
+    let v6 = Package::open(common::pkgs::v6::RPM_EMPTY)?;
+
+    for package in [&v4, &v6] {
+        let metadata = &package.metadata;
+
+        assert_eq!(metadata.is_source_package(), false);
+        assert_eq!(metadata.get_name().unwrap(), "rpm-empty");
+        assert!(metadata.get_epoch().is_err());
+        assert_eq!(metadata.get_version().unwrap(), "0");
+        assert_eq!(metadata.get_release().unwrap(), "0");
+        assert_eq!(metadata.get_arch().unwrap(), "x86_64");
+        assert_eq!(metadata.get_description().unwrap(), "");
+        assert_eq!(metadata.get_summary().unwrap(), "\"\"");
+        assert_eq!(metadata.get_license().unwrap(), "LGPL");
+        assert_eq!(metadata.get_group().unwrap(), "Unspecified");
+
+        assert_eq!(metadata.get_build_host().unwrap(), "localhost");
+        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+
+        assert_eq!(
+            metadata.get_payload_compressor().unwrap(),
+            CompressionType::None
+        );
+        assert_eq!(metadata.get_installed_size().unwrap(), 0);
+
+        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+        assert_eq!(metadata.get_source_rpm().unwrap(), "rpm-empty-0-0.src.rpm");
+        assert_eq!(
+            metadata.get_file_digest_algorithm().unwrap(),
+            DigestAlgorithm::Sha2_256
+        );
+
+        assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
+        assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+        assert!(matches!(
+            metadata.get_packager(),
+            Err(Error::TagNotFound(_))
+        ));
+        assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
+
+        assert!(metadata.get_file_paths()?.is_empty());
+        assert!(metadata.get_file_entries()?.is_empty());
+        assert!(metadata.get_changelog_entries().unwrap().is_empty());
+
+        assert_eq!(
+            metadata.get_provides().unwrap(),
+            vec![
+                Dependency::eq("rpm-empty", "0-0"),
+                Dependency::eq("rpm-empty(x86-64)", "0-0"),
+            ]
+        );
+        assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
+        assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
+        assert_eq!(metadata.get_supplements().unwrap(), vec![]);
+        assert_eq!(metadata.get_suggests().unwrap(), vec![]);
+        assert_eq!(metadata.get_enhances().unwrap(), vec![]);
+        assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+
+        // Both v4 and v6 have SHA256 header checksum
+        assert!(
+            metadata
+                .signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+                .is_ok()
+        );
+
+        // Both v4 and v6 have the same PAYLOADSHA256
+        assert_eq!(
+            metadata
+                .header
+                .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+                .unwrap(),
+            vec!["23d0422b4fea28f771e872741bb370790b3cd0538eafb461233e820b84b57a2e"]
+        );
+    }
+
+    // v4 Signature header checksums
+    assert_eq!(
+        v4.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "bd638771e0ddee7fb4fd2201e13ef00d10da7b23769fd4d3709e7469203565cd"
+    );
+    assert_eq!(
+        v4.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)
+            .unwrap(),
+        "a372f6650d7b0391a0698562fb3165a7ac8f0492"
+    );
+
+    // v6 Signature header checksums
+    assert_eq!(
+        v6.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "e2853aef4ed2f0b9be391c1222a7fa39e6ba187e81a7d2e963254e10a0e4f21b"
+    );
+    assert_eq!(
+        v6.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
+            .unwrap(),
+        "33666a1f97bf70776f7a6b5f7af9e71f2f7f5dd5adfac4f74d68829490ac87bd"
+    );
+    assert!(
+        v6.metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)
+            .is_err()
+    );
+
+    // v4 has rpmlib requires, v6 does not
+    assert_eq!(
+        v4.metadata.get_requires().unwrap(),
         vec![
             Dependency::rpmlib("CompressedFileNames", "3.0.4-1"),
             Dependency::rpmlib("FileDigests", "4.6.0-1"),
             Dependency::rpmlib("PayloadFilesHavePrefix", "4.0-1"),
         ]
     );
-    assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
-    assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
-    assert_eq!(metadata.get_supplements().unwrap(), vec![]);
-    assert_eq!(metadata.get_suggests().unwrap(), vec![]);
-    assert_eq!(metadata.get_enhances().unwrap(), vec![]);
-    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+    assert_eq!(v6.metadata.get_requires().unwrap(), vec![]);
 
     Ok(())
 }
 
+/// Parse v4 and v6 rpm-empty source RPM fixtures and verify metadata.
 #[test]
-#[ignore]
 fn test_empty_source_package() -> Result<(), Box<dyn std::error::Error>> {
-    let package = Package::open(common::pkgs::v4::RPM_EMPTY_SRC)?;
-    let metadata = &package.metadata;
+    let v4 = Package::open(common::pkgs::v4::src::RPM_EMPTY_SRC)?;
+    let v6 = Package::open(common::pkgs::v6::src::RPM_EMPTY_SRC)?;
 
-    assert_eq!(metadata.is_source_package(), true);
-    assert_eq!(metadata.get_name().unwrap(), "rpm-empty");
-    assert!(metadata.get_epoch().is_err());
-    assert_eq!(metadata.get_version().unwrap(), "0");
-    assert_eq!(metadata.get_release().unwrap(), "0");
-    assert_eq!(metadata.get_arch().unwrap(), "x86_64");
-    assert_eq!(metadata.get_description().unwrap(), "");
-    assert_eq!(metadata.get_summary().unwrap(), "\"\"");
-    assert_eq!(metadata.get_group().unwrap(), "Unspecified");
-    assert_eq!(metadata.get_license().unwrap(), "LGPL");
+    for package in [&v4, &v6] {
+        let metadata = &package.metadata;
 
-    assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+        assert_eq!(metadata.is_source_package(), true);
+        assert_eq!(metadata.get_name().unwrap(), "rpm-empty");
+        assert!(metadata.get_epoch().is_err());
+        assert_eq!(metadata.get_version().unwrap(), "0");
+        assert_eq!(metadata.get_release().unwrap(), "0");
+        assert_eq!(metadata.get_arch().unwrap(), "x86_64");
+        assert_eq!(metadata.get_description().unwrap(), "");
+        assert_eq!(metadata.get_summary().unwrap(), "\"\"");
+        assert_eq!(metadata.get_group().unwrap(), "Unspecified");
+        assert_eq!(metadata.get_license().unwrap(), "LGPL");
 
-    assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
-    assert!(matches!(
-        metadata.get_payload_compressor().unwrap(),
-        CompressionType::None
-    ));
-    assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+        assert_eq!(metadata.get_build_host().unwrap(), "localhost");
+        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
 
+        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+        assert_eq!(
+            metadata.get_file_digest_algorithm().unwrap(),
+            DigestAlgorithm::Sha2_256
+        );
+
+        assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
+        assert!(matches!(
+            metadata.get_payload_compressor().unwrap(),
+            CompressionType::None
+        ));
+        assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+        assert!(matches!(
+            metadata.get_packager(),
+            Err(Error::TagNotFound(_))
+        ));
+        assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
+        assert!(matches!(
+            metadata.get_source_rpm(),
+            Err(Error::TagNotFound(_))
+        ));
+        assert_eq!(metadata.get_installed_size().unwrap(), 162);
+
+        // File metadata and content assertions are in payload.rs::test_files_empty_source_package
+        assert_eq!(metadata.get_file_entries().unwrap().len(), 1);
+        assert_eq!(metadata.get_file_paths().unwrap().len(), 1);
+        assert!(metadata.get_changelog_entries().unwrap().is_empty());
+
+        assert_eq!(
+            metadata.get_provides().unwrap(),
+            vec![Dependency::eq("rpm-empty", "0-0")]
+        );
+        assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
+        assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
+        assert_eq!(metadata.get_supplements().unwrap(), vec![]);
+        assert_eq!(metadata.get_suggests().unwrap(), vec![]);
+        assert_eq!(metadata.get_enhances().unwrap(), vec![]);
+        assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+    }
+
+    // v4 has different rpmlib requires than v6
     assert_eq!(
-        metadata.get_file_entries().unwrap(),
-        vec![FileEntry {
-            path: PathBuf::from("rpm-empty.spec"),
-            mode: FileMode::regular(0o644),
-            ownership: FileOwnership {
-                user: "root".to_owned(),
-                group: "root".to_owned()
-            },
-            modified_at: Timestamp(1681068559),
-            size: 162,
-            flags: FileFlags::SPECFILE,
-            digest: Some(FileDigest {
-                digest: "c72be74016e47dd5fec1021d399c945c2dae699e9c80c968c00a95e6ac82857c"
-                    .to_owned(),
-                algo: DigestAlgorithm::Sha2_256,
-            }),
-            caps: None,
-            linkto: "".to_owned(),
-            ima_signature: None,
-        },]
-    );
-    assert!(metadata.get_changelog_entries().unwrap().is_empty());
-
-    assert_eq!(
-        metadata.get_provides().unwrap(),
-        vec![Dependency::eq("rpm-empty", "0-0")]
-    );
-    assert_eq!(
-        metadata.get_requires().unwrap(),
+        v4.metadata.get_requires().unwrap(),
         vec![
             Dependency::rpmlib("CompressedFileNames", "3.0.4-1"),
             Dependency::rpmlib("FileDigests", "4.6.0-1"),
         ]
     );
-
-    assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
-    assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
-    assert_eq!(metadata.get_supplements().unwrap(), vec![]);
-    assert_eq!(metadata.get_suggests().unwrap(), vec![]);
-    assert_eq!(metadata.get_enhances().unwrap(), vec![]);
-    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
-
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn test_no_rpm_files() -> Result<(), Box<dyn std::error::Error>> {
-    let rpm_file_path = common::pkgs::v4::RPM_EMPTY;
-    let package = Package::open(rpm_file_path)?;
-
-    assert!(package.metadata.get_file_paths()?.is_empty());
-    assert!(package.metadata.get_file_entries()?.is_empty());
+    assert_eq!(
+        v6.metadata.get_requires().unwrap(),
+        vec![Dependency::rpmlib("LargeFiles", "4.12.0-1")]
+    );
 
     Ok(())
 }

@@ -10,13 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `PackageBuilder::default_file_attrs()` and `PackageBuilder::default_dir_attrs()` for setting default ownership and permissions, similar to `%defattr` in RPM spec files.
-- `Package::signature_key_fingerprints()`
+- `Package::signatures()` for fetching RPM header signatures from the package. Does not include legacy header + payload signatures.
 - The ability to mark files as `%missingok`
 - Support for singing and verifying packages that use OpenPGP v6 signatures.
 - Support for signing packages using select subkeys rather than the primary key of the provided key material.
 - Signatures now include the `SignersUserID` subpacket when the key material contains a user ID.
 - `PackageBuilder::with_dir_entry()` as a shortcut to adding a directory entry on the RPM (doesn't add contents).
 - `PackageBuilder::with_dir()` adds a directory and recursively adds all files found in that directory to the RPM. Adding a file individually (e.g. to set different permissions / options on it) will still work - files added individually will take precedence over files added using `with_dir()`.
+- `PackageBuilder::order_with_requires()` for specifying ordering hints during package installation/upgrade without adding actual dependencies (similar to `OrderWithRequires` in spec files).
+- `BuildConfig::source_date()` for setting a fixed timestamp for reproducible builds.
+- `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
+- `Signer` and `Verifier` now support loading keyring files containing multiple OpenPGP certificates.
+- `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
+- ML-DSA package signatures can now be created and verified.
+- `Verifier` can now load multiple keys independently - see "Breaking Changes".
+- `Package::write_to()` writes a package to a file or directory. If given a directory, auto-generates the filename from package NEVRA.
 
 ### Fixed
 
@@ -27,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PackageBuilder::with_file_contents()` was not respecting `source_date`.
 - A number of issues / discrepancies in package payload writing.
 - A number of issues / discrepancies in the treatment of ghost files.
+- `FileVerifyFlags::default()` now correctly sets all 32 bits (0xffffffff) to match RPM's behavior, including reserved bits.
+- Package dependency lists are now sorted alphabetically by name to match RPM's ordering.
+- v6 packages now correctly include `RPMTAG_SOURCENEVR` and exclude the v4-only `RPMTAG_PAYLOADSHA256ALGO` tag.
+- Auto-generated provides now match RPM's behavior.
+  - `NAME(ISA)` provides/requires now use ISA format (`x86-64` instead of `x86_64`)
+  - `NAME(ISA)` provides/requires are omitted for `noarch`, version uses full EVR format (`[epoch:]version-release`)
+  - `config(NAME)` provides/requires are auto-generated when the package contains `%config` files.
+- Built packages now include reserved space in the signature header like `rpm` does.
+- `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
+- `Package::sign()` and `Package::sign_with_timestamps()` now append to `RPMSIGTAG_OPENPGPSIGNATURES` instead of replacing the signature header.
+- `Package::sign()`, `Package::sign_with_timestamps()`, and `Package::clear_signatures()` now preserve file IMA signatures.
 
 ### Changed
 
@@ -42,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer` is no longer generic over a key type. Code using `Signer<SecretKey>` should use `Signer` instead or else use `HsmSigner<SecretKey>` which exposes a similar API to the original `Signer<SecretKey>` for users who were using custom `SecretKey` implementations with hardware security modules.
 - `Signer::new()` now takes a `SecretKey` directly (no change in practice, but the type signature changed).
 - `Signer` fields are no longer public; use the provided constructor methods instead.
+- Renamed `Verifier::load_from_asc`, `load_from_asc_file`, `load_from_asc_bytes` to `from_asc`, `from_asc_file`, `from_asc_bytes`. The `load_from_*` names now refer to new methods that take `&mut self` and append key material to an existing `Verifier`.
+- Renamed `Signer::load_from_asc`, `load_from_asc_file`, `load_from_asc_bytes` to `from_asc`, `from_asc_file`, `from_asc_bytes`.
 - Removed `AlgorithmType` enum and the `algorithm()` method from the `Signing` and `Verifying` traits. This type was unused — the signature tag routing is determined from the signature packet itself.
 - Refactored the `FileOptions` functions. Use `FileOptions::new()`, `FileOptions::dir()`, `FileOptions::symlink()`, `FileOptions::ghost()` for a regular file, directory, symbolic link, or "ghost" file, respectively.
 - Renamed file attribute methods on `FileOptionsBuilder` to drop the `is_` prefix:
@@ -49,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `is_config_noreplace()` is replaced by chaining `config().noreplace()`.
   `missingok()` is now a standalone method (it is an independent RPM attribute, not
   just a sub-attribute of `%config`). New methods: `doc()`, `artifact()`, `noreplace()`.
+- Removed `Package::signature_key_ids()` - `Package::signatures()` is a more useful API.
+- Moved `source_date()` from `PackageBuilder` to `BuildConfig`.
 
 ## 0.19.0
 

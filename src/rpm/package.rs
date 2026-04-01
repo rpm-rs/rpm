@@ -38,8 +38,10 @@ fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Err
     let original = original.as_ref();
 
     let Ok(metadata) = original.metadata() else {
-        // If the target does not exist (or accurately we can't metadata it),
-        // don't create symlink on Windows since it will fail anyways.
+        // Windows symlink creation requires the target to exist and be accessible.
+        // Relative symlinks (e.g., "../dir") or targets outside the extraction directory
+        // will fail, so we silently skip them to allow extraction to continue.
+        // This matches RPM's behavior where symlinks are informational metadata.
         return Ok(());
     };
 
@@ -99,13 +101,51 @@ impl Package {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
+    /// Write the RPM package to a file or directory
+    ///
+    /// If `path` is an existing directory, the package will be written with an auto-generated
+    /// filename based on the package NEVRA (name-version-release.arch.rpm).
+    /// Otherwise, `path` is treated as a file path (ensuring it has a .rpm extension).
+    ///
+    /// Returns the actual path where the package was written.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test").build()?;
+    ///
+    /// // Write to a directory with auto-generated name
+    /// let path = pkg.write_to("/tmp")?;
+    /// // Creates: /tmp/foo-1.0.0-1.x86_64.rpm
+    ///
+    /// // Write to a specific file
+    /// let path = pkg.write_to("/tmp/custom-name.rpm")?;
+    /// // Creates: /tmp/custom-name.rpm
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn write_to(&self, path: impl AsRef<Path>) -> Result<PathBuf, Error> {
+        let path = path.as_ref();
+        let filename = format!("{}.rpm", self.metadata.get_nevra()?.nvra());
+
+        let output_path = if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
+            path.join(filename)
+        } else {
+            path.with_extension("rpm")
+        };
+
+        self.write_file(&output_path)?;
+        Ok(output_path)
+    }
+
     /// Iterate over the file contents of the package payload
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.files()? {
     ///     let file = entry?;
     ///     // do something with file.content
@@ -135,10 +175,19 @@ impl Package {
     /// directory itself already exists, the operation will fail. All extracted files will be
     /// dropped relative to the provided directory (it will not install any files).
     ///
+    /// ## Platform-specific behavior
+    ///
+    /// **Windows**: Symbolic links are only created if their target exists at extraction time.
+    /// Symlinks with relative targets (e.g., `../dir`) or targets outside the extraction
+    /// directory will be silently skipped. This is because Windows symlink creation requires
+    /// the target to exist and be accessible.
+    ///
+    /// **Unix**: All symbolic links are created regardless of whether their target exists.
+    ///
     /// # Examples
     ///
     /// ```text
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// package.extract(&package.metadata.get_name()?)?;
     /// ```
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
@@ -164,6 +213,11 @@ impl Package {
         let file_entries = self.metadata.get_file_entries()?;
 
         for file_entry in file_entries.iter() {
+            // Ghost files are not present in the payload archive and should not be created
+            if file_entry.flags.contains(FileFlags::GHOST) {
+                continue;
+            }
+
             let mut entry_reader = payload::Reader::new(&mut archive, &file_entries)?;
             if entry_reader.is_trailer() {
                 return Ok(());
@@ -207,24 +261,17 @@ impl Package {
         Ok(())
     }
 
-    // TODO: this should perhaps modify the header in-place instead?
     /// Generate a fresh, unsigned signature header
     #[cfg(feature = "signature-meta")]
     pub fn clear_signatures(&mut self) -> Result<(), Error> {
-        // create a temporary byte repr of the header and re-create all hashes
+        // create a temporary byte repr of the header
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
-        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
-        let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header_bytes.as_slice()));
-        let mut sig_header_builder = SignatureHeaderBuilder::new()
-            .set_sha256_digest(&header_digest_sha256)
-            .set_sha3_256_digest(&header_digest_sha3_256);
-        if self.metadata.signature.has_v4_size_header() {
-            sig_header_builder = sig_header_builder
-                .set_content_length(header_bytes.len() as u64 + self.content.len() as u64);
-        }
-        self.metadata.signature = sig_header_builder.build()?;
+
+        self.metadata.signature = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
+            .clear_signatures()
+            .calculate_digests(&header_bytes)
+            .build()?;
 
         Ok(())
     }
@@ -246,11 +293,11 @@ impl Package {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let mut package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// let raw_secret_key = std::fs::read("./tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret")?;
-    /// let signer = rpm::signature::pgp::Signer::load_from_asc_bytes(&raw_secret_key)?;
+    /// let signer = rpm::signature::pgp::Signer::from_asc_bytes(&raw_secret_key)?;
     /// // It's recommended to use timestamp of last commit in your VCS
     /// let source_date = 1_600_000_000;
     /// package.sign_with_timestamp(signer, source_date)?;
@@ -266,24 +313,13 @@ impl Package {
         S: signature::Signing<Signature = Vec<u8>>,
     {
         let t = t.try_into().unwrap();
-        // create a temporary byte repr of the header and re-create all hashes
+        // create a temporary byte repr of the header
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header_bytes)?;
 
-        let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header_bytes.as_slice()));
         let header_signature = signer.sign(header_bytes.as_slice(), t)?;
-
-        let mut sig_header_builder = SignatureHeaderBuilder::new();
-
-        if self.metadata.signature.has_v4_size_header() {
-            sig_header_builder = sig_header_builder
-                .set_content_length(header_bytes.len() as u64 + self.content.len() as u64);
-        }
-
-        let sig_header = sig_header_builder
-            .set_sha256_digest(&header_digest_sha256)
-            .set_content_length(header_bytes.len() as u64 + self.content.len() as u64)
+        let sig_header = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
+            .calculate_digests(&header_bytes)
             .add_openpgp_signature(header_signature)
             .build()?;
 
@@ -338,40 +374,45 @@ impl Package {
         }
     }
 
-    /// Return the key ids (issuers) of the signature as hexadecimal strings.
+    /// Return parsed information about each OpenPGP header signature in the package.
+    ///
+    /// Does not return legacy header + payload signatures (v3 signatures).
+    ///
+    /// Returns an empty `Vec` if the package is unsigned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::Package::open("my-package.rpm")?;
+    ///
+    /// for sig in pkg.signatures()? {
+    ///     println!("Version: {:?}", sig.version());
+    ///     println!("Algorithm: {:?}", sig.algorithm());
+    ///     if let Some(fp) = sig.fingerprint() {
+    ///         println!("Fingerprint: {fp}");
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "signature-pgp")]
-    pub fn signature_key_ids(&self) -> Result<Vec<String>, Error> {
-        let mut key_ids = Vec::new();
-        for sig in self.parse_signature_packets()? {
-            let ids: Vec<String> = sig.issuer_key_id().iter().map(|x| format!("{x}")).collect();
-            if ids.len() != 1 {
-                return Err(Error::UnexpectedIssuerCount(ids.len().try_into().unwrap()));
-            }
-            key_ids.extend(ids);
-        }
-        Ok(key_ids)
-    }
+    pub fn signatures(&self) -> Result<Vec<signature::pgp::SignatureInfo>, Error> {
+        let packets = match self.parse_signature_packets() {
+            Ok(packets) => packets,
+            Err(Error::NoSignatureFound) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
 
-    /// Return the fingerprints (issuers) of the signature as hexadecimal strings.
-    #[cfg(feature = "signature-pgp")]
-    pub fn signature_fingerprints(&self) -> Result<Vec<String>, Error> {
-        let mut fingerprints = Vec::new();
-        for sig in self.parse_signature_packets()? {
-            let fps: Vec<String> = sig
-                .issuer_fingerprint()
-                .iter()
-                .map(|x| format!("{x:x}"))
-                .collect();
-            if fps.len() != 1 {
-                return Err(Error::UnexpectedIssuerCount(fps.len().try_into().unwrap()));
-            }
-            fingerprints.extend(fps);
-        }
-        Ok(fingerprints)
+        Ok(packets
+            .iter()
+            .map(signature::pgp::SignatureInfo::from_pgp_signature)
+            .collect())
     }
 
     // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
     //        was present and verified or whether it was not present at all.
+    // https://github.com/rpm-rs/rpm/issues/128
 
     /// Verify the signature as present within the RPM package.
     #[cfg(feature = "signature-meta")]
@@ -390,13 +431,17 @@ impl Package {
 
         // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
         if let Ok(openpgp_signatures) = openpgp_sigs {
+            let mut last_err = None;
             for base64_sig in openpgp_signatures.iter() {
                 let signature = decode_sig(base64_sig)?;
                 signature::echo_signature("signature_header(header only)", &signature);
-                verifier.verify(header_bytes.as_slice(), &signature)?;
+                match verifier.verify(header_bytes.as_slice(), &signature) {
+                    Ok(()) => return Ok(()),
+                    Err(e) => last_err = Some(e),
+                }
             }
 
-            return Ok(());
+            return Err(last_err.unwrap_or(Error::NoSignatureFound));
         } else {
             let rsa_sig = &self
                 .metadata
@@ -627,9 +672,11 @@ impl PackageMetadata {
     /// See: [crate::Nevra]
     #[inline]
     pub fn get_nevra(&'_ self) -> Result<Nevra<'_>, Error> {
+        // Epoch defaults to 0 if not present
+        let epoch = self.get_epoch().unwrap_or(0);
         Ok(Nevra::new(
             Cow::Borrowed(self.get_name()?),
-            Cow::Owned(self.get_epoch()?.to_string()),
+            Cow::Owned(epoch.to_string()),
             Cow::Borrowed(self.get_version()?),
             Cow::Borrowed(self.get_release()?),
             Cow::Borrowed(self.get_arch()?),
@@ -918,7 +965,7 @@ impl PackageMetadata {
     ///
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat this
     /// package as a "requires" when the matching package is installed. Unlike a "requires" however,
-    /// if installing it would cause errors, it can be ignored ignored without error.
+    /// if installing it would cause errors, it can be ignored without error.
     pub fn get_supplements(&self) -> Result<Vec<Dependency>, Error> {
         self.get_dependencies(
             IndexTag::RPMTAG_SUPPLEMENTNAME,
@@ -931,9 +978,9 @@ impl PackageMetadata {
     /// This function returns the computed (byte) boundaries between those segments in the package file
     /// as if it were written out on-disk.
     ///
-    /// ```ignore
+    /// ```
     /// # use rpm::Package;
-    /// # let package = Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm").unwrap();
+    /// # let package = Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm").unwrap();
     /// let offsets = package.metadata.get_package_segment_offsets();
     /// let lead = offsets.lead..offsets.signature_header;
     /// let sig_header = offsets.signature_header..offsets.header;
@@ -1008,9 +1055,9 @@ impl PackageMetadata {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for path in package.metadata.get_file_paths()? {
     ///     println!("{}", path.display());
     /// }
@@ -1086,9 +1133,9 @@ impl PackageMetadata {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let package = rpm::Package::open("tests/assets/RPMS/v4/noarch/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+    /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// for entry in package.metadata.get_file_entries()? {
     ///     println!("{} is {} bytes", entry.path.display(), entry.size);
     /// }
@@ -1136,8 +1183,8 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS);
 
-        // Look for the file capabilities tag
-        // but it's not required so don't error out if it's not
+        // Look for the file capabilities tag, but it's not required so don't error out if it's not
+        // present
         let caps = match self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILECAPS)
@@ -1324,6 +1371,14 @@ impl Iterator for FileIterator<'_> {
         // @todo: probably safe to hand out a reference instead of cloning, just a bit more painful
         let file_entry = self.file_entries[self.count].clone();
         self.count += 1;
+
+        // Ghost files are not in the payload archive, so return them immediately with empty content
+        if file_entry.flags.contains(FileFlags::GHOST) {
+            return Some(Ok(RpmFile {
+                metadata: file_entry,
+                content: Vec::new(),
+            }));
+        }
 
         let reader = payload::Reader::new(&mut self.archive, &self.file_entries);
 

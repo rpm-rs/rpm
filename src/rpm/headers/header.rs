@@ -150,6 +150,23 @@ where
         Ok(())
     }
 
+    /// Returns all entries in this header with fully resolved data.
+    ///
+    /// This method returns a vector of (tag, IndexData) pairs where all lazy-loaded
+    /// data (strings, binaries) has been resolved from the store. Entries are
+    /// guaranteed to be sorted by tag number.
+    ///
+    /// This is primarily useful for debugging and testing purposes.
+    pub fn get_all_entries(&self) -> Result<Vec<(u32, IndexData)>, Error> {
+        self.index_entries
+            .iter()
+            .map(|entry| {
+                let data = self.resolve_entry_data(entry)?;
+                Ok((entry.tag, data))
+            })
+            .collect()
+    }
+
     pub fn entry_is_present(&self, tag: T) -> bool {
         self.index_entries
             .iter()
@@ -457,14 +474,6 @@ where
         let data_size = self.index_header.data_section_size;
 
         INDEX_HEADER_SIZE + index_size + data_size
-    }
-}
-
-#[cfg(feature = "signature-meta")]
-impl Header<IndexSignatureTag> {
-    pub(crate) fn has_v4_size_header(&self) -> bool {
-        self.entry_is_present(IndexSignatureTag::RPMSIGTAG_SIZE)
-            || self.entry_is_present(IndexSignatureTag::RPMSIGTAG_LONGSIZE)
     }
 }
 
@@ -861,7 +870,7 @@ impl<T: Tag> fmt::Display for IndexEntry<T> {
 
 /// Data as present in a [`IndexEntry`](self::IndexEntry) .
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum IndexData {
+pub enum IndexData {
     Null,
     Char(Vec<u8>),
     Int8(Vec<u8>),
@@ -1044,5 +1053,59 @@ mod test {
         assert_eq!(-48, entry.offset);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_from_entries_sorts_tags() {
+        // Create entries in non-sorted order
+        let entries = vec![
+            IndexEntry::new(
+                IndexTag::RPMTAG_VERSION,
+                IndexData::StringTag("1.0.0".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_NAME,
+                IndexData::StringTag("test".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_RELEASE,
+                IndexData::StringTag("1".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_ARCH,
+                IndexData::StringTag("x86_64".to_string()),
+            ),
+            IndexEntry::new(
+                IndexTag::RPMTAG_LICENSE,
+                IndexData::StringTag("MIT".to_string()),
+            ),
+        ];
+
+        // Verify they're not sorted
+        let tags_before: Vec<u32> = entries.iter().map(|e| e.tag).collect();
+        assert!(
+            !tags_before.windows(2).all(|w| w[0] <= w[1]),
+            "Input should not be sorted"
+        );
+
+        // Create header with from_entries
+        let header = Header::from_entries(entries, IndexTag::RPMTAG_HEADERIMMUTABLE);
+
+        // Extract tags from the created header (skip the region tag at index 0)
+        let tags_after: Vec<u32> = header.index_entries.iter().skip(1).map(|e| e.tag).collect();
+
+        // Verify they're now sorted
+        assert!(
+            tags_after.windows(2).all(|w| w[0] <= w[1]),
+            "Tags should be sorted: {:?}",
+            tags_after
+        );
+
+        // Verify the specific expected order
+        assert_eq!(tags_after[0], IndexTag::RPMTAG_NAME as u32);
+        assert_eq!(tags_after[1], IndexTag::RPMTAG_VERSION as u32);
+        assert_eq!(tags_after[2], IndexTag::RPMTAG_RELEASE as u32);
+        assert_eq!(tags_after[3], IndexTag::RPMTAG_LICENSE as u32);
+        assert_eq!(tags_after[4], IndexTag::RPMTAG_ARCH as u32);
     }
 }

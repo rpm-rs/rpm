@@ -14,7 +14,7 @@ use super::compressor::Compressor;
 use super::headers::*;
 use super::payload;
 use crate::errors::*;
-use crate::{Timestamp, constants::*};
+use crate::{Evr, Timestamp, constants::*};
 
 #[cfg(feature = "signature-meta")]
 use crate::signature;
@@ -34,6 +34,7 @@ pub enum RpmFormat {
 pub struct BuildConfig {
     format: RpmFormat,
     compression: CompressionWithLevel,
+    source_date: Option<Timestamp>,
 }
 
 impl From<RpmFormat> for BuildConfig {
@@ -57,6 +58,7 @@ impl BuildConfig {
         Self {
             format: RpmFormat::V4,
             compression: CompressionWithLevel::default(),
+            source_date: None,
         }
     }
 
@@ -65,7 +67,36 @@ impl BuildConfig {
         Self {
             format: RpmFormat::V6,
             compression: CompressionWithLevel::default(),
+            source_date: None,
         }
+    }
+
+    /// Set a fixed timestamp for reproducible builds.
+    ///
+    /// When set, this timestamp will be used for:
+    /// - Build time (`RPMTAG_BUILDTIME`)
+    /// - File modification times (`RPMTAG_FILEMTIMES`)
+    /// - Package signature timestamp
+    ///
+    /// This is equivalent to setting the `SOURCE_DATE_EPOCH` environment variable
+    /// for tools like `rpmbuild`, enabling reproducible/deterministic package builds.
+    ///
+    /// It is recommended to use the timestamp of the last commit in your VCS.
+    ///
+    /// ```
+    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let build_config = rpm::BuildConfig::default().source_date(1_600_000_000);
+    ///
+    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "some baz package")
+    ///     .using_config(build_config)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
+        self.source_date = Some(t.try_into().unwrap());
+        self
     }
 
     /// Set the compression type and/or level to be used for the payload of the built package
@@ -128,7 +159,7 @@ pub struct PackageBuilder {
     config: BuildConfig,
 
     name: String,
-    epoch: u32,
+    epoch: Option<u32>,
     version: String,
     license: String,
     arch: String,
@@ -151,6 +182,7 @@ pub struct PackageBuilder {
     suggests: Vec<Dependency>,
     enhances: Vec<Dependency>,
     supplements: Vec<Dependency>,
+    order_with_requires: Vec<Dependency>,
 
     pre_inst_script: Option<Scriptlet>,
     post_inst_script: Option<Scriptlet>,
@@ -175,7 +207,6 @@ pub struct PackageBuilder {
     vcs: Option<String>,
     cookie: Option<String>,
 
-    source_date: Option<Timestamp>,
     build_host: Option<String>,
 
     /// Default ownership and permissions for regular file entries (like `%defattr` in spec files).
@@ -206,7 +237,7 @@ impl PackageBuilder {
     pub fn new(name: &str, version: &str, license: &str, arch: &str, summary: &str) -> Self {
         Self {
             name: name.to_string(),
-            epoch: 0,
+            epoch: None,
             version: version.to_string(),
             license: license.to_string(),
             arch: arch.to_string(),
@@ -242,7 +273,7 @@ impl PackageBuilder {
     /// However, because of this, the epoch of a package must never decrease, and shouldn't be set
     /// unless required.
     pub fn epoch(mut self, epoch: u32) -> Self {
-        self.epoch = epoch;
+        self.epoch = Some(epoch);
         self
     }
 
@@ -319,27 +350,6 @@ impl PackageBuilder {
     /// ```
     pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
         self.build_host = Some(build_host.as_ref().to_owned());
-        self
-    }
-
-    /// Set source date (usually the date of the latest commit in VCS) used
-    /// to clamp modification time of included files and build time of the package.
-    ///
-    /// `dt` is number of seconds since the UNIX Epoch.
-    ///
-    /// ```
-    /// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    /// // It's recommended to use timestamp of last commit in your VCS
-    /// let source_date = 1_600_000_000;
-    /// // Do not forget
-    /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MPL-2.0", "x86_64", "some bar package")
-    ///     .source_date(source_date)
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn source_date(mut self, t: impl TryInto<Timestamp, Error = impl Debug>) -> Self {
-        self.source_date = Some(t.try_into().unwrap());
         self
     }
 
@@ -563,7 +573,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::Raw(content.into()),
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -601,7 +611,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -642,8 +652,8 @@ impl PackageBuilder {
         }
 
         self.add_data(
-            ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            ContentSource::Raw(options.symlink.clone().into_bytes()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -685,7 +695,7 @@ impl PackageBuilder {
 
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             options,
             false,
         )?;
@@ -765,7 +775,7 @@ impl PackageBuilder {
         }
         self.add_data(
             ContentSource::None,
-            self.source_date.unwrap_or(Timestamp::now()),
+            self.config.source_date.unwrap_or(Timestamp::now()),
             dir_options,
             true,
         )?;
@@ -786,7 +796,7 @@ impl PackageBuilder {
                 let options = customize(FileOptions::symlink(&dest, link_target.to_string_lossy()));
                 self.add_data(
                     ContentSource::None,
-                    self.source_date.unwrap_or(Timestamp::now()),
+                    self.config.source_date.unwrap_or(Timestamp::now()),
                     options.into(),
                     true,
                 )?;
@@ -1098,28 +1108,34 @@ impl PackageBuilder {
         self
     }
 
+    /// Add an ordering hint for package installation/upgrade.
+    ///
+    /// OrderWithRequires specifies dependencies that should be used for ordering during
+    /// installation/upgrade, but does not add them to the regular Requires list.
+    /// This is useful for breaking dependency cycles while maintaining proper installation order.
+    ///
+    /// See: `OrderWithRequires` from specfile syntax
+    pub fn order_with_requires(mut self, dep: Dependency) -> Self {
+        self.order_with_requires.push(dep);
+        self
+    }
+
     /// Build the package
     pub fn build(self) -> Result<Package, Error> {
-        let is_v4 = self.config.format == RpmFormat::V4;
+        let fmt = self.config.format;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
-
         let sig_header = {
-            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(&header));
-            let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(&header));
-
-            let mut builder = SignatureHeaderBuilder::new()
-                .set_sha256_digest(header_digest_sha256.as_str())
-                .set_sha3_256_digest(header_digest_sha3_256.as_str());
+            let mut builder = SignatureHeaderBuilder::new().format(fmt);
 
             // V6 packages shouldn't populate the content length header.
-            if is_v4 {
+            if fmt == RpmFormat::V4 {
                 builder = builder.set_content_length(header.len() as u64 + content.len() as u64);
             }
 
-            builder.build()?
+            builder.calculate_digests(&header).build()?
         };
 
         let metadata = PackageMetadata {
@@ -1143,7 +1159,7 @@ impl PackageBuilder {
     where
         S: signature::Signing<Signature = Vec<u8>>,
     {
-        let source_date = self.source_date;
+        let source_date = self.config.source_date;
         let now = Timestamp::now();
         let signature_timestamp = match source_date {
             Some(source_date_epoch) if source_date_epoch < now => source_date_epoch,
@@ -1300,9 +1316,9 @@ impl PackageBuilder {
             // Only meaningful for block/character device special files; always 0 otherwise.
             file_rdevs.push(0);
             // The device ID of the filesystem *containing* the file (st_dev), normalized to 1 or 0.
-            // Real files are always on a device (1), but ghost files have no backing file so their st_dev is 0.
+            // Ghost files have no backing file, so their st_dev is 0.
             file_devices.push(if is_ghost { 0 } else { 1 });
-            let mtime = match self.source_date {
+            let mtime = match self.config.source_date {
                 Some(d) if d < entry.modified_at => d,
                 _ => entry.modified_at,
             };
@@ -1324,11 +1340,14 @@ impl PackageBuilder {
             base_names.push(entry.base_name.to_owned());
             // Ghost files have certain verify flags cleared
             let verify = if is_ghost {
-                entry.verify_flags
-                    & !(FileVerifyFlags::FILEDIGEST
-                        | FileVerifyFlags::FILESIZE
-                        | FileVerifyFlags::LINKTO
-                        | FileVerifyFlags::MTIME)
+                FileVerifyFlags::from_bits_retain(
+                    entry.verify_flags.bits()
+                        & !(FileVerifyFlags::FILEDIGEST
+                            | FileVerifyFlags::FILESIZE
+                            | FileVerifyFlags::LINKTO
+                            | FileVerifyFlags::MTIME)
+                            .bits(),
+                )
             } else {
                 entry.verify_flags
             };
@@ -1342,20 +1361,11 @@ impl PackageBuilder {
                 continue;
             }
 
-            // On a real filesystem, directories always have at least 2 hard links:
-            // one from the parent and one from their own "." self-reference.
-            // RPM follows this convention in the nlink field.
-            let nlink: u32 = if entry.mode.file_type() == FileType::Dir {
-                2
-            } else {
-                1
-            };
-
             let mut writer = if !uses_large_files {
                 payload::Builder::new(cpio_path)
                     .mode(entry.mode.into())
                     .ino(ino_index)
-                    .nlink(nlink)
+                    .nlink(1)
                     .mtime(mtime.into())
                     .uid(self.uid.unwrap_or(0))
                     .gid(self.gid.unwrap_or(0))
@@ -1381,12 +1391,23 @@ impl PackageBuilder {
         }
         payload::trailer(&mut archive)?;
 
-        self.provides
-            .push(Dependency::eq(self.name.clone(), self.version.clone()));
-        self.provides.push(Dependency::eq(
-            format!("{}({})", self.name.clone(), self.arch.clone()),
-            self.version.clone(),
-        ));
+        // Auto-provide version uses EVR format: [epoch:]version-release
+        let epoch_str = self.epoch.map(|e| e.to_string()).unwrap_or_default();
+        let evr = Evr::new(&epoch_str, &self.version, &self.release).to_string();
+
+        self.provides.push(Dependency::eq(self.name.clone(), &evr));
+        // Add NAME(ISA) provide for non-noarch packages, matching RPM's %_isa macro behavior.
+        // RPM converts the canonical arch name to an ISA string (e.g. x86_64 -> x86-64).
+        if let Some(isa) = arch_to_isa(&self.arch) {
+            self.provides
+                .push(Dependency::eq(format!("{}({})", self.name, isa), &evr));
+        }
+
+        // If any file has the config flag, auto-generate config(NAME) provides and requires
+        if file_flags.iter().any(|f| f & FileFlags::CONFIG.bits() != 0) {
+            self.provides.push(Dependency::config(&self.name, &evr));
+            self.requires.push(Dependency::config(&self.name, &evr));
+        }
 
         if self.config.format == RpmFormat::V4 {
             self.requires
@@ -1409,26 +1430,35 @@ impl PackageBuilder {
                 .push(Dependency::rpmlib("FileCaps", "4.6.1-1".to_owned()));
         }
 
-        if uses_large_files {
+        if uses_large_files && !self.files.is_empty() {
             self.requires
                 .push(Dependency::rpmlib("LargeFiles", "4.12.0-1".to_owned()));
         }
 
-        // TODO: as per https://rpm-software-management.github.io/rpm/manual/users_and_groups.html,
-        // at some point in the future this might make sense as hard requirements, but since it's a new feature,
-        // they have to be weak requirements to avoid breaking things.
+        // user() and group() virtual provides require RPM >= 4.19 (sysusers support).
+        // V4 RPMs may target older distros, so use Recommends there for compatibility.
         for user in &users_to_create {
-            self.recommends.push(Dependency::user(user));
+            if self.config.format == RpmFormat::V6 {
+                self.requires.push(Dependency::user(user));
+            } else {
+                self.recommends.push(Dependency::user(user));
+            }
         }
 
         for group in &groups_to_create {
-            self.recommends.push(Dependency::group(group));
+            if self.config.format == RpmFormat::V6 {
+                self.requires.push(Dependency::group(group));
+            } else {
+                self.recommends.push(Dependency::group(group));
+            }
         }
 
         let mut provide_names = Vec::new();
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
+        // Sort dependency arrays by name to match rpm's behavior
+        self.provides.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.provides.into_iter() {
             provide_names.push(d.name);
             provide_flags.push(d.flags.bits());
@@ -1439,6 +1469,7 @@ impl PackageBuilder {
         let mut obsolete_flags = Vec::new();
         let mut obsolete_versions = Vec::new();
 
+        self.obsoletes.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.name);
             obsolete_flags.push(d.flags.bits());
@@ -1449,6 +1480,7 @@ impl PackageBuilder {
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
+        self.requires.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.requires.into_iter() {
             require_names.push(d.name);
             require_flags.push(d.flags.bits());
@@ -1459,6 +1491,7 @@ impl PackageBuilder {
         let mut conflicts_flags = Vec::new();
         let mut conflicts_versions = Vec::new();
 
+        self.conflicts.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.conflicts.into_iter() {
             conflicts_names.push(d.name);
             conflicts_flags.push(d.flags.bits());
@@ -1469,6 +1502,7 @@ impl PackageBuilder {
         let mut recommends_flags = Vec::new();
         let mut recommends_versions = Vec::new();
 
+        self.recommends.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.recommends.into_iter() {
             recommends_names.push(d.name);
             recommends_flags.push(d.flags.bits());
@@ -1479,6 +1513,7 @@ impl PackageBuilder {
         let mut suggests_flags = Vec::new();
         let mut suggests_versions = Vec::new();
 
+        self.suggests.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.suggests.into_iter() {
             suggests_names.push(d.name);
             suggests_flags.push(d.flags.bits());
@@ -1489,6 +1524,7 @@ impl PackageBuilder {
         let mut enhances_flags = Vec::new();
         let mut enhances_versions = Vec::new();
 
+        self.enhances.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.enhances.into_iter() {
             enhances_names.push(d.name);
             enhances_flags.push(d.flags.bits());
@@ -1499,11 +1535,37 @@ impl PackageBuilder {
         let mut supplements_flags = Vec::new();
         let mut supplements_versions = Vec::new();
 
+        self.supplements.sort_by(|a, b| a.name.cmp(&b.name));
         for d in self.supplements.into_iter() {
             supplements_names.push(d.name);
             supplements_flags.push(d.flags.bits());
             supplements_versions.push(d.version);
         }
+
+        let mut order_names = Vec::new();
+        let mut order_flags = Vec::new();
+        let mut order_versions = Vec::new();
+
+        self.order_with_requires.sort_by(|a, b| a.name.cmp(&b.name));
+        for d in self.order_with_requires.into_iter() {
+            order_names.push(d.name);
+            order_flags.push(d.flags.bits());
+            order_versions.push(d.version);
+        }
+
+        // Compute SOURCENEVR for v6 packages (do it early because the values get moved)
+        let source_nevr = if self.config.format == RpmFormat::V6 {
+            Some(if let Some(epoch_val) = self.epoch {
+                format!(
+                    "{}-{}:{}-{}",
+                    self.name, epoch_val, self.version, self.release
+                )
+            } else {
+                format!("{}-{}-{}", self.name, self.version, self.release)
+            })
+        } else {
+            None
+        };
 
         let mut actual_records = vec![
             // Existence of this tag is how rpm decides whether or not a package is a source rpm or binary rpm
@@ -1517,7 +1579,6 @@ impl PackageBuilder {
                 IndexData::StringArray(vec!["C".to_string()]),
             ),
             IndexEntry::new(IndexTag::RPMTAG_NAME, IndexData::StringTag(self.name)),
-            IndexEntry::new(IndexTag::RPMTAG_EPOCH, IndexData::Int32(vec![self.epoch])),
             IndexEntry::new(
                 IndexTag::RPMTAG_RPMVERSION,
                 IndexData::StringTag(format!("rpm-rs {}", env!("CARGO_PKG_VERSION"))),
@@ -1556,7 +1617,11 @@ impl PackageBuilder {
             // If it's legacy and safe to drop entirely let's do so. rpmbuild still writes it in the header though.
             IndexEntry::new(
                 IndexTag::RPMTAG_GROUP,
-                IndexData::I18NString(vec!["Unspecified".to_string()]),
+                IndexData::I18NString(vec![
+                    self.group
+                        .clone()
+                        .unwrap_or_else(|| "Unspecified".to_string()),
+                ]),
             ),
             IndexEntry::new(IndexTag::RPMTAG_ARCH, IndexData::StringTag(self.arch)),
             IndexEntry::new(
@@ -1569,8 +1634,16 @@ impl PackageBuilder {
             ),
         ];
 
+        // Only add epoch if explicitly set (even if 0)
+        if let Some(e) = self.epoch {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_EPOCH,
+                IndexData::Int32(vec![e]),
+            ));
+        }
+
         let now = Timestamp::now();
-        let build_time = match self.source_date {
+        let build_time = match self.config.source_date {
             Some(t) if t < now => t,
             _ => now,
         };
@@ -1631,10 +1704,6 @@ impl PackageBuilder {
                     IndexData::StringArray(file_langs),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_FILEDIGESTALGO,
-                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
-                ),
-                IndexEntry::new(
                     IndexTag::RPMTAG_FILEVERIFYFLAGS,
                     IndexData::Int32(file_verify_flags),
                 ),
@@ -1662,6 +1731,12 @@ impl PackageBuilder {
                 )])
             }
         }
+
+        // RPM always adds this tag, even if the package has no files. We will do the same.
+        actual_records.push(IndexEntry::new(
+            IndexTag::RPMTAG_FILEDIGESTALGO,
+            IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
+        ));
 
         actual_records.extend([
             IndexEntry::new(
@@ -1708,17 +1783,26 @@ impl PackageBuilder {
                     IndexData::StringArray(vec![payload_sha256]),
                 ),
                 IndexEntry::new(
-                    IndexTag::RPMTAG_PAYLOADSHA256ALGO,
-                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
-                ),
-                IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256ALT,
                     IndexData::StringArray(vec![raw_archive_sha256.to_string()]),
                 ),
             ]);
+            // PAYLOADSHA256ALGO is obsolete and not used in v6 packages
+            if self.config.format == RpmFormat::V4 {
+                actual_records.push(IndexEntry::new(
+                    IndexTag::RPMTAG_PAYLOADSHA256ALGO,
+                    IndexData::Int32(vec![DigestAlgorithm::Sha2_256 as u32]),
+                ));
+            }
         }
 
         if self.config.format == RpmFormat::V6 {
+            if let Some(nevr) = source_nevr {
+                actual_records.push(IndexEntry::new(
+                    IndexTag::RPMTAG_SOURCENEVR,
+                    IndexData::StringTag(nevr),
+                ));
+            }
             actual_records.extend([
                 IndexEntry::new(IndexTag::RPMTAG_RPMFORMAT, IndexData::Int32(vec![6])),
                 IndexEntry::new(
@@ -1756,24 +1840,25 @@ impl PackageBuilder {
             }
         }
 
-        let compression_details = match self.config.compression {
-            CompressionWithLevel::None => None,
-            CompressionWithLevel::Gzip(level) => Some(("gzip".to_owned(), level.to_string())),
-            CompressionWithLevel::Zstd(level) => Some(("zstd".to_owned(), level.to_string())),
-            CompressionWithLevel::Xz(level) => Some(("xz".to_owned(), level.to_string())),
-            CompressionWithLevel::Bzip2(level) => Some(("bzip2".to_owned(), level.to_string())),
+        // RPM always writes payloadflags unconditionally. That is a little silly, but we will do the same
+        let (compression_name, compression_flags) = match self.config.compression {
+            CompressionWithLevel::None => (None, String::new()),
+            CompressionWithLevel::Gzip(level) => (Some("gzip".to_owned()), level.to_string()),
+            CompressionWithLevel::Zstd(level) => (Some("zstd".to_owned()), level.to_string()),
+            CompressionWithLevel::Xz(level) => (Some("xz".to_owned()), level.to_string()),
+            CompressionWithLevel::Bzip2(level) => (Some("bzip2".to_owned()), level.to_string()),
         };
 
-        if let Some((compression_name, compression_level)) = compression_details {
+        if let Some(compression_name) = compression_name {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_PAYLOADCOMPRESSOR,
                 IndexData::StringTag(compression_name),
             ));
-            actual_records.push(IndexEntry::new(
-                IndexTag::RPMTAG_PAYLOADFLAGS,
-                IndexData::StringTag(compression_level),
-            ));
         }
+        actual_records.push(IndexEntry::new(
+            IndexTag::RPMTAG_PAYLOADFLAGS,
+            IndexData::StringTag(compression_flags),
+        ));
 
         if !self.changelog_names.is_empty() {
             actual_records.push(IndexEntry::new(
@@ -1895,6 +1980,21 @@ impl PackageBuilder {
             ));
         }
 
+        if !order_flags.is_empty() {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERNAME,
+                IndexData::StringArray(order_names),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERVERSION,
+                IndexData::StringArray(order_versions),
+            ));
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_ORDERFLAGS,
+                IndexData::Int32(order_flags),
+            ));
+        }
+
         if let Some(script) = self.pre_inst_script {
             script.apply(&mut actual_records, PREIN_TAGS);
         }
@@ -1934,6 +2034,13 @@ impl PackageBuilder {
             ));
         }
 
+        if let Some(packager) = self.packager {
+            actual_records.push(IndexEntry::new(
+                IndexTag::RPMTAG_PACKAGER,
+                IndexData::StringTag(packager),
+            ));
+        }
+
         if let Some(url) = self.url {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_URL,
@@ -1958,5 +2065,51 @@ impl PackageBuilder {
         let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
 
         Ok((lead, header, payload))
+    }
+}
+
+/// Convert a canonical RPM architecture name to its ISA (Instruction Set Architecture) string.
+///
+/// This is conceptually similar to RPM's `installplatform` dependency generator script.
+///
+/// RPM uses ISA strings in auto-generated provides like `NAME(ISA)`. The ISA is formed as
+/// `ISANAME-ISABITS` (e.g. `x86-64` for `x86_64`). Returns `None` for `noarch` and
+/// unrecognized architectures.
+fn arch_to_isa(arch: &str) -> Option<&'static str> {
+    match arch {
+        // x86
+        "x86_64" | "amd64" | "ia32e" => Some("x86-64"),
+        "i386" | "i486" | "i586" | "i686" | "athlon" | "geode" => Some("x86-32"),
+        // ARM
+        "aarch64" => Some("aarch-64"),
+        "armv7hl" | "armv7hnl" => Some("armv7hl-32"),
+        // Power
+        "ppc64" | "ppc64p7" => Some("ppc-64"),
+        "ppc64le" => Some("ppc-64"),
+        "ppc" => Some("ppc-32"),
+        // s390
+        "s390x" => Some("s390-64"),
+        "s390" => Some("s390-32"),
+        // RISC-V
+        "riscv64" => Some("riscv-64"),
+        // LoongArch
+        "loongarch64" => Some("loongarch-64"),
+        // MIPS
+        "mips64" | "mips64el" => Some("mips-64"),
+        "mips" | "mipsel" => Some("mips-32"),
+        "mips64r6" | "mips64r6el" => Some("mipsr6-64"),
+        "mipsr6" | "mipsr6el" => Some("mipsr6-32"),
+        // SPARC
+        "sparc64" | "sparc64v" => Some("sparc-64"),
+        "sparc" | "sparcv8" | "sparcv9" | "sparcv9v" => Some("sparc-32"),
+        // Other
+        "ia64" => Some("ia-64"),
+        "alpha" | "alphaev5" | "alphaev56" | "alphaev6" | "alphaev67" | "alphapca56" => {
+            Some("alpha-64")
+        }
+        "m68k" => Some("m68k-32"),
+        "e2k" | "e2kv4" | "e2kv5" | "e2kv6" | "e2kv7" => Some("e2k-64"),
+        // noarch and unknown
+        _ => None,
     }
 }

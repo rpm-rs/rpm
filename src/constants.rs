@@ -431,8 +431,14 @@ pub enum IndexSignatureTag {
     /// Index Records and Header store, stored as a hex-encoded string.
     RPMSIGTAG_SHA256 = IndexTag::RPMTAG_SHA256HEADER as u32,
 
-    /// A silly tag for a date.
-    RPMTAG_INSTALLTIME = IndexTag::RPMTAG_INSTALLTIME as u32,
+    /// Reserved space in the signature header for later adding signatures without
+    /// rewriting the entire package. Used in v6 packages. Placed at the top of the
+    /// signature range (999) so it's always the last tag.
+    RPMSIGTAG_RESERVED = 999,
+
+    /// Reserved space in the signature header for v4 packages.
+    /// Shares tag number 1008 with RPMTAG_INSTALLTIME.
+    RPMSIGTAG_RESERVEDSPACE = 1008,
 
     //////////////////////////////////////////
     /* Various legacy tags - all deprecated */
@@ -589,6 +595,17 @@ bitflags! {
         const READFAIL	= 1 << 29;	  // file read failed
         const LSTATFAIL	= 1 << 30;	  // lstat failed
         const LGETFILECONFAIL	= 1 << 31;	// lgetfilecon failed
+    }
+}
+
+impl FileVerifyFlags {
+    /// Default file verification flags used by RPM.
+    ///
+    /// RPM sets all 32 bits to 1 by default (0xffffffff), which includes
+    /// not only the explicitly defined flags above, but also reserved bits
+    /// used internally by rpm for rpmVerifyAttrs, rpmVerifyFlags, and rpmQueryFlags.
+    pub fn all_flags() -> Self {
+        Self::from_bits_retain(0xffffffff)
     }
 }
 
