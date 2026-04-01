@@ -144,6 +144,7 @@ echo ">>>>>>>>>> {label}: OK <<<<<<<<<<"
         let sources = Path::new(common::CARGO_MANIFEST_DIR).join("tests/assets/SOURCES");
         let script = sources.join("multiplication_tables.py");
         let config_file = sources.join("example_config.toml");
+        let sysusers_file = sources.join("hugo.conf");
         let module_dir = sources.join("module");
 
         let bldr = PackageBuilder::new(name, "1.0.0", "MIT", "x86_64", "some package")
@@ -160,6 +161,10 @@ echo ">>>>>>>>>> {label}: OK <<<<<<<<<<"
             .with_file(
                 config_file.to_str().unwrap(),
                 FileOptions::new("/etc/foobar/other.toml").user("hugo"),
+            )?
+            .with_file(
+                sysusers_file.to_str().unwrap(),
+                FileOptions::new("/usr/lib/sysusers.d/hugo.conf"),
             )?
             .with_symlink(FileOptions::symlink("/usr/bin/bar", "/usr/bin/foo"))?
             .with_dir_entry(FileOptions::dir("/var/log/foobar").permissions(0o750))?
