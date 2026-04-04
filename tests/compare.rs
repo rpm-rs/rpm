@@ -524,6 +524,11 @@ fn test_build_rpm_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             .group("root")
             .caps("cap_sys_admin,cap_sys_ptrace=pe")?,
     )?
+    // sysusers.d config for non-root owners
+    .with_file_contents(
+        "u jane - \"Jane user\"\ng bob - \"Bob group\"\nu bob - \"Bob user\"\n",
+        FileOptions::new("/usr/lib/sysusers.d/rpm-file-attrs.conf"),
+    )?
     // Verify flags
     .with_file_contents(
         "verify_some\n",

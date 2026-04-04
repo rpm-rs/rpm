@@ -473,7 +473,7 @@ mod fixtures {
 
         // Verify all three file APIs return consistent data and get files for content verification
         let files = assert_file_apis_consistent(&package)?;
-        assert_eq!(files.len(), 25);
+        assert_eq!(files.len(), 26);
 
         // Extract package and verify extracted files match files() API results
         let temp_dir = tempfile::tempdir()?;
@@ -1049,6 +1049,34 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("cap_sys_ptrace,cap_sys_admin=ep".to_owned()),
+                linkto: "".to_owned(),
+                ima_signature: None,
+            }
+        );
+
+        // File 25: /usr/lib/sysusers.d/rpm-file-attrs.conf
+        let expected_sysusers = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/assets/SOURCES/rpm-file-attrs-sysusers.conf"
+        ));
+        assert_eq!(files[25].content, expected_sysusers);
+        assert_eq!(
+            files[25].metadata,
+            FileEntry {
+                path: PathBuf::from("/usr/lib/sysusers.d/rpm-file-attrs.conf"),
+                mode: FileMode::regular(0o644),
+                ownership: FileOwnership {
+                    user: "root".to_owned(),
+                    group: "root".to_owned(),
+                },
+                modified_at: Timestamp(1681068559),
+                size: expected_sysusers.len(),
+                flags: FileFlags::empty(),
+                digest: Some(FileDigest {
+                    digest: calculate_sha256(&files[25].content),
+                    algo: DigestAlgorithm::Sha2_256,
+                }),
+                caps: Some("".to_owned()),
                 linkto: "".to_owned(),
                 ima_signature: None,
             }
