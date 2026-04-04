@@ -125,7 +125,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
         metadata.get_payload_compressor().unwrap(),
         CompressionType::None
     );
-    assert_eq!(metadata.get_installed_size().unwrap(), 241);
+    assert_eq!(metadata.get_installed_size().unwrap(), 301);
 
     assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
     assert_eq!(
@@ -146,8 +146,8 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
 
     // File metadata and content assertions are in payload.rs::test_files_file_attrs
-    assert_eq!(metadata.get_file_entries().unwrap().len(), 25);
-    assert_eq!(metadata.get_file_paths().unwrap().len(), 25);
+    assert_eq!(metadata.get_file_entries().unwrap().len(), 26);
+    assert_eq!(metadata.get_file_paths().unwrap().len(), 26);
     assert!(metadata.get_changelog_entries().unwrap().is_empty());
 
     assert_eq!(
@@ -155,7 +155,33 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
         vec![
             // TODO: understand what this means and why it is both provided and required
             Dependency::config("rpm-file-attrs", "1.0-1".to_owned()),
+            // Auto-generated sysusers provides from /usr/lib/sysusers.d/rpm-file-attrs.conf
+            Dependency::new(
+                "group(bob)".to_owned(),
+                DependencyFlags::FIND_PROVIDES,
+                "".to_owned(),
+            ),
+            Dependency::new(
+                "group(bob)".to_owned(),
+                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                "ZyBib2IgLSAiQm9iIGdyb3VwIgAA".to_owned(),
+            ),
+            Dependency::new(
+                "group(jane)".to_owned(),
+                DependencyFlags::FIND_PROVIDES,
+                "".to_owned(),
+            ),
             Dependency::eq("rpm-file-attrs".to_owned(), "1.0-1".to_owned()),
+            Dependency::new(
+                "user(bob)".to_owned(),
+                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                "dSBib2IgLSAiQm9iIHVzZXIi".to_owned(),
+            ),
+            Dependency::new(
+                "user(jane)".to_owned(),
+                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                "dSBqYW5lIC0gIkphbmUgdXNlciIA".to_owned(),
+            ),
         ]
     );
     assert_eq!(
