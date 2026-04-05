@@ -156,32 +156,32 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             // TODO: understand what this means and why it is both provided and required
             Dependency::config("rpm-file-attrs", "1.0-1".to_owned()),
             // Auto-generated sysusers provides from /usr/lib/sysusers.d/rpm-file-attrs.conf
-            Dependency::new(
-                "group(bob)".to_owned(),
-                DependencyFlags::FIND_PROVIDES,
-                "".to_owned(),
-            ),
-            Dependency::new(
-                "group(bob)".to_owned(),
-                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
-                "ZyBib2IgLSAiQm9iIGdyb3VwIgAA".to_owned(),
-            ),
-            Dependency::new(
-                "group(jane)".to_owned(),
-                DependencyFlags::FIND_PROVIDES,
-                "".to_owned(),
-            ),
+            Dependency {
+                name: "group(bob)".to_owned(),
+                flags: DependencyFlags::FIND_PROVIDES,
+                version: "".to_owned(),
+            },
+            Dependency {
+                name: "group(bob)".to_owned(),
+                flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                version: "ZyBib2IgLSAiQm9iIGdyb3VwIgAA".to_owned(),
+            },
+            Dependency {
+                name: "group(jane)".to_owned(),
+                flags: DependencyFlags::FIND_PROVIDES,
+                version: "".to_owned(),
+            },
             Dependency::eq("rpm-file-attrs".to_owned(), "1.0-1".to_owned()),
-            Dependency::new(
-                "user(bob)".to_owned(),
-                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
-                "dSBib2IgLSAiQm9iIHVzZXIi".to_owned(),
-            ),
-            Dependency::new(
-                "user(jane)".to_owned(),
-                DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
-                "dSBqYW5lIC0gIkphbmUgdXNlciIA".to_owned(),
-            ),
+            Dependency {
+                name: "user(bob)".to_owned(),
+                flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                version: "dSBib2IgLSAiQm9iIHVzZXIi".to_owned(),
+            },
+            Dependency {
+                name: "user(jane)".to_owned(),
+                flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                version: "dSBqYW5lIC0gIkphbmUgdXNlciIA".to_owned(),
+            },
         ]
     );
     assert_eq!(
@@ -208,14 +208,14 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
             .unwrap(),
-        "fddbff7efcd2a15fdb44866c9fd9cfbd8abc8e4c11778f9be122ad202861e26b"
+        "269fab2852005f88bf651d90756cd17113d23d6bf0c8e28ede612611c1a4c1c8"
     );
     assert_eq!(
         metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
             .unwrap(),
-        "f9b60ff49302f1e2cbda10dfeb1b5c0583a46b26f828eee246135b6f9f96bcde"
+        "92ebb502d4eba6038db150e02a4e3811976d12f26472a8a8cd789539d5422a77"
     );
 
     // Payload digest
@@ -224,7 +224,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
             .unwrap(),
-        vec!["0a467f76e04a3f0c4dd9309c4d7c7f02e26f680aac6653c29b80e4c75eecaa7f"]
+        vec!["1bc45cd34f5965dd00700bbf00bf7f1dd0f9a5a060be994428611ad32d3c6f3d"]
     );
 
     Ok(())
@@ -455,14 +455,14 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
             .unwrap(),
-        "3899d2a1cba29b927bb75acdf4f6741e0035746bb0292daf378dbc0e19e102cc"
+        "54367497f885c1295f6930b415edc151924fb20f789557010151a91c4de62d26"
     );
     assert_eq!(
         v4.metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1)
             .unwrap(),
-        "7059f15df48653aef7f01c66de941daded095dd0"
+        "f3655318e4f8fd511ca7f0c674fd27a7f6cf2061"
     );
 
     assert_eq!(
@@ -470,14 +470,14 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
             .unwrap(),
-        "96e5e2b8bd9d481507d219e74f6266380e7d2fd60c43c16f9636949b0bc55391"
+        "352ff65e76ef151baf393b15bdcbc8a1f32b42d910bd767e2af7801e46703aef"
     );
     assert_eq!(
         v6.metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
             .unwrap(),
-        "13c481f44babdabd4cc4bbfbf4e387f01cb341714d562f21666f5119291469e6"
+        "759944f4ffe630aff90f7972710019323ae639db520792f4fe5cc3f89c79c8da"
     );
 
     // Payload digests differ between v4 and v6
@@ -486,14 +486,14 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
             .unwrap(),
-        vec!["ed47768313fc0fa57e170ba6118990df05dd0d0cb31da091a10251796528aa5b"]
+        vec!["3ef1e3e3a2cd7d82fe48a3daee1f19202bf7582aff85a701b1e47ffbbeaddb63"]
     );
     assert_eq!(
         v6.metadata
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
             .unwrap(),
-        vec!["34e41a24b89600ecd770b8420439325392155a9e44117518ea22b0643a94ea58"]
+        vec!["69b3410877d629ad8b59909fc343ab58117b4155c6de3935a42964e589b6ea8f"]
     );
 
     // v4 and v6 have different rpmlib requires

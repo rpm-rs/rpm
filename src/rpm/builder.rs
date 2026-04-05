@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
+use std::io::Read;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -8,6 +9,7 @@ use std::{fs, io};
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
+use base64::prelude::*;
 use digest::Digest;
 
 use super::compressor::Compressor;
@@ -1453,12 +1455,135 @@ impl PackageBuilder {
             }
         }
 
+        // Auto-generate user() and group() provides from sysusers.d config files,
+        // matching RPM 4.19+ behavior.
+        // Track which file generated each provide for the file dependency mapping.
+        let mut file_dep_provides: Vec<(usize, Dependency)> = Vec::new();
+        for (file_index, (path, entry)) in self.files.iter().enumerate() {
+            if !path.starts_with("./usr/lib/sysusers.d/") || !path.ends_with(".conf") {
+                continue;
+            }
+            let mut content = String::new();
+            entry.source.try_into_bufread()?.read_to_string(&mut content)?;
+
+            for line in content.lines() {
+                let fields: Vec<&str> = line.split_whitespace().collect();
+                let kind = match fields.first() {
+                    Some(&k @ ("u" | "u!" | "g" | "m")) => k,
+                    _ => continue,
+                };
+                let name = match fields.get(1) {
+                    Some(n) => *n,
+                    None => continue,
+                };
+
+                // RPM base64-encodes the normalized line (fields rejoined with single spaces)
+                // and NUL-pads the input to avoid '=' padding chars in the output, since '='
+                // has special meaning in RPM dependency version syntax.
+                let normalized = fields.join(" ");
+                let len = normalized.len();
+                let pad_len = (3 - len % 3) % 3;
+                let mut line_bytes = normalized.into_bytes();
+                line_bytes.resize(len + pad_len, 0);
+                let version = BASE64_STANDARD_NO_PAD.encode(&line_bytes);
+
+                let mut add_provide = |dep: Dependency| {
+                    file_dep_provides.push((file_index, dep.clone()));
+                    self.provides.push(dep);
+                };
+
+                match kind {
+                    // 'u' and 'u!' both create a user; 'u!' tells systemd-sysusers
+                    // to fully lock the account, but the provides are the same.
+                    "u" | "u!" => {
+                        add_provide(Dependency {
+                            name: format!("user({})", name),
+                            flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                            version,
+                        });
+                        // Creating a user implicitly creates a group with the same name
+                        add_provide(Dependency {
+                            name: format!("group({})", name),
+                            flags: DependencyFlags::FIND_PROVIDES,
+                            version: "".to_owned(),
+                        });
+                    }
+                    "g" => {
+                        add_provide(Dependency {
+                            name: format!("group({})", name),
+                            flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                            version,
+                        });
+                    }
+                    "m" => {
+                        // 'm' adds a user to a group, generating a versioned
+                        // groupmember(user/group) provide and user()/group() requires.
+                        let groupname = match fields.get(2) {
+                            Some(g) => *g,
+                            None => continue,
+                        };
+                        add_provide(Dependency {
+                            name: format!("groupmember({}/{})", name, groupname),
+                            flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
+                            version,
+                        });
+                        self.requires.push(Dependency::user(name));
+                        self.requires.push(Dependency::group(groupname));
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+
         let mut provide_names = Vec::new();
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
-        // Sort dependency arrays by name to match rpm's behavior
-        self.provides.sort_by(|a, b| a.name.cmp(&b.name));
+        // Sort dependency arrays by name, then version, then flags to match rpm's behavior.
+        // RPM's doFind uses this ordering for binary search (name, EVR, flags).
+        self.provides.sort_by(|a, b| {
+            a.name
+                .cmp(&b.name)
+                .then_with(|| a.version.cmp(&b.version))
+                .then_with(|| a.flags.bits().cmp(&b.flags.bits()))
+        });
+
+        // Build file-to-dependency mapping (FILEDEPENDSX/N/DEPENDSDICT) for
+        // auto-generated provides (e.g. sysusers.d). Look up post-sort indices.
+        let mut file_depends_x: Vec<u32> = vec![0; files_len];
+        let mut file_depends_n: Vec<u32> = vec![0; files_len];
+        let mut depends_dict: Vec<u32> = Vec::new();
+
+        if !file_dep_provides.is_empty() {
+            // Stable sort: by file index, then versioned deps before unversioned
+            // (matching RPM's rpmfcNormalizeFDeps verdepLess comparator).
+            // Original file-line order is preserved within each group.
+            file_dep_provides.sort_by(|(fi_a, dep_a), (fi_b, dep_b)| {
+                fi_a.cmp(fi_b).then_with(|| {
+                    let a_versioned = !dep_a.version.is_empty();
+                    let b_versioned = !dep_b.version.is_empty();
+                    b_versioned.cmp(&a_versioned) // versioned first
+                })
+            });
+
+            for (file_idx, dep) in &file_dep_provides {
+                let provide_idx = self
+                    .provides
+                    .iter()
+                    .position(|p| p == dep)
+                    .expect("sysusers provide not found after sort");
+
+                // 'P' (0x50) = Provides type
+                let dict_entry = (b'P' as u32) << 24 | (provide_idx as u32 & 0x00ff_ffff);
+
+                if file_depends_n[*file_idx] == 0 {
+                    file_depends_x[*file_idx] = depends_dict.len() as u32;
+                }
+                file_depends_n[*file_idx] += 1;
+                depends_dict.push(dict_entry);
+            }
+        }
+
         for d in self.provides.into_iter() {
             provide_names.push(d.name);
             provide_flags.push(d.flags.bits());
@@ -1752,6 +1877,23 @@ impl PackageBuilder {
                 IndexData::Int32(provide_flags),
             ),
         ]);
+
+        if !depends_dict.is_empty() {
+            actual_records.extend([
+                IndexEntry::new(
+                    IndexTag::RPMTAG_FILEDEPENDSX,
+                    IndexData::Int32(file_depends_x),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_FILEDEPENDSN,
+                    IndexData::Int32(file_depends_n),
+                ),
+                IndexEntry::new(
+                    IndexTag::RPMTAG_DEPENDSDICT,
+                    IndexData::Int32(depends_dict),
+                ),
+            ]);
+        }
 
         // digest of the uncompressed raw archive calculated on the inner writer
         let (hash_values, raw_archive_size) = archive.into_digests();

@@ -475,6 +475,7 @@ fn test_build_rpm_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     )?
     .with_file_contents(
         "readme\n",
+        #[allow(deprecated)]
         FileOptions::new("/opt/rpm-file-attrs/readme").readme(),
     )?
     // Owner, group and permissions
