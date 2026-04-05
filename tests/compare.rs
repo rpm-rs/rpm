@@ -217,6 +217,14 @@ fn assert_packages_match(
         sig_cmp.report()
     );
 
+    assert_eq!(
+        parsed.content, fixture.content,
+        "===== Payload mismatch ({}) =====\nparsed {} bytes vs fixture {} bytes",
+        label,
+        parsed.content.len(),
+        fixture.content.len(),
+    );
+
     Ok(())
 }
 
