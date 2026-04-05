@@ -493,7 +493,7 @@ impl From<FileOptionsBuilder> for FileOptions {
 }
 
 /// Description of a dependency as present in a RPM header record.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dependency {
     pub name: String,
     pub flags: DependencyFlags,
