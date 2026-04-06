@@ -618,6 +618,24 @@ impl Dependency {
         )
     }
 
+    /// Create an interpreter dependency (e.g. `/bin/sh`).
+    ///
+    /// This corresponds to a bare `Requires(interp)` without a phase-specific
+    /// flag. RPM generates these for explicit `-p` interpreter declarations
+    /// in spec files (e.g. `%post -p /bin/sh`).
+    pub fn interp(dep_name: impl Into<String>) -> Self {
+        Self::new(dep_name.into(), DependencyFlags::INTERP, "".to_string())
+    }
+
+    /// Create a dependency on a package or file required for a verify script.
+    pub fn script_verify(dep_name: impl Into<String>) -> Self {
+        Self::new(
+            dep_name.into(),
+            DependencyFlags::SCRIPT_VERIFY,
+            "".to_string(),
+        )
+    }
+
     fn new(dep_name: String, flags: DependencyFlags, version: String) -> Self {
         Dependency {
             name: dep_name,
@@ -689,7 +707,48 @@ impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
 /// Type-alias for a tuple containing index tags for a scriptlet type,
 pub(crate) type ScriptletIndexTags = (IndexTag, IndexTag, IndexTag);
 
+/// Type-alias for the set of index tags used by a trigger family
+/// (scripts, progs, flags, names, versions, condition-flags, index).
+pub(crate) type TriggerIndexTags = (
+    IndexTag, // scripts
+    IndexTag, // script progs
+    IndexTag, // script flags (optional)
+    IndexTag, // condition names
+    IndexTag, // condition versions
+    IndexTag, // condition flags
+    IndexTag, // condition-to-script index
+);
+
+/// A single trigger entry parsed from an RPM header.
+///
+/// Each trigger has a script body, interpreter, and one or more conditions
+/// (target packages or paths) that activate it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trigger {
+    /// The script to execute when the trigger fires
+    pub script: String,
+    /// The interpreter for the script (e.g. `["/bin/sh"]`)
+    pub program: Vec<String>,
+    /// The conditions that activate this trigger
+    pub conditions: Vec<TriggerCondition>,
+}
+
+/// A single condition within a trigger entry.
+///
+/// For package triggers, `name` is the target package name (e.g. `"bash"`).
+/// For file triggers, `name` is the monitored path (e.g. `"/usr/lib"`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TriggerCondition {
+    /// Target package name or file path
+    pub name: String,
+    /// Dependency flags encoding the trigger type and version comparison
+    pub flags: DependencyFlags,
+    /// Version constraint (empty string if unconstrained)
+    pub version: String,
+}
+
 /// Description of a scriptlet as present in a RPM header record
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scriptlet {
     /// Content of the scriptlet
     pub script: String,
@@ -743,7 +802,14 @@ impl Scriptlet {
         }
 
         if let Some(prog) = self.program {
-            records.push(IndexEntry::new(prog_tag, IndexData::StringArray(prog)));
+            // RPM writes single-value prog tags as String for backward compatibility, and
+            // StringArray only when there are multiple interpreter arguments.
+            let data = if prog.len() == 1 {
+                IndexData::StringTag(prog.into_iter().next().unwrap())
+            } else {
+                IndexData::StringArray(prog)
+            };
+            records.push(IndexEntry::new(prog_tag, data));
         }
     }
 }

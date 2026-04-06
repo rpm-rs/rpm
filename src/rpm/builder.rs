@@ -155,6 +155,24 @@ pub struct FileDefaults {
     pub permissions: Option<u16>,
 }
 
+/// Internal representation of a trigger for the builder.
+///
+/// Each entry represents one trigger script with one condition.
+/// Multiple entries with the same script can share a script index
+/// (compound triggers), but the simple API creates one entry per trigger.
+struct PackageTriggerEntry {
+    /// Combined flags: trigger type (TRIGGERIN, TRIGGERUN, etc.) OR'd with
+    /// optional version comparison flags (LESS, GREATER, EQUAL).
+    /// For example, `%triggerin -- bash > 5.0` would have `TRIGGERIN | GREATER`.
+    flags: DependencyFlags,
+    /// Target package name (for package triggers) or path (for file triggers)
+    name: String,
+    /// Version constraint (empty string if unconstrained)
+    version: String,
+    /// The script to execute
+    script: Scriptlet,
+}
+
 /// Create an RPM file by specifying metadata and files using the builder pattern.
 #[derive(Default)]
 pub struct PackageBuilder {
@@ -195,6 +213,10 @@ pub struct PackageBuilder {
     pre_untrans_script: Option<Scriptlet>,
     post_untrans_script: Option<Scriptlet>,
     verify_script: Option<Scriptlet>,
+
+    triggers: Vec<PackageTriggerEntry>,
+    file_triggers: Vec<PackageTriggerEntry>,
+    trans_file_triggers: Vec<PackageTriggerEntry>,
 
     /// The author name with email followed by a dash with the version
     /// `Max Mustermann <max@example.com> - 0.1-1`
@@ -1036,6 +1058,209 @@ impl PackageBuilder {
         self
     }
 
+    // todo: consider whether a dedicated VersionConstraint type is justified
+    // instead of Option<(DependencyFlags, &str)> for the version condition parameter.
+
+    /// Add a `%triggerin` script that fires just after the target package is installed.
+    ///
+    /// `target` is the package name to trigger on (e.g. `"bash"`). `condition`
+    /// optionally restricts which versions of the target will activate the
+    /// trigger, corresponding to the `-- target [op version]` syntax in spec
+    /// files. For example, `Some((DependencyFlags::GREATER, "5.0"))` matches
+    /// `%triggerin -- bash > 5.0` and will only fire when the installed version
+    /// of bash is greater than 5.0.
+    pub fn trigger_in(
+        mut self,
+        target: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERIN | cmp,
+            name: target.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%triggerun` script that fires just before the target package is removed.
+    ///
+    /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
+    pub fn trigger_un(
+        mut self,
+        target: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERUN | cmp,
+            name: target.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%triggerpostun` script that fires just after the target package is removed.
+    ///
+    /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
+    pub fn trigger_postun(
+        mut self,
+        target: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERPOSTUN | cmp,
+            name: target.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%triggerprein` script that fires just before the target package is installed.
+    ///
+    /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
+    pub fn trigger_prein(
+        mut self,
+        target: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERPREIN | cmp,
+            name: target.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%filetriggerin` script that fires when a file is installed under the given path.
+    ///
+    /// `path` is the directory prefix to watch (e.g. `"/usr/lib"`). `condition`
+    /// optionally restricts which versions of the package owning the file will
+    /// activate the trigger (see [`trigger_in`](Self::trigger_in)).
+    pub fn file_trigger_in(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERIN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%filetriggerun` script that fires when a file is removed from the given path.
+    ///
+    /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
+    pub fn file_trigger_un(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERUN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%filetriggerpostun` script that fires after a file is removed from the given path.
+    ///
+    /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
+    pub fn file_trigger_postun(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERPOSTUN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%transfiletriggerin` script that fires when a file is installed under the given path
+    /// (runs once per transaction rather than once per package).
+    ///
+    /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
+    pub fn trans_file_trigger_in(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.trans_file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERIN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%transfiletriggerun` script that fires when a file is removed from the given path
+    /// (runs once per transaction rather than once per package).
+    ///
+    /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
+    pub fn trans_file_trigger_un(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.trans_file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERUN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
+    /// Add a `%transfiletriggerpostun` script that fires after a file is removed from the given
+    /// path (runs once per transaction rather than once per package).
+    ///
+    /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
+    pub fn trans_file_trigger_postun(
+        mut self,
+        path: &str,
+        condition: Option<(DependencyFlags, &str)>,
+        script: impl Into<Scriptlet>,
+    ) -> Self {
+        let (cmp, ver) = unpack_version_condition(condition);
+        self.trans_file_triggers.push(PackageTriggerEntry {
+            flags: DependencyFlags::TRIGGERPOSTUN | cmp,
+            name: path.to_owned(),
+            version: ver,
+            script: script.into(),
+        });
+        self
+    }
+
     /// Add a "provides" dependency
     ///
     /// These are aliases or capabilities provided by this package which other packages can reference.
@@ -1464,7 +1689,10 @@ impl PackageBuilder {
                 continue;
             }
             let mut content = String::new();
-            entry.source.try_into_bufread()?.read_to_string(&mut content)?;
+            entry
+                .source
+                .try_into_bufread()?
+                .read_to_string(&mut content)?;
 
             for line in content.lines() {
                 let fields: Vec<&str> = line.split_whitespace().collect();
@@ -1539,14 +1767,9 @@ impl PackageBuilder {
         let mut provide_flags = Vec::new();
         let mut provide_versions = Vec::new();
 
-        // Sort dependency arrays by name, then version, then flags to match rpm's behavior.
-        // RPM's doFind uses this ordering for binary search (name, EVR, flags).
-        self.provides.sort_by(|a, b| {
-            a.name
-                .cmp(&b.name)
-                .then_with(|| a.version.cmp(&b.version))
-                .then_with(|| a.flags.bits().cmp(&b.flags.bits()))
-        });
+        // Sort dependency arrays by (name, EVR, flags) to match RPM's doFind()
+        // ordering in rpmds.cc. All dependency types use the same sort.
+        sort_deps(&mut self.provides);
 
         // Build file-to-dependency mapping (FILEDEPENDSX/N/DEPENDSDICT) for
         // auto-generated provides (e.g. sysusers.d). Look up post-sort indices.
@@ -1594,18 +1817,51 @@ impl PackageBuilder {
         let mut obsolete_flags = Vec::new();
         let mut obsolete_versions = Vec::new();
 
-        self.obsoletes.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.obsoletes);
         for d in self.obsoletes.into_iter() {
             obsolete_names.push(d.name);
             obsolete_flags.push(d.flags.bits());
             obsolete_versions.push(d.version);
         }
 
+        // Auto-generate interpreter requires for scriptlets.
+        // Each scriptlet with a program generates a require with INTERP | <phase>.
+        // The explicit `-p` case (e.g. `%post -p /bin/sh`) also adds a bare INTERP require.
+        {
+            let scriptlet_phases: &[(&Option<Scriptlet>, DependencyFlags)] = &[
+                (&self.pre_inst_script, DependencyFlags::SCRIPT_PRE),
+                (&self.post_inst_script, DependencyFlags::SCRIPT_POST),
+                (&self.pre_uninst_script, DependencyFlags::SCRIPT_PREUN),
+                (&self.post_uninst_script, DependencyFlags::SCRIPT_POSTUN),
+                (&self.pre_trans_script, DependencyFlags::PRETRANS),
+                (&self.post_trans_script, DependencyFlags::POSTTRANS),
+                (&self.verify_script, DependencyFlags::SCRIPT_VERIFY),
+            ];
+            for (scriptlet, phase_flag) in scriptlet_phases {
+                if let Some(script) = scriptlet {
+                    let interp = script
+                        .program
+                        .as_ref()
+                        .and_then(|p| p.first())
+                        .map(|s| s.as_str())
+                        .unwrap_or("/bin/sh");
+                    let dep = Dependency {
+                        name: interp.to_owned(),
+                        flags: DependencyFlags::INTERP | *phase_flag,
+                        version: String::new(),
+                    };
+                    if !self.requires.contains(&dep) {
+                        self.requires.push(dep);
+                    }
+                }
+            }
+        }
+
         let mut require_names = Vec::new();
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
-        self.requires.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.requires);
         for d in self.requires.into_iter() {
             require_names.push(d.name);
             require_flags.push(d.flags.bits());
@@ -1616,7 +1872,7 @@ impl PackageBuilder {
         let mut conflicts_flags = Vec::new();
         let mut conflicts_versions = Vec::new();
 
-        self.conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.conflicts);
         for d in self.conflicts.into_iter() {
             conflicts_names.push(d.name);
             conflicts_flags.push(d.flags.bits());
@@ -1627,7 +1883,7 @@ impl PackageBuilder {
         let mut recommends_flags = Vec::new();
         let mut recommends_versions = Vec::new();
 
-        self.recommends.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.recommends);
         for d in self.recommends.into_iter() {
             recommends_names.push(d.name);
             recommends_flags.push(d.flags.bits());
@@ -1638,7 +1894,7 @@ impl PackageBuilder {
         let mut suggests_flags = Vec::new();
         let mut suggests_versions = Vec::new();
 
-        self.suggests.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.suggests);
         for d in self.suggests.into_iter() {
             suggests_names.push(d.name);
             suggests_flags.push(d.flags.bits());
@@ -1649,7 +1905,7 @@ impl PackageBuilder {
         let mut enhances_flags = Vec::new();
         let mut enhances_versions = Vec::new();
 
-        self.enhances.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.enhances);
         for d in self.enhances.into_iter() {
             enhances_names.push(d.name);
             enhances_flags.push(d.flags.bits());
@@ -1660,7 +1916,7 @@ impl PackageBuilder {
         let mut supplements_flags = Vec::new();
         let mut supplements_versions = Vec::new();
 
-        self.supplements.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.supplements);
         for d in self.supplements.into_iter() {
             supplements_names.push(d.name);
             supplements_flags.push(d.flags.bits());
@@ -1671,7 +1927,7 @@ impl PackageBuilder {
         let mut order_flags = Vec::new();
         let mut order_versions = Vec::new();
 
-        self.order_with_requires.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_deps(&mut self.order_with_requires);
         for d in self.order_with_requires.into_iter() {
             order_names.push(d.name);
             order_flags.push(d.flags.bits());
@@ -1888,10 +2144,7 @@ impl PackageBuilder {
                     IndexTag::RPMTAG_FILEDEPENDSN,
                     IndexData::Int32(file_depends_n),
                 ),
-                IndexEntry::new(
-                    IndexTag::RPMTAG_DEPENDSDICT,
-                    IndexData::Int32(depends_dict),
-                ),
+                IndexEntry::new(IndexTag::RPMTAG_DEPENDSDICT, IndexData::Int32(depends_dict)),
             ]);
         }
 
@@ -2169,6 +2422,29 @@ impl PackageBuilder {
             script.apply(&mut actual_records, POSTUNTRANS_TAGS);
         }
 
+        if let Some(script) = self.verify_script {
+            script.apply(&mut actual_records, VERIFYSCRIPT_TAGS);
+        }
+
+        // Serialize package triggers
+        serialize_triggers(&self.triggers, &mut actual_records, TRIGGER_TAGS, None);
+
+        // Serialize file triggers
+        serialize_triggers(
+            &self.file_triggers,
+            &mut actual_records,
+            FILETRIGGER_TAGS,
+            Some(IndexTag::RPMTAG_FILETRIGGERPRIORITIES),
+        );
+
+        // Serialize transaction file triggers
+        serialize_triggers(
+            &self.trans_file_triggers,
+            &mut actual_records,
+            TRANSFILETRIGGER_TAGS,
+            Some(IndexTag::RPMTAG_TRANSFILETRIGGERPRIORITIES),
+        );
+
         if let Some(vendor) = self.vendor {
             actual_records.push(IndexEntry::new(
                 IndexTag::RPMTAG_VENDOR,
@@ -2207,6 +2483,109 @@ impl PackageBuilder {
         let header = Header::from_entries(actual_records, IndexTag::RPMTAG_HEADERIMMUTABLE);
 
         Ok((lead, header, payload))
+    }
+}
+
+/// Extract comparison flags and version string from an optional version condition.
+/// Sort dependencies by (name, EVR, flags) to match what RPM does. Uses a lexicographic
+/// sort, not a version-aware one.
+fn sort_deps(deps: &mut Vec<Dependency>) {
+    deps.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then_with(|| a.version.cmp(&b.version))
+            .then_with(|| a.flags.bits().cmp(&b.flags.bits()))
+    });
+}
+
+fn unpack_version_condition(
+    condition: Option<(DependencyFlags, &str)>,
+) -> (DependencyFlags, String) {
+    match condition {
+        Some((cmp, ver)) => (cmp, ver.to_owned()),
+        None => (DependencyFlags::empty(), String::new()),
+    }
+}
+
+/// Add a list of trigger entries into RPM header index entries.
+///
+/// Each trigger family (package triggers, file triggers, trans file triggers) uses
+/// the same parallel-array structure but with different tag sets.
+/// If `priority_tag` is provided, a priorities array is also written (used by file triggers).
+fn serialize_triggers(
+    triggers: &[PackageTriggerEntry],
+    records: &mut Vec<IndexEntry<IndexTag>>,
+    tags: TriggerIndexTags,
+    priority_tag: Option<IndexTag>,
+) {
+    if triggers.is_empty() {
+        return;
+    }
+
+    let (scripts_tag, progs_tag, _flags_tag, names_tag, versions_tag, cond_flags_tag, index_tag) =
+        tags;
+
+    // Scripts and progs arrays preserve insertion order (one entry per trigger).
+    let mut scripts = Vec::with_capacity(triggers.len());
+    let mut progs = Vec::with_capacity(triggers.len());
+    for entry in triggers {
+        scripts.push(entry.script.script.clone());
+        progs.push(
+            entry
+                .script
+                .program
+                .as_ref()
+                .and_then(|p| p.first().cloned())
+                .unwrap_or_else(|| "/bin/sh".to_owned()),
+        );
+    }
+
+    // Condition arrays (names, versions, flags, indices) are sorted to match RPM's ordering:
+    // by (name, version, flags, index)
+    let mut condition_order: Vec<usize> = (0..triggers.len()).collect();
+    condition_order.sort_by(|&a, &b| {
+        let ea = &triggers[a];
+        let eb = &triggers[b];
+        ea.name
+            .cmp(&eb.name)
+            .then(ea.version.cmp(&eb.version))
+            .then(ea.flags.bits().cmp(&eb.flags.bits()))
+            .then(a.cmp(&b))
+    });
+
+    let mut names = Vec::with_capacity(triggers.len());
+    let mut versions = Vec::with_capacity(triggers.len());
+    let mut cond_flags = Vec::with_capacity(triggers.len());
+    let mut indices = Vec::with_capacity(triggers.len());
+    for &i in &condition_order {
+        let entry = &triggers[i];
+        names.push(entry.name.clone());
+        versions.push(entry.version.clone());
+        cond_flags.push(entry.flags.bits());
+        indices.push(i as u32); // maps back to the script at the original position
+    }
+
+    records.push(IndexEntry::new(
+        scripts_tag,
+        IndexData::StringArray(scripts),
+    ));
+    records.push(IndexEntry::new(progs_tag, IndexData::StringArray(progs)));
+    records.push(IndexEntry::new(names_tag, IndexData::StringArray(names)));
+    records.push(IndexEntry::new(
+        versions_tag,
+        IndexData::StringArray(versions),
+    ));
+    records.push(IndexEntry::new(
+        cond_flags_tag,
+        IndexData::Int32(cond_flags),
+    ));
+    records.push(IndexEntry::new(index_tag, IndexData::Int32(indices)));
+
+    if let Some(prio_tag) = priority_tag {
+        records.push(IndexEntry::new(
+            prio_tag,
+            IndexData::Int32(vec![1000000u32; triggers.len()]),
+        ));
     }
 }
 

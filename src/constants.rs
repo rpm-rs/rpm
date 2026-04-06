@@ -6,7 +6,7 @@ use std::fmt::Display;
 
 use bitflags::bitflags;
 
-use crate::ScriptletIndexTags;
+use crate::{ScriptletIndexTags, TriggerIndexTags};
 
 pub const HEADER_IMAGE: u32 = 61;
 pub const HEADER_SIGNATURES: u32 = 62;
@@ -641,58 +641,100 @@ pub enum DigestAlgorithm {
     Sha3_512 = 14,
 }
 
-/// Index tag values for the %prein scriptlet,
+// Scriptlet index tag tuples: (script_tag, flags_tag, prog_tag).
+
+/// Index tag values for the %prein scriptlet.
 pub(crate) const PREIN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREIN,
     IndexTag::RPMTAG_PREINFLAGS,
     IndexTag::RPMTAG_PREINPROG,
 );
 
-/// Index tag values for the %postin scriptlet,
+/// Index tag values for the %postin scriptlet.
 pub(crate) const POSTIN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTIN,
     IndexTag::RPMTAG_POSTINFLAGS,
     IndexTag::RPMTAG_POSTINPROG,
 );
 
-/// Index tag values for the %preun scriptlet,
+/// Index tag values for the %preun scriptlet.
 pub(crate) const PREUN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREUN,
     IndexTag::RPMTAG_PREUNFLAGS,
     IndexTag::RPMTAG_PREUNPROG,
 );
 
-/// Index tag values for the %postun scriptlet,
+/// Index tag values for the %postun scriptlet.
 pub(crate) const POSTUN_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTUN,
     IndexTag::RPMTAG_POSTUNFLAGS,
     IndexTag::RPMTAG_POSTUNPROG,
 );
 
-/// Index tag values for the %pretrans scriptlet,
+/// Index tag values for the %pretrans scriptlet.
 pub(crate) const PRETRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PRETRANS,
     IndexTag::RPMTAG_PRETRANSFLAGS,
     IndexTag::RPMTAG_PRETRANSPROG,
 );
 
-/// Index tag values for the %posttrans scriptlet,
+/// Index tag values for the %posttrans scriptlet.
 pub(crate) const POSTTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTTRANS,
     IndexTag::RPMTAG_POSTTRANSFLAGS,
     IndexTag::RPMTAG_POSTTRANSPROG,
 );
 
-/// Index tag values for the %preuntrans scriptlet,
+/// Index tag values for the %preuntrans scriptlet.
 pub(crate) const PREUNTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_PREUNTRANS,
     IndexTag::RPMTAG_PREUNTRANSFLAGS,
     IndexTag::RPMTAG_PREUNTRANSPROG,
 );
 
-/// Index tag values for the %postuntrans scriptlet,
+/// Index tag values for the %postuntrans scriptlet.
 pub(crate) const POSTUNTRANS_TAGS: ScriptletIndexTags = (
     IndexTag::RPMTAG_POSTUNTRANS,
     IndexTag::RPMTAG_POSTUNTRANSFLAGS,
     IndexTag::RPMTAG_POSTUNTRANSPROG,
+);
+
+/// Index tag values for the %verifyscript scriptlet.
+pub(crate) const VERIFYSCRIPT_TAGS: ScriptletIndexTags = (
+    IndexTag::RPMTAG_VERIFYSCRIPT,
+    IndexTag::RPMTAG_VERIFYSCRIPTFLAGS,
+    IndexTag::RPMTAG_VERIFYSCRIPTPROG,
+);
+
+/// Index tag values for package triggers (%triggerin, %triggerun, etc.)
+pub(crate) const TRIGGER_TAGS: TriggerIndexTags = (
+    IndexTag::RPMTAG_TRIGGERSCRIPTS,
+    IndexTag::RPMTAG_TRIGGERSCRIPTPROG,
+    IndexTag::RPMTAG_TRIGGERSCRIPTFLAGS,
+    IndexTag::RPMTAG_TRIGGERNAME,
+    IndexTag::RPMTAG_TRIGGERVERSION,
+    IndexTag::RPMTAG_TRIGGERFLAGS,
+    IndexTag::RPMTAG_TRIGGERINDEX,
+);
+
+/// Index tag values for file triggers (%filetriggerin, %filetriggerun, etc.)
+pub(crate) const FILETRIGGER_TAGS: TriggerIndexTags = (
+    IndexTag::RPMTAG_FILETRIGGERSCRIPTS,
+    IndexTag::RPMTAG_FILETRIGGERSCRIPTPROG,
+    IndexTag::RPMTAG_FILETRIGGERSCRIPTFLAGS,
+    IndexTag::RPMTAG_FILETRIGGERNAME,
+    IndexTag::RPMTAG_FILETRIGGERVERSION,
+    IndexTag::RPMTAG_FILETRIGGERFLAGS,
+    IndexTag::RPMTAG_FILETRIGGERINDEX,
+);
+
+/// Index tag values for transaction file triggers (%transfiletriggerin, etc.)
+pub(crate) const TRANSFILETRIGGER_TAGS: TriggerIndexTags = (
+    IndexTag::RPMTAG_TRANSFILETRIGGERSCRIPTS,
+    IndexTag::RPMTAG_TRANSFILETRIGGERSCRIPTPROG,
+    IndexTag::RPMTAG_TRANSFILETRIGGERSCRIPTFLAGS,
+    IndexTag::RPMTAG_TRANSFILETRIGGERNAME,
+    IndexTag::RPMTAG_TRANSFILETRIGGERVERSION,
+    IndexTag::RPMTAG_TRANSFILETRIGGERFLAGS,
+    IndexTag::RPMTAG_TRANSFILETRIGGERINDEX,
 );
