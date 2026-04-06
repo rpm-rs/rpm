@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.20.0
+
+Huge release! Testing has been improved dramatically, as has conformance / similarity against what RPM produces. There are also many breaking changes to be aware of, but they are worthwhile.
+
 ### Added
 
 - `PackageBuilder::default_file_attrs()` and `PackageBuilder::default_dir_attrs()` for setting default ownership and permissions, similar to `%defattr` in RPM spec files.
@@ -22,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Signer::load_from_asc_file()` and `Verifier::load_from_asc_file()` helpers, to streamline building `Signer` and `Verifier`.
 - `Signer` and `Verifier` now support loading keyring files containing multiple OpenPGP certificates.
 - `Verifier::with_key()` allows selecting a specific certificate by fingerprint from a loaded keyring.
-- ML-DSA package signatures can now be created and verified.
+- ML-DSA package signatures can now be created and verified. Note that the IETF standard on OpenPGP support for post-quantum cryptography is not yet final, so producing packages with such signatures is not yet recommended - nonetheless, PQC-signed RPMs are "in the wild" already.
 - `Verifier` can now load multiple keys independently - see "Breaking Changes".
 - `Package::write_to()` writes a package to a file or directory. If given a directory, auto-generates the filename from package NEVRA.
 - `PackageMetadata::get_verify_script()` getter for the `%verifyscript` scriptlet.
