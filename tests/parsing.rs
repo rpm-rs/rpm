@@ -7,6 +7,8 @@ use rpm::*;
 
 mod common;
 
+const COOKIE: &str = "localhost 1681068559";
+
 /// Verify that the lead, signature header, header, and payload boundaries
 /// of each fixture RPM (v4, v6, signed, unsigned, constructed) point to
 /// valid magic bytes for their respective segment types.
@@ -119,7 +121,10 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(metadata.get_group().unwrap(), "Unspecified");
 
     assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+    assert_eq!(
+        metadata.get_build_time().unwrap(),
+        common::FIXTURE_SOURCE_DATE as u64
+    );
 
     assert_eq!(
         metadata.get_payload_compressor().unwrap(),
@@ -127,7 +132,7 @@ fn test_file_attrs() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(metadata.get_installed_size().unwrap(), 301);
 
-    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
     assert_eq!(
         metadata.get_source_rpm().unwrap(),
         "rpm-file-attrs-1.0-1.src.rpm"
@@ -255,7 +260,10 @@ fn test_file_types() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(metadata.get_group().unwrap(), "Unspecified");
 
     assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+    assert_eq!(
+        metadata.get_build_time().unwrap(),
+        common::FIXTURE_SOURCE_DATE as u64
+    );
 
     assert_eq!(
         metadata.get_payload_compressor().unwrap(),
@@ -263,7 +271,7 @@ fn test_file_types() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(metadata.get_installed_size().unwrap(), 2048);
 
-    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
     assert_eq!(
         metadata.get_source_rpm().unwrap(),
         "rpm-file-types-1.0-1.src.rpm"
@@ -361,10 +369,13 @@ fn test_basic_package() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(metadata.get_vendor().unwrap(), "Los Pollos Hermanos");
         assert_eq!(metadata.get_group().unwrap(), "Development/Tools");
         assert_eq!(metadata.get_vcs().unwrap(), "https://github.com/rpm-rs/rpm");
-        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+        assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
 
         assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+        assert_eq!(
+            metadata.get_build_time().unwrap(),
+            common::FIXTURE_SOURCE_DATE as u64
+        );
 
         assert_eq!(
             metadata.get_payload_compressor().unwrap(),
@@ -547,7 +558,10 @@ fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(metadata.get_group().unwrap(), "Unspecified");
 
         assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+        assert_eq!(
+            metadata.get_build_time().unwrap(),
+            common::FIXTURE_SOURCE_DATE as u64
+        );
 
         assert_eq!(
             metadata.get_payload_compressor().unwrap(),
@@ -555,7 +569,7 @@ fn test_empty_package() -> Result<(), Box<dyn std::error::Error>> {
         );
         assert_eq!(metadata.get_installed_size().unwrap(), 0);
 
-        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+        assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
         assert_eq!(metadata.get_source_rpm().unwrap(), "rpm-empty-0-0.src.rpm");
         assert_eq!(
             metadata.get_file_digest_algorithm().unwrap(),
@@ -679,9 +693,12 @@ fn test_empty_source_package() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(metadata.get_license().unwrap(), "LGPL");
 
         assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-        assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+        assert_eq!(
+            metadata.get_build_time().unwrap(),
+            common::FIXTURE_SOURCE_DATE as u64
+        );
 
-        assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+        assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
         assert_eq!(
             metadata.get_file_digest_algorithm().unwrap(),
             DigestAlgorithm::Sha2_256
@@ -761,7 +778,10 @@ fn test_scriptlets_package() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(metadata.get_group().unwrap(), "Unspecified");
 
     assert_eq!(metadata.get_build_host().unwrap(), "localhost");
-    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+    assert_eq!(
+        metadata.get_build_time().unwrap(),
+        common::FIXTURE_SOURCE_DATE as u64
+    );
 
     assert_eq!(
         metadata.get_payload_compressor().unwrap(),
@@ -769,7 +789,7 @@ fn test_scriptlets_package() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(metadata.get_installed_size().unwrap(), 15);
 
-    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(metadata.get_cookie().unwrap(), COOKIE);
     assert_eq!(
         metadata.get_source_rpm().unwrap(),
         "rpm-scriptlets-1.0-1.src.rpm"

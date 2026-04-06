@@ -104,7 +104,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[0].content.len(),
                 flags: FileFlags::CONFIG,
                 digest: Some(FileDigest {
@@ -128,7 +128,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[1].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -151,7 +151,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[2].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -171,7 +171,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[3].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -192,7 +192,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[4].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -216,7 +216,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[5].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -239,7 +239,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[6].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -261,7 +261,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[7].content.len(),
                 flags: FileFlags::DOC,
                 digest: Some(FileDigest {
@@ -285,7 +285,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[8].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -308,7 +308,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[9].content.len(),
                 flags: FileFlags::GHOST,
                 digest: None,
@@ -328,7 +328,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned()
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[10].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -491,7 +491,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[0].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -512,7 +512,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[1].content.len(),
                 flags: FileFlags::ARTIFACT,
                 digest: Some(FileDigest {
@@ -536,7 +536,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[2].content.len(),
                 flags: FileFlags::CONFIG,
                 digest: Some(FileDigest {
@@ -560,7 +560,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[3].content.len(),
                 flags: FileFlags::CONFIG | FileFlags::NOREPLACE,
                 digest: Some(FileDigest {
@@ -584,7 +584,7 @@ mod fixtures {
                     user: "jane".to_owned(),
                     group: "bob".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[4].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -607,7 +607,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[5].content.len(),
                 flags: FileFlags::empty(),
                 digest: None,
@@ -628,7 +628,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: files[6].content.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -652,7 +652,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 4,
                 flags: FileFlags::DOC,
                 digest: Some(FileDigest {
@@ -675,7 +675,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 11,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -698,7 +698,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 12,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -721,7 +721,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 15,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -744,7 +744,7 @@ mod fixtures {
                     user: "jane".to_owned(),
                     group: "jane".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 26,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -766,7 +766,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 0,
                 flags: FileFlags::GHOST,
                 digest: None,
@@ -788,7 +788,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 8,
                 flags: FileFlags::LICENSE,
                 digest: Some(FileDigest {
@@ -811,7 +811,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 10,
                 flags: FileFlags::MISSINGOK,
                 digest: Some(FileDigest {
@@ -834,7 +834,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 7,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -857,7 +857,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 7,
                 flags: FileFlags::README,
                 digest: Some(FileDigest {
@@ -880,7 +880,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 6,
                 flags: FileFlags::empty(),
                 digest: None,
@@ -903,7 +903,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 0,
                 flags: FileFlags::empty(),
                 digest: None,
@@ -925,7 +925,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 6,
                 flags: FileFlags::empty(),
                 digest: None,
@@ -949,7 +949,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 11,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -972,7 +972,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 12,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -995,7 +995,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 11,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1018,7 +1018,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 12,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1041,7 +1041,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 10,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1069,7 +1069,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: expected_sysusers.len(),
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1124,7 +1124,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 0,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1150,7 +1150,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 31,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1177,7 +1177,7 @@ mod fixtures {
                     user: "root".to_owned(),
                     group: "root".to_owned(),
                 },
-                modified_at: Timestamp(1681068559),
+                modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                 size: 2017,
                 flags: FileFlags::empty(),
                 digest: Some(FileDigest {
@@ -1235,7 +1235,7 @@ mod fixtures {
                         user: "root".to_owned(),
                         group: "root".to_owned()
                     },
-                    modified_at: Timestamp(1681068559),
+                    modified_at: Timestamp(common::FIXTURE_SOURCE_DATE),
                     size: 162,
                     flags: FileFlags::SPECFILE,
                     digest: Some(FileDigest {
