@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ML-DSA package signatures can now be created and verified.
 - `Verifier` can now load multiple keys independently - see "Breaking Changes".
 - `Package::write_to()` writes a package to a file or directory. If given a directory, auto-generates the filename from package NEVRA.
+- `PackageMetadata::get_verify_script()` getter for the `%verifyscript` scriptlet.
+- `PackageMetadata::get_triggers()`, `get_file_triggers()`, and `get_trans_file_triggers()` getters for reading trigger entries from parsed packages.
+- `Trigger` and `TriggerCondition` public types for representing parsed trigger data.
+- `Dependency::script_verify()` constructor for `%verify` scriptlet interpreter dependencies.
+- `PackageBuilder::verify_script()` for setting the `%verifyscript` scriptlet.
+- `PackageBuilder` trigger methods: `trigger_in()`, `trigger_un()`, `trigger_postun()`, `trigger_prein()`, `file_trigger_in()`, `file_trigger_un()`, `file_trigger_postun()`, `trans_file_trigger_in()`, `trans_file_trigger_un()`, `trans_file_trigger_postun()`.
 
 ### Fixed
 
@@ -46,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Package::verify_signatures()` will now succeed if any signature validation succeeds (if the package has more than one) against `Verifier`.
 - `Package::sign()` and `Package::sign_with_timestamps()` now append to `RPMSIGTAG_OPENPGPSIGNATURES` instead of replacing the signature header.
 - `Package::sign()`, `Package::sign_with_timestamps()`, and `Package::clear_signatures()` now preserve file IMA signatures.
+- `PackageBuilder::verify_script()` was accepted by `PackageBuilder` but never added into the built package.
+- `Scriptlet` "prog" tags are now written as a String type for a single provided argument, matching RPM - previously they were always written as STRING_ARRAY.
+- Reading scriptlet "prog" tags now handles both STRING and STRING_ARRAY types, matching RPM which writes STRING for single-argument interpreters (the common case).
 
 ### Changed
 

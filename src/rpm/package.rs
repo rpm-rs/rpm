@@ -816,6 +816,12 @@ impl PackageMetadata {
         self.get_scriptlet(POSTUNTRANS_TAGS)
     }
 
+    /// Get the %verifyscript scriptlet for this package
+    #[inline]
+    pub fn get_verify_script(&self) -> Result<Scriptlet, Error> {
+        self.get_scriptlet(VERIFYSCRIPT_TAGS)
+    }
+
     fn get_dependencies(
         &self,
         names_tag: IndexTag,
@@ -875,6 +881,80 @@ impl PackageMetadata {
             flags,
             program,
         })
+    }
+
+    /// Get package triggers (%triggerin, %triggerun, %triggerpostun, %triggerprein).
+    ///
+    /// Returns an empty list if no package triggers are defined.
+    pub fn get_triggers(&self) -> Result<Vec<Trigger>, Error> {
+        self.get_trigger_entries(TRIGGER_TAGS)
+    }
+
+    /// Get file triggers (%filetriggerin, %filetriggerun, %filetriggerpostun).
+    ///
+    /// Returns an empty list if no file triggers are defined.
+    pub fn get_file_triggers(&self) -> Result<Vec<Trigger>, Error> {
+        self.get_trigger_entries(FILETRIGGER_TAGS)
+    }
+
+    /// Get transaction file triggers (%transfiletriggerin, etc.).
+    ///
+    /// Returns an empty list if no transaction file triggers are defined.
+    pub fn get_trans_file_triggers(&self) -> Result<Vec<Trigger>, Error> {
+        self.get_trigger_entries(TRANSFILETRIGGER_TAGS)
+    }
+
+    fn get_trigger_entries(&self, tags: TriggerIndexTags) -> Result<Vec<Trigger>, Error> {
+        let (
+            scripts_tag,
+            progs_tag,
+            _flags_tag,
+            names_tag,
+            versions_tag,
+            cond_flags_tag,
+            index_tag,
+        ) = tags;
+
+        let scripts = match self.header.get_entry_data_as_string_array(scripts_tag) {
+            Ok(v) => v,
+            Err(Error::TagNotFound(_)) => return Ok(vec![]),
+            Err(e) => return Err(e),
+        };
+
+        let progs = self.header.get_entry_data_as_string_array(progs_tag)?;
+        let names = self.header.get_entry_data_as_string_array(names_tag)?;
+        let versions = self.header.get_entry_data_as_string_array(versions_tag)?;
+        let cond_flags = self.header.get_entry_data_as_u32_array(cond_flags_tag)?;
+        let indices = self.header.get_entry_data_as_u32_array(index_tag)?;
+
+        // Build triggers: group conditions by their script index
+        let num_scripts = scripts.len();
+        let mut triggers: Vec<Trigger> = scripts
+            .into_iter()
+            .zip(progs)
+            .map(|(script, prog)| Trigger {
+                script: script.to_owned(),
+                program: vec![prog.to_owned()],
+                conditions: Vec::new(),
+            })
+            .collect();
+
+        for (name, (version, (flags, idx))) in names.into_iter().zip(
+            versions
+                .into_iter()
+                .zip(cond_flags.into_iter().zip(indices)),
+        ) {
+            let script_idx = idx as usize;
+            if script_idx < num_scripts {
+                triggers[script_idx].conditions.push(TriggerCondition {
+                    name: name.to_owned(),
+                    flags: DependencyFlags::from_bits_retain(flags),
+                    version: version.to_owned(),
+                });
+            }
+        }
+
+        Ok(triggers)
     }
 
     /// Get a list of dependencies which this package "provides"

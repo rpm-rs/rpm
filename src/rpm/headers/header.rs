@@ -314,6 +314,17 @@ where
                 }
                 Ok(result)
             }
+            // Some tags that are typically StringArray types are written as String type when only
+            // a single value exists. e.g. scriptlet "prog" tags with a single interpreter argument
+            IndexData::StringTag(s) if !s.is_empty() => Ok(vec![s.as_str()]),
+            IndexData::StringTag(_) => {
+                let remaining = &self.store[entry.offset as usize..];
+                let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                let s = std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                    tag: entry.tag.to_string(),
+                })?;
+                Ok(vec![s])
+            }
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "string array",
                 actual_data_type: entry.data.to_string(),

@@ -736,3 +736,270 @@ fn test_empty_source_package() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+/// Parse the rpm-scriptlets fixture and verify scriptlets, triggers, and file triggers.
+#[test]
+fn test_scriptlets_package() -> Result<(), Box<dyn std::error::Error>> {
+    let package = Package::open(common::pkgs::v6::RPM_SCRIPTLETS)?;
+    let metadata = &package.metadata;
+
+    assert_eq!(metadata.is_source_package(), false);
+    assert_eq!(metadata.get_name().unwrap(), "rpm-scriptlets");
+    assert!(metadata.get_epoch().is_err());
+    assert_eq!(metadata.get_version().unwrap(), "1.0");
+    assert_eq!(metadata.get_release().unwrap(), "1");
+    assert_eq!(metadata.get_arch().unwrap(), "noarch");
+    assert_eq!(
+        metadata.get_description().unwrap(),
+        "A package for exercising RPM scriptlets, triggers, and file triggers."
+    );
+    assert_eq!(
+        metadata.get_summary().unwrap(),
+        "Test RPM scriptlets and triggers"
+    );
+    assert_eq!(metadata.get_license().unwrap(), "MIT");
+    assert_eq!(metadata.get_group().unwrap(), "Unspecified");
+
+    assert_eq!(metadata.get_build_host().unwrap(), "localhost");
+    assert_eq!(metadata.get_build_time().unwrap(), 1681068559);
+
+    assert_eq!(
+        metadata.get_payload_compressor().unwrap(),
+        CompressionType::None
+    );
+    assert_eq!(metadata.get_installed_size().unwrap(), 15);
+
+    assert_eq!(metadata.get_cookie().unwrap(), "localhost 1681068559");
+    assert_eq!(
+        metadata.get_source_rpm().unwrap(),
+        "rpm-scriptlets-1.0-1.src.rpm"
+    );
+    assert_eq!(
+        metadata.get_file_digest_algorithm().unwrap(),
+        DigestAlgorithm::Sha2_256
+    );
+
+    assert!(matches!(metadata.get_vendor(), Err(Error::TagNotFound(_))));
+    assert!(matches!(metadata.get_url(), Err(Error::TagNotFound(_))));
+    assert!(matches!(
+        metadata.get_packager(),
+        Err(Error::TagNotFound(_))
+    ));
+    assert!(matches!(metadata.get_vcs(), Err(Error::TagNotFound(_))));
+
+    assert_eq!(metadata.get_file_entries().unwrap().len(), 1);
+    assert_eq!(metadata.get_file_paths().unwrap().len(), 1);
+    assert!(metadata.get_changelog_entries().unwrap().is_empty());
+
+    // Dependencies
+    assert_eq!(
+        metadata.get_provides().unwrap(),
+        vec![Dependency::eq("rpm-scriptlets", "1.0-1")]
+    );
+    assert_eq!(metadata.get_conflicts().unwrap(), vec![]);
+    assert_eq!(metadata.get_obsoletes().unwrap(), vec![]);
+    assert_eq!(metadata.get_supplements().unwrap(), vec![]);
+    assert_eq!(metadata.get_suggests().unwrap(), vec![]);
+    assert_eq!(metadata.get_enhances().unwrap(), vec![]);
+    assert_eq!(metadata.get_recommends().unwrap(), vec![]);
+
+    // Basic scriptlets
+    // NOTE: RPM includes comments that follow each scriptlet body up to the
+    // next section marker, so the script bodies include trailing comments.
+    let sh = Some(vec!["/bin/sh".to_owned()]);
+
+    assert_eq!(
+        metadata.get_pre_install_script().unwrap(),
+        Scriptlet {
+            script: "echo \"pre-install\"\n\n# Explicit interpreter".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_post_install_script().unwrap(),
+        Scriptlet {
+            script: "echo \"post-install\"".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_pre_uninstall_script().unwrap(),
+        Scriptlet {
+            script: "echo \"pre-uninstall\"".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_post_uninstall_script().unwrap(),
+        Scriptlet {
+            script: "echo \"post-uninstall\"\n\n# Transaction-level scriptlets".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_pre_trans_script().unwrap(),
+        Scriptlet {
+            script: "echo \"pre-transaction\"".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_post_trans_script().unwrap(),
+        Scriptlet {
+            script: "echo \"post-transaction\"\n\n# Verify scriptlet".to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+    assert_eq!(
+        metadata.get_verify_script().unwrap(),
+        Scriptlet {
+            script: "echo \"verify\"\n\n# Triggers (against a hypothetical target package)"
+                .to_owned(),
+            flags: None,
+            program: sh.clone(),
+        }
+    );
+
+    // Package triggers: triggerprein, triggerin (> 5.0), triggerun (<= 6.0), triggerpostun
+    assert_eq!(
+        metadata.get_triggers().unwrap(),
+        vec![
+            Trigger {
+                script: "echo \"trigger-pre-install on bash\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "bash".to_owned(),
+                    flags: DependencyFlags::TRIGGERPREIN,
+                    version: "".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"trigger-install on bash > 5.0\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "bash".to_owned(),
+                    flags: DependencyFlags::TRIGGERIN | DependencyFlags::GREATER,
+                    version: "5.0".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"trigger-uninstall on bash <= 6.0\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "bash".to_owned(),
+                    flags: DependencyFlags::TRIGGERUN | DependencyFlags::LE,
+                    version: "6.0".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"trigger-post-uninstall on bash\"\n\n# File triggers".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "bash".to_owned(),
+                    flags: DependencyFlags::TRIGGERPOSTUN,
+                    version: "".to_owned(),
+                }],
+            },
+        ]
+    );
+
+    // File triggers (filetriggerin, filetriggerun, filetriggerpostun -- /usr/lib)
+    assert_eq!(
+        metadata.get_file_triggers().unwrap(),
+        vec![
+            Trigger {
+                script: "echo \"file-trigger-install in /usr/lib\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/lib".to_owned(),
+                    flags: DependencyFlags::TRIGGERIN,
+                    version: "".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"file-trigger-uninstall in /usr/lib\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/lib".to_owned(),
+                    flags: DependencyFlags::TRIGGERUN,
+                    version: "".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"file-trigger-post-uninstall in /usr/lib\"\n\n# Transaction-level file triggers".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/lib".to_owned(),
+                    flags: DependencyFlags::TRIGGERPOSTUN,
+                    version: "".to_owned(),
+                }],
+            },
+        ]
+    );
+
+    // Transaction file triggers (transfiletriggerin, etc. -- /usr/bin)
+    assert_eq!(
+        metadata.get_trans_file_triggers().unwrap(),
+        vec![
+            Trigger {
+                script: "echo \"trans-file-trigger-install in /usr/bin\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/bin".to_owned(),
+                    flags: DependencyFlags::TRIGGERIN,
+                    version: "".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"trans-file-trigger-uninstall in /usr/bin\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/bin".to_owned(),
+                    flags: DependencyFlags::TRIGGERUN,
+                    version: "".to_owned(),
+                }],
+            },
+            Trigger {
+                script: "echo \"trans-file-trigger-post-uninstall in /usr/bin\"".to_owned(),
+                program: vec!["/bin/sh".to_owned()],
+                conditions: vec![TriggerCondition {
+                    name: "/usr/bin".to_owned(),
+                    flags: DependencyFlags::TRIGGERPOSTUN,
+                    version: "".to_owned(),
+                }],
+            },
+        ]
+    );
+
+    assert_eq!(
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256)
+            .unwrap(),
+        "b2a74081a9e61b65cb546fb26d0072c7ab41f55a9f3b163b6c301d517ee8663d"
+    );
+    assert_eq!(
+        metadata
+            .signature
+            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256)
+            .unwrap(),
+        "f9200b308ed7e9303efb99f1f9a22f5eff0a67b9a270d626cd051cbf664d3d81"
+    );
+
+    // Payload digest
+    assert_eq!(
+        metadata
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+            .unwrap(),
+        vec!["70d9f63275a86467c02e0e97ba8b66b1a6eb1f3f36fbe2c20bb98953d381e91b"]
+    );
+
+    Ok(())
+}
