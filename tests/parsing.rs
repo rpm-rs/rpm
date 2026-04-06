@@ -1003,3 +1003,104 @@ fn test_scriptlets_package() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+/// Parse the rpm-rich-deps fixture and verify rich (boolean) dependencies
+/// are correctly read across all dependency types.
+#[test]
+fn test_rich_deps_package() -> Result<(), Box<dyn std::error::Error>> {
+    let package = Package::open(common::pkgs::v6::RPM_RICH_DEPS)?;
+    let metadata = &package.metadata;
+
+    assert_eq!(metadata.get_name().unwrap(), "rpm-rich-deps");
+    assert_eq!(metadata.get_version().unwrap(), "1.0");
+    assert_eq!(metadata.get_release().unwrap(), "1");
+    assert_eq!(metadata.get_arch().unwrap(), "noarch");
+    assert_eq!(metadata.get_license().unwrap(), "MIT");
+    assert_eq!(
+        metadata.get_summary().unwrap(),
+        "Test RPM rich (boolean) dependencies"
+    );
+
+    // Rich deps are stored as regular dependencies with the boolean
+    // expression as the name, flags=ANY, and empty version.
+    let requires = metadata.get_requires()?;
+    let rich_requires: Vec<_> = requires
+        .iter()
+        .filter(|d| d.name.starts_with('('))
+        .collect();
+    assert_eq!(rich_requires.len(), 11);
+
+    // Verify all rich requires have flags=ANY and empty version
+    for dep in &rich_requires {
+        assert_eq!(
+            dep.flags,
+            DependencyFlags::ANY,
+            "rich dep {} should have ANY flags",
+            dep.name
+        );
+        assert_eq!(
+            dep.version, "",
+            "rich dep {} should have empty version",
+            dep.name
+        );
+    }
+
+    // Verify specific rich requires are present
+    let rich_names: Vec<&str> = rich_requires.iter().map(|d| d.name.as_str()).collect();
+    assert!(rich_names.contains(&"(pkgA or pkgB)"));
+    assert!(rich_names.contains(&"(pkgC and pkgD)"));
+    assert!(rich_names.contains(&"(pkgE if pkgF)"));
+    assert!(rich_names.contains(&"(pkgG if pkgH else pkgI)"));
+    assert!(rich_names.contains(&"(pkgO with pkgP)"));
+    assert!(rich_names.contains(&"(pkgQ without pkgR)"));
+    // Nested
+    assert!(rich_names.contains(&"((pkgS or pkgT) and pkgU)"));
+    assert!(rich_names.contains(&"(pkgV or (pkgW and pkgX))"));
+    // With version constraints (embedded in the expression, not in the dep version field)
+    assert!(rich_names.contains(&"(pkgBB >= 2.0 or pkgCC >= 3.0)"));
+    assert!(rich_names.contains(&"(pkgDD >= 1.0 and pkgEE < 5.0)"));
+    assert!(rich_names.contains(&"(pkgFF >= 2.0 if pkgGG >= 1.0)"));
+
+    // Verify rpmlib(RichDependencies) is auto-generated
+    assert!(
+        requires
+            .iter()
+            .any(|d| d.name == "rpmlib(RichDependencies)")
+    );
+
+    // Rich deps in other dependency types
+    let recommends = metadata.get_recommends()?;
+    let rich_recommends: Vec<&str> = recommends
+        .iter()
+        .filter(|d| d.name.starts_with('('))
+        .map(|d| d.name.as_str())
+        .collect();
+    assert!(rich_recommends.contains(&"((pkgY and pkgZ) or pkgAA)"));
+    assert!(rich_recommends.contains(&"(pkgHH or pkgII)"));
+
+    let suggests = metadata.get_suggests()?;
+    assert!(suggests.iter().any(|d| d.name == "(pkgJJ if pkgKK)"));
+
+    let supplements = metadata.get_supplements()?;
+    let rich_supplements: Vec<&str> = supplements
+        .iter()
+        .filter(|d| d.name.starts_with('('))
+        .map(|d| d.name.as_str())
+        .collect();
+    assert!(rich_supplements.contains(&"(pkgJ unless pkgK)"));
+    assert!(rich_supplements.contains(&"(pkgLL and pkgMM)"));
+
+    let enhances = metadata.get_enhances()?;
+    assert!(enhances.iter().any(|d| d.name == "(pkgNN or pkgOO)"));
+
+    let conflicts = metadata.get_conflicts()?;
+    let rich_conflicts: Vec<&str> = conflicts
+        .iter()
+        .filter(|d| d.name.starts_with('('))
+        .map(|d| d.name.as_str())
+        .collect();
+    assert!(rich_conflicts.contains(&"(pkgL unless pkgM else pkgN)"));
+    assert!(rich_conflicts.contains(&"(pkgPP and pkgQQ)"));
+
+    Ok(())
+}

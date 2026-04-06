@@ -1662,6 +1662,24 @@ impl PackageBuilder {
                 .push(Dependency::rpmlib("LargeFiles", "4.12.0-1".to_owned()));
         }
 
+        let has_rich_deps = [
+            &self.requires,
+            &self.provides,
+            &self.conflicts,
+            &self.obsoletes,
+            &self.recommends,
+            &self.suggests,
+            &self.enhances,
+            &self.supplements,
+            &self.order_with_requires,
+        ]
+        .iter()
+        .any(|deps| deps.iter().any(|d| d.name.starts_with('(')));
+        if has_rich_deps {
+            self.requires
+                .push(Dependency::rpmlib("RichDependencies", "4.12.0-1"));
+        }
+
         // user() and group() virtual provides require RPM >= 4.19 (sysusers support).
         // V4 RPMs may target older distros, so use Recommends there for compatibility.
         for user in &users_to_create {
