@@ -770,6 +770,77 @@ fn test_build_rpm_scriptlets() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Build a package matching the rpm-rich-deps.spec file.
+///
+/// Tests rich (boolean) dependencies across all dependency types.
+#[test]
+fn test_build_rpm_rich_deps() -> Result<(), Box<dyn std::error::Error>> {
+    use rpm::Dependency;
+
+    let temp_dir = std::env::temp_dir().join("rpm-rs-rich-deps-test");
+    std::fs::create_dir_all(&temp_dir)?;
+    let data_path = temp_dir.join("data");
+    std::fs::write(&data_path, "rich-deps-test\n")?;
+
+    let pkg = PackageBuilder::new(
+        "rpm-rich-deps",
+        "1.0",
+        "MIT",
+        "noarch",
+        "Test RPM rich (boolean) dependencies",
+    )
+    .using_config(
+        BuildConfig::v6()
+            .compression(CompressionType::None)
+            .source_date(common::FIXTURE_SOURCE_DATE),
+    )
+    .release("1")
+    .description(
+        "A package for exercising RPM rich (boolean) dependency syntax,\n\
+         including all boolean operators and nesting.",
+    )
+    // Boolean operators
+    .requires(Dependency::any("(pkgA or pkgB)"))
+    .requires(Dependency::any("(pkgC and pkgD)"))
+    .requires(Dependency::any("(pkgE if pkgF)"))
+    .requires(Dependency::any("(pkgG if pkgH else pkgI)"))
+    .supplements(Dependency::any("(pkgJ unless pkgK)"))
+    .conflicts(Dependency::any("(pkgL unless pkgM else pkgN)"))
+    .requires(Dependency::any("(pkgO with pkgP)"))
+    .requires(Dependency::any("(pkgQ without pkgR)"))
+    // Nested boolean expressions
+    .requires(Dependency::any("((pkgS or pkgT) and pkgU)"))
+    .requires(Dependency::any("(pkgV or (pkgW and pkgX))"))
+    .recommends(Dependency::any("((pkgY and pkgZ) or pkgAA)"))
+    // Boolean deps with version constraints
+    .requires(Dependency::any("(pkgBB >= 2.0 or pkgCC >= 3.0)"))
+    .requires(Dependency::any("(pkgDD >= 1.0 and pkgEE < 5.0)"))
+    .requires(Dependency::any("(pkgFF >= 2.0 if pkgGG >= 1.0)"))
+    // Rich deps in other dependency types
+    .recommends(Dependency::any("(pkgHH or pkgII)"))
+    .suggests(Dependency::any("(pkgJJ if pkgKK)"))
+    .supplements(Dependency::any("(pkgLL and pkgMM)"))
+    .enhances(Dependency::any("(pkgNN or pkgOO)"))
+    .conflicts(Dependency::any("(pkgPP and pkgQQ)"))
+    // File
+    .with_file(&data_path, FileOptions::new("/opt/rpm-rich-deps/data"))?
+    .build()?;
+
+    // Clean up temp files
+    std::fs::remove_dir_all(&temp_dir)?;
+
+    // Write and re-read the package
+    let mut buf = Vec::new();
+    pkg.write(&mut buf)?;
+    let parsed = Package::parse(&mut buf.as_slice())?;
+
+    // Compare with fixture package
+    let fixture = Package::open(common::pkgs::v6::RPM_RICH_DEPS)?;
+    assert_packages_match(&parsed, &fixture, "v6")?;
+
+    Ok(())
+}
+
 /// Test that reading and writing RPM files is lossless.
 ///
 /// Parse all test fixture RPM files, write them out, and verify the checksum
