@@ -1680,10 +1680,19 @@ impl PackageBuilder {
             }
         }
 
-        // Auto-generate user() and group() provides from sysusers.d config files,
-        // matching RPM 4.19+ behavior.
-        // Track which file generated each provide for the file dependency mapping.
-        let mut file_dep_provides: Vec<(usize, Dependency)> = Vec::new();
+        // Auto-generate user(), group(), and groupmember() dependencies from
+        // sysusers.d config files, matching RPM 4.19+ behavior.
+        //
+        // Each sysusers.d line type produces different dependencies:
+        //   'u'/'u!' (create user)  -> provides: user(name)=ver, group(name)
+        //   'g'      (create group) -> provides: group(name)=ver
+        //   'm'      (add to group) -> provides: groupmember(user/group)=ver
+        //                              requires: user(name), group(name)
+        //
+        // We track (file_index, dep_type, dependency) so that the DEPENDSDICT
+        // mapping can later record which file generated each dependency.
+        // dep_type is b'P' for provides or b'R' for requires.
+        let mut file_deps: Vec<(usize, u8, Dependency)> = Vec::new();
         for (file_index, (path, entry)) in self.files.iter().enumerate() {
             if !path.starts_with("./usr/lib/sysusers.d/") || !path.ends_with(".conf") {
                 continue;
@@ -1715,33 +1724,34 @@ impl PackageBuilder {
                 line_bytes.resize(len + pad_len, 0);
                 let version = BASE64_STANDARD_NO_PAD.encode(&line_bytes);
 
-                let mut add_provide = |dep: Dependency| {
-                    file_dep_provides.push((file_index, dep.clone()));
-                    self.provides.push(dep);
-                };
-
                 match kind {
                     // 'u' and 'u!' both create a user; 'u!' tells systemd-sysusers
                     // to fully lock the account, but the provides are the same.
                     "u" | "u!" => {
-                        add_provide(Dependency {
+                        let dep = Dependency {
                             name: format!("user({})", name),
                             flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
                             version,
-                        });
+                        };
+                        file_deps.push((file_index, b'P', dep.clone()));
+                        self.provides.push(dep);
                         // Creating a user implicitly creates a group with the same name
-                        add_provide(Dependency {
+                        let dep = Dependency {
                             name: format!("group({})", name),
                             flags: DependencyFlags::FIND_PROVIDES,
                             version: "".to_owned(),
-                        });
+                        };
+                        file_deps.push((file_index, b'P', dep.clone()));
+                        self.provides.push(dep);
                     }
                     "g" => {
-                        add_provide(Dependency {
+                        let dep = Dependency {
                             name: format!("group({})", name),
                             flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
                             version,
-                        });
+                        };
+                        file_deps.push((file_index, b'P', dep.clone()));
+                        self.provides.push(dep);
                     }
                     "m" => {
                         // 'm' adds a user to a group, generating a versioned
@@ -1750,83 +1760,29 @@ impl PackageBuilder {
                             Some(g) => *g,
                             None => continue,
                         };
-                        add_provide(Dependency {
+                        let dep = Dependency {
                             name: format!("groupmember({}/{})", name, groupname),
                             flags: DependencyFlags::EQUAL | DependencyFlags::FIND_PROVIDES,
                             version,
-                        });
-                        self.requires.push(Dependency::user(name));
-                        self.requires.push(Dependency::group(groupname));
+                        };
+                        file_deps.push((file_index, b'P', dep.clone()));
+                        self.provides.push(dep);
+                        let dep = Dependency::user(name);
+                        file_deps.push((file_index, b'R', dep.clone()));
+                        self.requires.push(dep);
+                        let dep = Dependency::group(groupname);
+                        file_deps.push((file_index, b'R', dep.clone()));
+                        self.requires.push(dep);
                     }
                     _ => unreachable!(),
                 }
             }
         }
 
-        let mut provide_names = Vec::new();
-        let mut provide_flags = Vec::new();
-        let mut provide_versions = Vec::new();
-
-        // Sort dependency arrays by (name, EVR, flags) to match RPM's doFind()
-        // ordering in rpmds.cc. All dependency types use the same sort.
-        sort_deps(&mut self.provides);
-
-        // Build file-to-dependency mapping (FILEDEPENDSX/N/DEPENDSDICT) for
-        // auto-generated provides (e.g. sysusers.d). Look up post-sort indices.
-        let mut file_depends_x: Vec<u32> = vec![0; files_len];
-        let mut file_depends_n: Vec<u32> = vec![0; files_len];
-        let mut depends_dict: Vec<u32> = Vec::new();
-
-        if !file_dep_provides.is_empty() {
-            // Stable sort: by file index, then versioned deps before unversioned
-            // (matching RPM's rpmfcNormalizeFDeps verdepLess comparator).
-            // Original file-line order is preserved within each group.
-            file_dep_provides.sort_by(|(fi_a, dep_a), (fi_b, dep_b)| {
-                fi_a.cmp(fi_b).then_with(|| {
-                    let a_versioned = !dep_a.version.is_empty();
-                    let b_versioned = !dep_b.version.is_empty();
-                    b_versioned.cmp(&a_versioned) // versioned first
-                })
-            });
-
-            for (file_idx, dep) in &file_dep_provides {
-                let provide_idx = self
-                    .provides
-                    .iter()
-                    .position(|p| p == dep)
-                    .expect("sysusers provide not found after sort");
-
-                // 'P' (0x50) = Provides type
-                let dict_entry = (b'P' as u32) << 24 | (provide_idx as u32 & 0x00ff_ffff);
-
-                if file_depends_n[*file_idx] == 0 {
-                    file_depends_x[*file_idx] = depends_dict.len() as u32;
-                }
-                file_depends_n[*file_idx] += 1;
-                depends_dict.push(dict_entry);
-            }
-        }
-
-        for d in self.provides.into_iter() {
-            provide_names.push(d.name);
-            provide_flags.push(d.flags.bits());
-            provide_versions.push(d.version);
-        }
-
-        let mut obsolete_names = Vec::new();
-        let mut obsolete_flags = Vec::new();
-        let mut obsolete_versions = Vec::new();
-
-        sort_deps(&mut self.obsoletes);
-        for d in self.obsoletes.into_iter() {
-            obsolete_names.push(d.name);
-            obsolete_flags.push(d.flags.bits());
-            obsolete_versions.push(d.version);
-        }
-
         // Auto-generate interpreter requires for scriptlets.
         // Each scriptlet with a program generates a require with INTERP | <phase>.
         // The explicit `-p` case (e.g. `%post -p /bin/sh`) also adds a bare INTERP require.
+        // Done before sorting so that the DEPENDSDICT lookup uses final indices.
         {
             let scriptlet_phases: &[(&Option<Scriptlet>, DependencyFlags)] = &[
                 (&self.pre_inst_script, DependencyFlags::SCRIPT_PRE),
@@ -1857,11 +1813,85 @@ impl PackageBuilder {
             }
         }
 
+        let mut provide_names = Vec::new();
+        let mut provide_flags = Vec::new();
+        let mut provide_versions = Vec::new();
+
+        // Sort dependency arrays by (name, EVR, flags) to match what RPM does.
+        // All dependency types use the same sort.
+        sort_deps(&mut self.provides);
+        sort_deps(&mut self.requires);
+
+        // Build the file-to-dependency mapping stored in three parallel tags:
+        //   FILEDEPENDSX  - per-file start offset into DEPENDSDICT
+        //   FILEDEPENDSN  - per-file count of entries in DEPENDSDICT
+        //   DEPENDSDICT   - packed (type, index) entries linking files to deps
+        //
+        // Each DEPENDSDICT entry is a u32 with the dependency type character
+        // (e.g. b'P' for provides, b'R' for requires) in the high byte and
+        // the index into that type's sorted dependency array in the low 24 bits.
+        let mut file_depends_x: Vec<u32> = vec![0; files_len];
+        let mut file_depends_n: Vec<u32> = vec![0; files_len];
+        let mut depends_dict: Vec<u32> = Vec::new();
+
+        if !file_deps.is_empty() {
+            // Sort by file index, then versioned deps before unversioned
+            // (matching RPM's dedup behavior for file-level dependencies).
+            file_deps.sort_by(|(fi_a, _, dep_a), (fi_b, _, dep_b)| {
+                fi_a.cmp(fi_b).then_with(|| {
+                    let a_versioned = !dep_a.version.is_empty();
+                    let b_versioned = !dep_b.version.is_empty();
+                    b_versioned.cmp(&a_versioned) // versioned first
+                })
+            });
+
+            for (file_idx, dep_type, dep) in &file_deps {
+                // Look up this dependency's post-sort index in the appropriate array
+                let dep_array = match *dep_type {
+                    b'P' => &self.provides,
+                    b'R' => &self.requires,
+                    _ => unreachable!(),
+                };
+                let dep_idx = dep_array
+                    .iter()
+                    .position(|d| d == dep)
+                    .expect("file dependency not found after sort");
+
+                // DEPENDSDICT entries pack a dependency type tag in the high byte
+                // and the index into that type's array in the low 24 bits.
+                let dict_entry = (*dep_type as u32) << 24 | (dep_idx as u32 & 0x00ff_ffff);
+
+                // Record this file's starting offset in DEPENDSDICT on its first
+                // dependency, and bump its entry count for each subsequent one.
+                if file_depends_n[*file_idx] == 0 {
+                    file_depends_x[*file_idx] = depends_dict.len() as u32;
+                }
+                file_depends_n[*file_idx] += 1;
+                depends_dict.push(dict_entry);
+            }
+        }
+
+        for d in self.provides.into_iter() {
+            provide_names.push(d.name);
+            provide_flags.push(d.flags.bits());
+            provide_versions.push(d.version);
+        }
+
+        let mut obsolete_names = Vec::new();
+        let mut obsolete_flags = Vec::new();
+        let mut obsolete_versions = Vec::new();
+
+        sort_deps(&mut self.obsoletes);
+        for d in self.obsoletes.into_iter() {
+            obsolete_names.push(d.name);
+            obsolete_flags.push(d.flags.bits());
+            obsolete_versions.push(d.version);
+        }
+
         let mut require_names = Vec::new();
         let mut require_flags = Vec::new();
         let mut require_versions = Vec::new();
 
-        sort_deps(&mut self.requires);
         for d in self.requires.into_iter() {
             require_names.push(d.name);
             require_flags.push(d.flags.bits());
@@ -2489,7 +2519,7 @@ impl PackageBuilder {
 /// Extract comparison flags and version string from an optional version condition.
 /// Sort dependencies by (name, EVR, flags) to match what RPM does. Uses a lexicographic
 /// sort, not a version-aware one.
-fn sort_deps(deps: &mut Vec<Dependency>) {
+fn sort_deps(deps: &mut [Dependency]) {
     deps.sort_by(|a, b| {
         a.name
             .cmp(&b.name)
