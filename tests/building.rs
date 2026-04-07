@@ -85,65 +85,80 @@ mod validation {
         );
     }
 
+    /// Verify that calling build() twice returns an error.
+    #[test]
+    fn test_builder_rejects_double_build() {
+        let mut b = PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test");
+        b.build().expect("first build should succeed");
+        let err = b.build();
+        assert!(
+            matches!(err, Err(rpm::Error::BuilderReuse)),
+            "second build should return BuilderReuse error"
+        );
+    }
+
     /// Verify that each `with_*` method rejects mismatched `FileOptions` variants.
     #[test]
     fn test_file_options_validation() {
         let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
         // with_dir_entry rejects non-Dir mode
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_dir_entry(FileOptions::new("/var/log/foo"));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_dir_entry(FileOptions::new("/var/log/foo"));
         assert!(
             err.is_err(),
             "with_dir_entry should reject regular file options"
         );
 
         // with_symlink rejects non-SymbolicLink mode
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_symlink(FileOptions::new("/usr/bin/link"));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_symlink(FileOptions::new("/usr/bin/link"));
         assert!(
             err.is_err(),
             "with_symlink should reject regular file options"
         );
 
         // with_symlink rejects empty target
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_symlink(FileOptions::new("/usr/bin/link").mode(FileMode::symbolic_link(0o777)));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err =
+            b.with_symlink(FileOptions::new("/usr/bin/link").mode(FileMode::symbolic_link(0o777)));
         assert!(
             err.is_err(),
             "with_symlink should reject empty symlink target"
         );
 
         // with_ghost rejects non-ghost options
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_ghost(FileOptions::new("/var/log/foo"));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_ghost(FileOptions::new("/var/log/foo"));
         assert!(err.is_err(), "with_ghost should reject non-ghost options");
 
         // with_file rejects Dir mode
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_file(
             cargo_file.to_str().unwrap(),
             FileOptions::dir("/var/log/foo"),
         );
         assert!(err.is_err(), "with_file should reject directory options");
 
         // with_file rejects ghost flag
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t").with_file(
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_file(
             cargo_file.to_str().unwrap(),
             FileOptions::ghost("/var/log/foo"),
         );
         assert!(err.is_err(), "with_file should reject ghost options");
 
         // with_file_contents rejects Dir mode
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_file_contents("content", FileOptions::dir("/var/log/foo"));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_file_contents("content", FileOptions::dir("/var/log/foo"));
         assert!(
             err.is_err(),
             "with_file_contents should reject directory options"
         );
 
         // with_file_contents rejects ghost flag
-        let err = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t")
-            .with_file_contents("content", FileOptions::ghost("/var/log/foo"));
+        let mut b = PackageBuilder::new("t", "1.0.0", "MIT", "x86_64", "t");
+        let err = b.with_file_contents("content", FileOptions::ghost("/var/log/foo"));
         assert!(
             err.is_err(),
             "with_file_contents should reject ghost options"
@@ -155,10 +170,11 @@ mod validation {
     fn test_duplicate_explicit_add_still_errors() {
         let cargo_file = Path::new(common::CARGO_MANIFEST_DIR).join("Cargo.toml");
 
-        let result = PackageBuilder::new("test-dup", "1.0.0", "MIT", "x86_64", "test")
+        let mut builder = PackageBuilder::new("test-dup", "1.0.0", "MIT", "x86_64", "test");
+        builder
             .with_file(&cargo_file, FileOptions::new("/etc/test.toml"))
-            .unwrap()
-            .with_file(&cargo_file, FileOptions::new("/etc/test.toml"));
+            .unwrap();
+        let result = builder.with_file(&cargo_file, FileOptions::new("/etc/test.toml"));
 
         assert!(result.is_err(), "duplicate explicit add should error");
     }

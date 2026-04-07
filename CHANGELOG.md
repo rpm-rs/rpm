@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+This ought to be the last major API-changing release for a long time (maybe ever). `PackageBuilder` is now pass-by-reference instead of pass-by-value, which significantly helps ergonomics in some cases (by avoiding the need to re-assign variables constantly when calling methods on `PackageBuilder` in loops).
+
+### Breaking Changes
+
+- The `PackageBuilder` API is now pass-by-reference
+
 ## 0.21.0
 
 ### Added
@@ -36,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed verification of the MD5 header+payload digest (`RPMSIGTAG_MD5`) and the associated dependency on `md5`. MD5 is well and truly obsolete cryptography these days.
 - Removed verification of legacy "RPM v3"-style signatures.
+This ought to be the last major API-changing release for a long time (maybe ever). `PackageBuilder` is now pass-by-reference instead of pass-by-value, which significantly helps ergonomics in some cases (by avoiding the need to re-assign variables constantly when calling methods on `PackageBuilder` in loops).
+
+### Breaking Changes
+
+- `PackageBuilder` methods now take `&mut self` and return `&mut Self` instead of consuming `self` and returning `Self`. This is an ergonomic improvement in most cases, as it makes it much easier to use builder methods in loops (e.g. when adding files or dependencies from a collection). Code that stores a `PackageBuilder` after chaining methods from a temporary will need to use a `let mut` binding instead.
 
 ## 0.20.0
 

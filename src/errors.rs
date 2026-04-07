@@ -171,6 +171,11 @@ pub enum Error {
 
     #[error("{0}")]
     InvalidFileCaps(String),
+
+    #[error(
+        "PackageBuilder has already been consumed by a previous call to build() or build_and_sign()"
+    )]
+    BuilderReuse,
 }
 
 impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for Error {

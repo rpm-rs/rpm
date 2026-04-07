@@ -458,7 +458,7 @@ where
 
     pub(crate) fn from_entries(mut actual_records: Vec<IndexEntry<T>>, region_tag: T) -> Self {
         // Ensure the tags in the header we're creating will be in sorted order
-        actual_records.sort_by(|e1, e2| e1.tag.cmp(&e2.tag));
+        actual_records.sort_by_key(|e| e.tag);
 
         let mut store = Vec::new();
         for record in &mut actual_records {

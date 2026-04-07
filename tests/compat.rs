@@ -146,8 +146,8 @@ echo ">>>>>>>>>> {label}: OK <<<<<<<<<<"
         let config_file = sources.join("example_config.toml");
         let module_dir = sources.join("module");
 
-        let bldr = PackageBuilder::new(name, "1.0.0", "MIT", "x86_64", "some package")
-            .default_file_attrs(Some(0o644), Some("root".into()), Some("root".into()))
+        let mut bldr = PackageBuilder::new(name, "1.0.0", "MIT", "x86_64", "some package");
+        bldr.default_file_attrs(Some(0o644), Some("root".into()), Some("root".into()))
             .default_dir_attrs(Some(0o755), Some("root".into()), Some("root".into()))
             .with_file(script.to_str().unwrap(), FileOptions::new("/usr/bin/foo"))?
             .with_file(
