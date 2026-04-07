@@ -251,6 +251,9 @@ pub struct PackageBuilder {
     default_file_attrs: FileDefaults,
     /// Default ownership and permissions for directory entries (like the dirmode in `%defattr`).
     default_dir_attrs: FileDefaults,
+
+    /// Whether `build()` or `build_and_sign()` has already been called.
+    consumed: bool,
 }
 
 impl PackageBuilder {
@@ -295,7 +298,7 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn using_config(mut self, config: impl Into<BuildConfig>) -> Self {
+    pub fn using_config(&mut self, config: impl Into<BuildConfig>) -> &mut Self {
         self.config = config.into();
         self
     }
@@ -310,7 +313,7 @@ impl PackageBuilder {
     ///
     /// However, because of this, the epoch of a package must never decrease, and shouldn't be set
     /// unless required.
-    pub fn epoch(mut self, epoch: u32) -> Self {
+    pub fn epoch(&mut self, epoch: u32) -> &mut Self {
         self.epoch = Some(epoch);
         self
     }
@@ -331,45 +334,45 @@ impl PackageBuilder {
     /// * 3.fc38
     /// * 5.el9_2.alma
     /// * 0.20230715gitabcdef
-    pub fn release(mut self, release: impl Into<String>) -> Self {
+    pub fn release(&mut self, release: impl Into<String>) -> &mut Self {
         self.release = release.into();
         self
     }
 
     /// Set the URL for the package. Most often this is the website of the upstream project being
     /// packaged
-    pub fn url(mut self, content: impl Into<String>) -> Self {
+    pub fn url(&mut self, content: impl Into<String>) -> &mut Self {
         self.url = Some(content.into());
         self
     }
 
     /// Set the version control URL of the upstream project
-    pub fn vcs(mut self, content: impl Into<String>) -> Self {
+    pub fn vcs(&mut self, content: impl Into<String>) -> &mut Self {
         self.vcs = Some(content.into());
         self
     }
 
     /// Define a detailed, multiline, description of what the packaged software does
-    pub fn description(mut self, desc: impl Into<String>) -> Self {
+    pub fn description(&mut self, desc: impl Into<String>) -> &mut Self {
         self.desc = Some(desc.into());
         self
     }
 
     /// Set the package vendor - the name of the organization that is producing the package.
-    pub fn vendor(mut self, content: impl Into<String>) -> Self {
+    pub fn vendor(&mut self, content: impl Into<String>) -> &mut Self {
         self.vendor = Some(content.into());
         self
     }
 
     /// Set the packager, the name of the person producing the package. This is often not present,
     /// or set to the same value as the vendor
-    pub fn packager(mut self, content: impl Into<String>) -> Self {
+    pub fn packager(&mut self, content: impl Into<String>) -> &mut Self {
         self.packager = Some(content.into());
         self
     }
 
     /// Set the package group (this is deprecated in most packaging guidelines)
-    pub fn group(mut self, content: impl Into<String>) -> Self {
+    pub fn group(&mut self, content: impl Into<String>) -> &mut Self {
         self.group = Some(content.into());
         self
     }
@@ -386,7 +389,7 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build_host(mut self, build_host: impl AsRef<str>) -> Self {
+    pub fn build_host(&mut self, build_host: impl AsRef<str>) -> &mut Self {
         self.build_host = Some(build_host.as_ref().to_owned());
         self
     }
@@ -395,7 +398,7 @@ impl PackageBuilder {
     /// one operation
     ///
     /// You can use any value, but the standard format is "${build_host} ${build_time}"
-    pub fn cookie(mut self, cookie: impl AsRef<str>) -> Self {
+    pub fn cookie(&mut self, cookie: impl AsRef<str>) -> &mut Self {
         self.cookie = Some(cookie.as_ref().to_owned());
         self
     }
@@ -411,11 +414,11 @@ impl PackageBuilder {
     /// Can be called multiple times — each call changes the defaults for subsequent additions,
     /// similar to positional `%defattr` in RPM spec files.
     pub fn default_file_attrs(
-        mut self,
+        &mut self,
         permissions: Option<u16>,
         user: Option<String>,
         group: Option<String>,
-    ) -> Self {
+    ) -> &mut Self {
         if let Some(p) = permissions {
             self.default_file_attrs.permissions = Some(p);
         }
@@ -438,11 +441,11 @@ impl PackageBuilder {
     ///
     /// Can be called multiple times — each call changes the defaults for subsequent additions.
     pub fn default_dir_attrs(
-        mut self,
+        &mut self,
         permissions: Option<u16>,
         user: Option<String>,
         group: Option<String>,
-    ) -> Self {
+    ) -> &mut Self {
         if let Some(p) = permissions {
             self.default_dir_attrs.permissions = Some(p);
         }
@@ -480,11 +483,11 @@ impl PackageBuilder {
     /// # }();
     /// ```
     pub fn add_changelog_entry(
-        mut self,
+        &mut self,
         name: impl AsRef<str>,
         entry: impl AsRef<str>,
         timestamp: impl TryInto<Timestamp, Error = impl Debug>,
-    ) -> Self {
+    ) -> &mut Self {
         self.changelog_names.push(name.as_ref().to_owned());
         self.changelog_entries.push(entry.as_ref().to_owned());
         self.changelog_times.push(timestamp.try_into().unwrap());
@@ -516,10 +519,10 @@ impl PackageBuilder {
     /// # }
     /// ```
     pub fn with_file(
-        mut self,
+        &mut self,
         source: impl AsRef<Path>,
         options: impl Into<FileOptions>,
-    ) -> Result<Self, Error> {
+    ) -> Result<&mut Self, Error> {
         let metadata = fs::metadata(source.as_ref())?;
         #[allow(unused_mut)]
         let mut options = options.into();
@@ -590,10 +593,10 @@ impl PackageBuilder {
     /// # }
     /// ```
     pub fn with_file_contents(
-        mut self,
+        &mut self,
         content: impl Into<Vec<u8>>,
         options: impl Into<FileOptions>,
-    ) -> Result<Self, Error> {
+    ) -> Result<&mut Self, Error> {
         let options = options.into();
 
         if options.mode.file_type() != FileType::Regular {
@@ -637,7 +640,7 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_dir_entry(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+    pub fn with_dir_entry(&mut self, options: impl Into<FileOptions>) -> Result<&mut Self, Error> {
         let options = options.into();
 
         if options.mode.file_type() != FileType::Dir {
@@ -673,7 +676,7 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_symlink(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+    pub fn with_symlink(&mut self, options: impl Into<FileOptions>) -> Result<&mut Self, Error> {
         let options = options.into();
 
         if options.mode.file_type() != FileType::SymbolicLink {
@@ -721,7 +724,7 @@ impl PackageBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_ghost(mut self, options: impl Into<FileOptions>) -> Result<Self, Error> {
+    pub fn with_ghost(&mut self, options: impl Into<FileOptions>) -> Result<&mut Self, Error> {
         let options = options.into();
 
         if !options.flag.contains(FileFlags::GHOST) {
@@ -775,25 +778,26 @@ impl PackageBuilder {
     /// # }
     /// ```
     pub fn with_dir<P, D, F>(
-        self,
+        &mut self,
         source_dir: P,
         dest_prefix: D,
         customize: F,
-    ) -> Result<Self, Error>
+    ) -> Result<&mut Self, Error>
     where
         P: AsRef<Path>,
         D: AsRef<str>,
         F: Fn(FileOptionsBuilder) -> FileOptionsBuilder,
     {
-        self.add_dir_recursive(source_dir.as_ref(), dest_prefix.as_ref(), &customize)
+        self.add_dir_recursive(source_dir.as_ref(), dest_prefix.as_ref(), &customize)?;
+        Ok(self)
     }
 
     fn add_dir_recursive<F>(
-        mut self,
+        &mut self,
         source_dir: &Path,
         dest_prefix: &str,
         customize: &F,
-    ) -> Result<Self, Error>
+    ) -> Result<(), Error>
     where
         F: Fn(FileOptionsBuilder) -> FileOptionsBuilder,
     {
@@ -828,7 +832,7 @@ impl PackageBuilder {
             let file_type = metadata.file_type();
 
             if file_type.is_dir() {
-                self = self.add_dir_recursive(&entry.path(), &dest, customize)?;
+                self.add_dir_recursive(&entry.path(), &dest, customize)?;
             } else if file_type.is_symlink() {
                 let link_target = fs::read_link(entry.path())?;
                 let options = customize(FileOptions::symlink(&dest, link_target.to_string_lossy()));
@@ -863,7 +867,7 @@ impl PackageBuilder {
             }
         }
 
-        Ok(self)
+        Ok(())
     }
 
     fn add_data(
@@ -988,7 +992,7 @@ impl PackageBuilder {
     ///
     /// See: %pre from specfile syntax
     #[inline]
-    pub fn pre_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn pre_install_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.pre_inst_script = Some(content.into());
         self
     }
@@ -997,7 +1001,7 @@ impl PackageBuilder {
     ///
     /// See: %post from specfile syntax
     #[inline]
-    pub fn post_install_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn post_install_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.post_inst_script = Some(content.into());
         self
     }
@@ -1006,7 +1010,7 @@ impl PackageBuilder {
     ///
     /// See: %preun from specfile syntax
     #[inline]
-    pub fn pre_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn pre_uninstall_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.pre_uninst_script = Some(content.into());
         self
     }
@@ -1015,7 +1019,7 @@ impl PackageBuilder {
     ///
     /// See: %postun from specfile syntax
     #[inline]
-    pub fn post_uninstall_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn post_uninstall_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.post_uninst_script = Some(content.into());
         self
     }
@@ -1025,7 +1029,7 @@ impl PackageBuilder {
     ///
     /// See: %pretrans from specfile syntax
     #[inline]
-    pub fn pre_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn pre_trans_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.pre_trans_script = Some(content.into());
         self
     }
@@ -1036,7 +1040,7 @@ impl PackageBuilder {
     ///
     /// See: %posttrans from specfile syntax
     #[inline]
-    pub fn post_trans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn post_trans_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.post_trans_script = Some(content.into());
         self
     }
@@ -1046,7 +1050,7 @@ impl PackageBuilder {
     ///
     /// See: %preuntrans from specfile syntax
     #[inline]
-    pub fn pre_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn pre_untrans_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.pre_untrans_script = Some(content.into());
         self
     }
@@ -1057,7 +1061,7 @@ impl PackageBuilder {
     ///
     /// See: %posttrans from specfile syntax
     #[inline]
-    pub fn post_untrans_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn post_untrans_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.post_untrans_script = Some(content.into());
         self
     }
@@ -1067,7 +1071,7 @@ impl PackageBuilder {
     ///
     /// See: `%verifyscript` from specfile syntax
     #[inline]
-    pub fn verify_script(mut self, content: impl Into<Scriptlet>) -> Self {
+    pub fn verify_script(&mut self, content: impl Into<Scriptlet>) -> &mut Self {
         self.verify_script = Some(content.into());
         self
     }
@@ -1084,11 +1088,11 @@ impl PackageBuilder {
     /// `%triggerin -- bash > 5.0` and will only fire when the installed version
     /// of bash is greater than 5.0.
     pub fn trigger_in(
-        mut self,
+        &mut self,
         target: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERIN | cmp,
@@ -1103,11 +1107,11 @@ impl PackageBuilder {
     ///
     /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
     pub fn trigger_un(
-        mut self,
+        &mut self,
         target: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERUN | cmp,
@@ -1122,11 +1126,11 @@ impl PackageBuilder {
     ///
     /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
     pub fn trigger_postun(
-        mut self,
+        &mut self,
         target: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERPOSTUN | cmp,
@@ -1141,11 +1145,11 @@ impl PackageBuilder {
     ///
     /// See [`trigger_in`](Self::trigger_in) for details on `target` and `condition`.
     pub fn trigger_prein(
-        mut self,
+        &mut self,
         target: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERPREIN | cmp,
@@ -1162,11 +1166,11 @@ impl PackageBuilder {
     /// optionally restricts which versions of the package owning the file will
     /// activate the trigger (see [`trigger_in`](Self::trigger_in)).
     pub fn file_trigger_in(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERIN | cmp,
@@ -1181,11 +1185,11 @@ impl PackageBuilder {
     ///
     /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
     pub fn file_trigger_un(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERUN | cmp,
@@ -1200,11 +1204,11 @@ impl PackageBuilder {
     ///
     /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
     pub fn file_trigger_postun(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERPOSTUN | cmp,
@@ -1220,11 +1224,11 @@ impl PackageBuilder {
     ///
     /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
     pub fn trans_file_trigger_in(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.trans_file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERIN | cmp,
@@ -1240,11 +1244,11 @@ impl PackageBuilder {
     ///
     /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
     pub fn trans_file_trigger_un(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.trans_file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERUN | cmp,
@@ -1260,11 +1264,11 @@ impl PackageBuilder {
     ///
     /// See [`file_trigger_in`](Self::file_trigger_in) for details on `path` and `condition`.
     pub fn trans_file_trigger_postun(
-        mut self,
+        &mut self,
         path: &str,
         condition: Option<(DependencyFlags, &str)>,
         script: impl Into<Scriptlet>,
-    ) -> Self {
+    ) -> &mut Self {
         let (cmp, ver) = unpack_version_condition(condition);
         self.trans_file_triggers.push(PackageTriggerEntry {
             flags: DependencyFlags::TRIGGERPOSTUN | cmp,
@@ -1278,7 +1282,7 @@ impl PackageBuilder {
     /// Add a "provides" dependency
     ///
     /// These are aliases or capabilities provided by this package which other packages can reference.
-    pub fn provides(mut self, dep: Dependency) -> Self {
+    pub fn provides(&mut self, dep: Dependency) -> &mut Self {
         self.provides.push(dep);
         self
     }
@@ -1287,7 +1291,7 @@ impl PackageBuilder {
     ///
     /// These are packages or capabilities which must be present in order for the package to be
     /// installed.
-    pub fn requires(mut self, dep: Dependency) -> Self {
+    pub fn requires(&mut self, dep: Dependency) -> &mut Self {
         self.requires.push(dep);
         self
     }
@@ -1295,7 +1299,7 @@ impl PackageBuilder {
     /// Add a "conflicts" dependency
     ///
     /// These are packages which must not be present in order for the package to be installed.
-    pub fn conflicts(mut self, dep: Dependency) -> Self {
+    pub fn conflicts(&mut self, dep: Dependency) -> &mut Self {
         self.conflicts.push(dep);
         self
     }
@@ -1304,7 +1308,7 @@ impl PackageBuilder {
     ///
     /// These are packages this package supercedes - if this package is installed, packages
     /// listed as "obsoletes" will be be automatically removed (if they are present).
-    pub fn obsoletes(mut self, dep: Dependency) -> Self {
+    pub fn obsoletes(&mut self, dep: Dependency) -> &mut Self {
         self.obsoletes.push(dep);
         self
     }
@@ -1314,7 +1318,7 @@ impl PackageBuilder {
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to treat them
     /// as though they were "requires".  Unlike "requires" however, if installing a package listed
     /// as a "recommends" would cause errors, it may be ignored without error.
-    pub fn recommends(mut self, dep: Dependency) -> Self {
+    pub fn recommends(&mut self, dep: Dependency) -> &mut Self {
         self.recommends.push(dep);
         self
     }
@@ -1323,7 +1327,7 @@ impl PackageBuilder {
     ///
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
     /// them to the user to be optionally installed.
-    pub fn suggests(mut self, dep: Dependency) -> Self {
+    pub fn suggests(&mut self, dep: Dependency) -> &mut Self {
         self.suggests.push(dep);
         self
     }
@@ -1333,7 +1337,7 @@ impl PackageBuilder {
     /// "rpm" itself will ignore such dependencies, but a dependency solver may elect to display
     /// this package to the user to be optionally installed when a package matching the "enhances"
     /// dependency is installed.
-    pub fn enhances(mut self, dep: Dependency) -> Self {
+    pub fn enhances(&mut self, dep: Dependency) -> &mut Self {
         self.enhances.push(dep);
         self
     }
@@ -1344,7 +1348,7 @@ impl PackageBuilder {
     /// package as if it were a "requires" when the matching package is installed. Unlike a
     /// "requires" however, if installing it would cause errors, it can be ignored ignored
     /// without error.
-    pub fn supplements(mut self, dep: Dependency) -> Self {
+    pub fn supplements(&mut self, dep: Dependency) -> &mut Self {
         self.supplements.push(dep);
         self
     }
@@ -1356,16 +1360,21 @@ impl PackageBuilder {
     /// This is useful for breaking dependency cycles while maintaining proper installation order.
     ///
     /// See: `OrderWithRequires` from specfile syntax
-    pub fn order_with_requires(mut self, dep: Dependency) -> Self {
+    pub fn order_with_requires(&mut self, dep: Dependency) -> &mut Self {
         self.order_with_requires.push(dep);
         self
     }
 
     /// Build the package
-    pub fn build(self) -> Result<Package, Error> {
+    pub fn build(&mut self) -> Result<Package, Error> {
         let fmt = self.config.format;
-        let reserved_space = self.config.reserved_space;
-        let (lead, header_idx_tag, content) = self.prepare_data()?;
+        let reserved_space: Option<u32> = self.config.reserved_space;
+        if self.consumed {
+            return Err(Error::BuilderReuse);
+        }
+        let builder = std::mem::take(self);
+        self.consumed = true;
+        let (lead, header_idx_tag, content) = builder.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
@@ -1399,7 +1408,7 @@ impl PackageBuilder {
     ///
     /// See `signature::Signing` for more details.
     #[cfg(feature = "signature-meta")]
-    pub fn build_and_sign<S>(self, signer: S) -> Result<Package, Error>
+    pub fn build_and_sign<S>(&mut self, signer: S) -> Result<Package, Error>
     where
         S: signature::Signing<Signature = Vec<u8>>,
     {
