@@ -66,6 +66,8 @@ pub enum DigestStatus {
     Verified,
     /// The digest tag was not present in the package headers.
     NotPresent,
+    /// The digest was not checked (e.g. payload digests when only metadata is available).
+    NotChecked,
     /// The digest was present but did not match the computed value.
     Mismatch {
         /// The value declared in the RPM header.
@@ -84,6 +86,11 @@ impl DigestStatus {
     /// Returns `true` if this digest tag was not present.
     pub fn is_not_present(&self) -> bool {
         matches!(self, DigestStatus::NotPresent)
+    }
+
+    /// Returns `true` if this digest was not checked.
+    pub fn is_not_checked(&self) -> bool {
+        matches!(self, DigestStatus::NotChecked)
     }
 
     /// Returns `true` if this digest was present but mismatched.
@@ -486,79 +493,12 @@ impl Package {
         Ok(())
     }
 
-    /// Parse all PGP signature packets from the package's signature header.
-    #[cfg(feature = "signature-pgp")]
-    fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
-        let openpgp_sigs = &self
-            .metadata
-            .signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
-
-        // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
-        if let Ok(openpgp_sigs) = openpgp_sigs {
-            let mut packets = Vec::new();
-            for base64_sig in openpgp_sigs.iter() {
-                let mut signature = Vec::new();
-                let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
-                decoder.read_to_end(&mut signature)?;
-                packets.push(Verifier::parse_signature(&signature)?);
-            }
-            Ok(packets)
-        } else {
-            let rsa_sig = self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
-            if let Ok(rsa_sig) = rsa_sig {
-                return Ok(vec![Verifier::parse_signature(rsa_sig)?]);
-            }
-
-            let eddsa_sig = self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
-            if let Ok(eddsa_sig) = eddsa_sig {
-                return Ok(vec![Verifier::parse_signature(eddsa_sig)?]);
-            }
-
-            Err(Error::NoSignatureFound)
-        }
-    }
-
     /// Return parsed information about each OpenPGP header signature in the package.
     ///
-    /// Does not return legacy header + payload signatures (v3 signatures).
-    ///
-    /// Returns an empty `Vec` if the package is unsigned.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let pkg = rpm::Package::open("my-package.rpm")?;
-    ///
-    /// for sig in pkg.signatures()? {
-    ///     println!("Version: {:?}", sig.version());
-    ///     println!("Algorithm: {:?}", sig.algorithm());
-    ///     if let Some(fp) = sig.fingerprint() {
-    ///         println!("Fingerprint: {fp}");
-    ///     }
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Delegates to [`PackageMetadata::signatures`].
     #[cfg(feature = "signature-pgp")]
     pub fn signatures(&self) -> Result<Vec<signature::pgp::SignatureInfo>, Error> {
-        let packets = match self.parse_signature_packets() {
-            Ok(packets) => packets,
-            Err(Error::NoSignatureFound) => return Ok(Vec::new()),
-            Err(e) => return Err(e),
-        };
-
-        Ok(packets
-            .iter()
-            .map(signature::pgp::SignatureInfo::from_pgp_signature)
-            .collect())
+        self.metadata.signatures()
     }
 
     /// Verify header-only signatures.
@@ -610,36 +550,13 @@ impl Package {
     /// # }
     /// ```
     pub fn check_digests(&self) -> Result<DigestReport, Error> {
-        let mut header = Vec::<u8>::with_capacity(1024);
-        // make sure to not hash any previous signatures in the header
-        self.metadata.header.write(&mut header)?;
+        // --- Header digests (from sig header) ---
 
-        // --- Header digests (from signature header) ---
-
-        let sha1_header = DigestStatus::check_digest_against_tag::<sha1::Sha1>(
-            self.metadata
-                .signature
-                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1),
-            header.as_slice(),
-        );
-
-        let sha256_header = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
-            self.metadata
-                .signature
-                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256),
-            header.as_slice(),
-        );
-
-        let sha3_256_header = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
-            self.metadata
-                .signature
-                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256),
-            header.as_slice(),
-        );
+        let mut report = self.metadata.check_digests()?;
 
         // --- Payload digests (from main header) ---
 
-        let payload_sha256 = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
+        report.payload_sha256 = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
             self.metadata
                 .header
                 .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
@@ -647,28 +564,21 @@ impl Package {
             self.content.as_slice(),
         );
 
-        let payload_sha512 = DigestStatus::check_digest_against_tag::<sha2::Sha512>(
+        report.payload_sha512 = DigestStatus::check_digest_against_tag::<sha2::Sha512>(
             self.metadata
                 .header
                 .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA512),
             self.content.as_slice(),
         );
 
-        let payload_sha3_256 = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
+        report.payload_sha3_256 = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
             self.metadata
                 .header
                 .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256),
             self.content.as_slice(),
         );
 
-        Ok(DigestReport {
-            sha1_header,
-            sha256_header,
-            sha3_256_header,
-            payload_sha256,
-            payload_sha512,
-            payload_sha3_256,
-        })
+        Ok(report)
     }
 
     /// Check all digests and verify all signatures, returning a detailed report.
@@ -708,51 +618,10 @@ impl Package {
     where
         V: signature::Verifying<Signature = Vec<u8>>,
     {
-        let digests = self.check_digests()?;
+        let mut report = self.metadata.check_signatures(&verifier)?;
+        report.digests = self.check_digests()?;
 
-        let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        self.metadata.header.write(&mut header_bytes)?;
-
-        let mut signatures = Vec::new();
-
-        let openpgp_sigs = self
-            .metadata
-            .signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
-
-        if let Ok(openpgp_sigs) = openpgp_sigs {
-            for base64_sig in openpgp_sigs.iter() {
-                let sig_bytes = decode_sig(base64_sig)?;
-                signature::echo_signature("signature_header(header only)", &sig_bytes);
-
-                let parsed = Verifier::parse_signature(&sig_bytes)?;
-                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
-                let error = verifier.verify(header_bytes.as_slice(), &sig_bytes).err();
-                signatures.push(SignatureCheckResult { info, error });
-            }
-        }
-
-        // Legacy signature tags
-        for sig_result in [
-            self.metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
-            self.metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
-        ] {
-            if let Ok(sig_bytes) = sig_result {
-                let parsed = Verifier::parse_signature(sig_bytes)?;
-                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
-                let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
-                signatures.push(SignatureCheckResult { info, error });
-            }
-        }
-
-        Ok(SignatureReport {
-            digests,
-            signatures,
-        })
+        Ok(report)
     }
 }
 
@@ -1590,6 +1459,177 @@ impl PackageMetadata {
                 unreachable!()
             }
         }
+    }
+
+    /// Parse all PGP signature packets from the package's signature header.
+    #[cfg(feature = "signature-pgp")]
+    fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
+        let openpgp_sigs = &self
+            .signature
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
+
+        // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
+        if let Ok(openpgp_sigs) = openpgp_sigs {
+            let mut packets = Vec::new();
+            for base64_sig in openpgp_sigs.iter() {
+                let mut signature = Vec::new();
+                let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
+                decoder.read_to_end(&mut signature)?;
+                packets.push(Verifier::parse_signature(&signature)?);
+            }
+            Ok(packets)
+        } else {
+            // Legacy signature tags
+            for sig_bytes in [
+                self.signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
+                self.signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
+            ] {
+                if let Ok(sig_bytes) = sig_bytes {
+                    return Ok(vec![Verifier::parse_signature(sig_bytes)?]);
+                }
+            }
+
+            Err(Error::NoSignatureFound)
+        }
+    }
+
+    /// Return parsed information about each OpenPGP header signature in the package.
+    ///
+    /// Does not return legacy header + payload signatures (v3 signatures).
+    ///
+    /// Returns an empty `Vec` if the package is unsigned.
+    #[cfg(feature = "signature-pgp")]
+    pub fn signatures(&self) -> Result<Vec<signature::pgp::SignatureInfo>, Error> {
+        let packets = match self.parse_signature_packets() {
+            Ok(packets) => packets,
+            Err(Error::NoSignatureFound) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+
+        Ok(packets
+            .iter()
+            .map(signature::pgp::SignatureInfo::from_pgp_signature)
+            .collect())
+    }
+
+    /// Check header digests and return a detailed report.
+    ///
+    /// Only header digests are checked; payload digest fields are set to
+    /// [`DigestStatus::NotChecked`]. To check all digests including payload,
+    /// use [`Package::check_digests`].
+    pub fn check_digests(&self) -> Result<DigestReport, Error> {
+        let mut header = Vec::<u8>::with_capacity(1024);
+        self.header.write(&mut header)?;
+
+        // --- Header digests (from sig header) ---
+
+        let sha1_header = DigestStatus::check_digest_against_tag::<sha1::Sha1>(
+            self.signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1),
+            header.as_slice(),
+        );
+
+        let sha256_header = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
+            self.signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256),
+            header.as_slice(),
+        );
+
+        let sha3_256_header = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
+            self.signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256),
+            header.as_slice(),
+        );
+
+        Ok(DigestReport {
+            sha1_header,
+            sha256_header,
+            sha3_256_header,
+            payload_sha256: DigestStatus::NotChecked,
+            payload_sha512: DigestStatus::NotChecked,
+            payload_sha3_256: DigestStatus::NotChecked,
+        })
+    }
+
+    /// Verify header digests.
+    ///
+    /// This is a convenience wrapper around [`check_digests`](Self::check_digests)
+    /// that collapses the detailed report into a pass/fail `Result`.
+    ///
+    /// Only header digests are verified. To verify all digests including payload,
+    /// use [`Package::verify_digests`].
+    pub fn verify_digests(&self) -> Result<(), Error> {
+        self.check_digests()?.result()
+    }
+
+    /// Verify header-only signatures.
+    ///
+    /// This is a convenience wrapper around [`check_signatures`](Self::check_signatures)
+    /// that collapses the detailed report into a pass/fail `Result`.
+    ///
+    /// Legacy v3 signatures that cover the payload are not checked.
+    /// To verify all signatures, use [`Package::verify_signature`].
+    #[cfg(feature = "signature-meta")]
+    pub fn verify_signature<V>(&self, verifier: V) -> Result<(), Error>
+    where
+        V: signature::Verifying<Signature = Vec<u8>>,
+    {
+        self.check_signatures(verifier)?.into_result()
+    }
+
+    /// Check header digests and verify header-only signatures, returning a detailed report.
+    ///
+    /// Legacy v3 signatures that cover the payload are skipped (they require the full
+    /// package content). Payload digest fields are set to [`DigestStatus::NotChecked`].
+    /// To check everything, use [`Package::check_signatures`].
+    #[cfg(feature = "signature-pgp")]
+    pub fn check_signatures<V>(&self, verifier: V) -> Result<SignatureReport, Error>
+    where
+        V: signature::Verifying<Signature = Vec<u8>>,
+    {
+        let digests = self.check_digests()?;
+
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        self.header.write(&mut header_bytes)?;
+
+        let mut signatures = Vec::new();
+
+        let openpgp_sigs = self
+            .signature
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
+
+        if let Ok(openpgp_sigs) = openpgp_sigs {
+            for base64_sig in openpgp_sigs.iter() {
+                let sig_bytes = decode_sig(base64_sig)?;
+
+                let parsed = Verifier::parse_signature(&sig_bytes)?;
+                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+                let error = verifier.verify(header_bytes.as_slice(), &sig_bytes).err();
+                signatures.push(SignatureCheckResult { info, error });
+            }
+        } else {
+            // Legacy signature tags
+            for sig_bytes in [
+                self.signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
+                self.signature
+                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
+            ] {
+                if let Ok(sig_bytes) = sig_bytes {
+                    let parsed = Verifier::parse_signature(sig_bytes)?;
+                    let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+                    let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
+                    signatures.push(SignatureCheckResult { info, error });
+                }
+            }
+        }
+
+        Ok(SignatureReport {
+            digests,
+            signatures,
+        })
     }
 }
 
