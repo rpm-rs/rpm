@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Package::check_digests()` returns a `DigestReport` with per-digest verification status (`Verified`, `NotPresent`, or `Mismatch`) for all supported digest types (MD5, SHA-1, SHA-256, SHA3-256 header digests and SHA-256, SHA-512, SHA3-256 payload digests).
 - `Package::check_signatures()` returns a `SignatureReport` containing the `DigestReport` plus per-signature results (`SignatureCheckResult`) with full `SignatureInfo` metadata (fingerprint, algorithm, etc.) and any verification error.
 - `DigestStatus`, `DigestReport`, `SignatureCheckResult`, and `SignatureReport` types for structured verification results.
+- `PackageMetadata::signatures()`, `check_digests()`, `verify_digests()`, `verify_signature()`, and `check_signatures()` have been added to allow verifying header digests and signatures without reading the package payload. Payload digest fields are set to `DigestStatus::NotChecked`.
 
 ### Removed
 
