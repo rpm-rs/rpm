@@ -128,6 +128,43 @@
 //! # fn main() {}
 //! ```
 //!
+//! ### Detailed verification reports
+//!
+//! ```
+//! # #[cfg(feature = "signature-pgp")]
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use rpm::signature::pgp::Verifier;
+//!
+//! let pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
+//! let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
+//!
+//! let report = pkg.check_signatures(verifier)?;
+//!
+//! // Inspect individual digest results
+//! if report.digests.sha256_header.is_verified() {
+//!     println!("SHA-256 header digest: OK");
+//! }
+//!
+//! // Inspect each signature with its metadata
+//! for result in &report.signatures {
+//!     if let Some(fp) = result.info.fingerprint() {
+//!         print!("Signature {}: ", fp);
+//!     }
+//!     if result.is_verified() {
+//!         println!("OK");
+//!     } else {
+//!         println!("FAILED: {}", result.error.as_ref().unwrap());
+//!     }
+//! }
+//!
+//! // Or just check overall pass/fail
+//! assert!(report.is_ok());
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "signature-pgp"))]
+//! # fn main() {}
+//! ```
+//!
 //! ### Build new package
 //!
 //! ```

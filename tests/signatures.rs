@@ -128,6 +128,44 @@ fn parse_externally_signed_rpm_and_verify() -> Result<(), Box<dyn std::error::Er
     let verifier = Verifier::from_asc_file(common::keys::v6::RSA_4K_PUBLIC)?;
     package.verify_signature(&verifier)?;
 
+    // check_signatures with one key: verify fingerprints match expectations
+    let sigs = package.signatures()?;
+    assert_eq!(sigs.len(), 2);
+    let all_fingerprints: Vec<_> = sigs.iter().map(|s| s.fingerprint().unwrap()).collect();
+
+    // RSA verifier: the RSA signature should verify, the other should fail
+    let report = package.check_signatures(&verifier)?;
+    assert_eq!(report.signatures.len(), 2);
+    assert!(report.is_ok(), "at least one signature should verify");
+
+    let verified: Vec<_> = report
+        .signatures
+        .iter()
+        .filter(|s| s.is_verified())
+        .collect();
+    let failed: Vec<_> = report
+        .signatures
+        .iter()
+        .filter(|s| !s.is_verified())
+        .collect();
+    assert_eq!(verified.len(), 1);
+    assert_eq!(failed.len(), 1);
+
+    // The verified signature's fingerprint should be one we know about
+    let verified_fp = verified[0].info.fingerprint().unwrap();
+    assert!(
+        all_fingerprints.contains(&verified_fp),
+        "verified fingerprint {verified_fp} should be in the package's signature list"
+    );
+
+    // The failed signature should have a different fingerprint and an error
+    let failed_fp = failed[0].info.fingerprint().unwrap();
+    assert_ne!(
+        verified_fp, failed_fp,
+        "verified and failed should be different signatures"
+    );
+    assert!(failed[0].error.is_some());
+
     Ok(())
 }
 
@@ -138,7 +176,17 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     let pkg = rpm::Package::open(common::pkgs::v4::RPM_EMPTY)?;
     assert!(matches!(
-        pkg.verify_signature(verifier),
+        pkg.verify_signature(&verifier),
+        Err(rpm::Error::NoSignatureFound)
+    ));
+
+    // check_signatures report: digests ok, no signatures
+    let report = pkg.check_signatures(&verifier)?;
+    assert!(report.digests.is_ok());
+    assert!(report.signatures.is_empty());
+    assert!(!report.is_ok());
+    assert!(matches!(
+        report.into_result(),
         Err(rpm::Error::NoSignatureFound)
     ));
 
@@ -146,9 +194,13 @@ fn test_verify_unsigned_package() -> Result<(), Box<dyn std::error::Error>> {
     let verifier = Verifier::from_asc_file(common::keys::v6::ED25519_PUBLIC)?;
     let pkg = rpm::Package::open(common::pkgs::v6::RPM_EMPTY)?;
     assert!(matches!(
-        pkg.verify_signature(verifier),
+        pkg.verify_signature(&verifier),
         Err(rpm::Error::NoSignatureFound)
     ));
+
+    let report = pkg.check_signatures(&verifier)?;
+    assert!(report.digests.is_ok());
+    assert!(report.signatures.is_empty());
 
     Ok(())
 }
@@ -164,6 +216,13 @@ fn test_verify_with_empty_verifier() -> Result<(), Box<dyn std::error::Error>> {
         pkg.verify_signature(&verifier),
         Err(rpm::Error::KeyNotFoundError { key_ref: _ })
     ));
+
+    // check_signatures report: signature present but failed
+    let report = pkg.check_signatures(&verifier)?;
+    assert!(report.digests.is_ok());
+    assert_eq!(report.signatures.len(), 1);
+    assert!(!report.signatures[0].is_verified());
+    assert!(!report.is_ok());
 
     // v6
     let pkg = rpm::Package::open(common::pkgs::v6::RPM_BASIC_RSA_SIGNED)?;
@@ -577,7 +636,8 @@ mod keyring {
     }
 }
 
-/// Test that verify_digests succeeds independently of signature verification
+/// Test that verify_digests succeeds independently of signature verification,
+/// and that check_digests() reports the correct per-digest status for v4 vs v6.
 #[test]
 fn test_verify_digests_standalone() -> Result<(), Box<dyn std::error::Error>> {
     // Unsigned packages should still have valid digests
@@ -603,6 +663,26 @@ fn test_verify_digests_standalone() -> Result<(), Box<dyn std::error::Error>> {
     let signed_pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "digest test")
         .build_and_sign(&signer)?;
     signed_pkg.verify_digests()?;
+
+    // check_digests() on a v4 package: SHA-1 present, SHA3-256 not present
+    let report = rpm::Package::open(common::pkgs::v4::RPM_BASIC)?.check_digests()?;
+    assert!(report.sha1_header.is_verified());
+    assert!(report.sha256_header.is_verified());
+    assert!(report.sha3_256_header.is_not_present());
+    assert!(report.payload_sha256.is_verified());
+    assert!(report.payload_sha512.is_not_present());
+    assert!(report.payload_sha3_256.is_not_present());
+    assert!(report.is_ok());
+
+    // check_digests() on a v6 package: SHA3-256 present, SHA-1 not present
+    let report = rpm::Package::open(common::pkgs::v6::RPM_BASIC)?.check_digests()?;
+    assert!(report.sha256_header.is_verified());
+    assert!(report.sha3_256_header.is_verified());
+    assert!(report.sha1_header.is_not_present());
+    assert!(report.payload_sha256.is_verified());
+    assert!(report.payload_sha512.is_verified());
+    assert!(report.payload_sha3_256.is_verified());
+    assert!(report.is_ok());
 
     Ok(())
 }
@@ -1048,6 +1128,22 @@ fn test_tampered_payload_detected() -> Result<(), Box<dyn std::error::Error>> {
         "verify_digests should fail after payload tampering"
     );
 
+    // check_digests should show which specific digests failed
+    let report = pkg.check_digests()?;
+    assert!(
+        report.payload_sha256.is_mismatch(),
+        "payload SHA-256 should mismatch"
+    );
+    // Header-only digests should still be fine
+    assert!(report.sha1_header.is_verified());
+    assert!(report.sha256_header.is_verified());
+    // result() should return a descriptive error
+    let err = report.result().unwrap_err();
+    assert!(
+        err.to_string().contains("mismatch"),
+        "error should mention mismatch: {err}"
+    );
+
     // Signature verification should also fail (it calls verify_digests internally)
     let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
     assert!(
@@ -1058,6 +1154,7 @@ fn test_tampered_payload_detected() -> Result<(), Box<dyn std::error::Error>> {
     // Signed v6 package
     let signer = Signer::from_asc_file(common::keys::v6::ED25519_PRIVATE)?;
     let mut pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "tamper test")
+        .using_config(rpm::BuildConfig::v6())
         .build_and_sign(&signer)?;
 
     pkg.verify_digests()?;
@@ -1070,6 +1167,13 @@ fn test_tampered_payload_detected() -> Result<(), Box<dyn std::error::Error>> {
         pkg.verify_digests().is_err(),
         "verify_digests should fail after payload tampering (v6)"
     );
+
+    // v6 report should show payload digests failed but header digests ok
+    let report = pkg.check_digests()?;
+    assert!(!report.is_ok());
+    assert!(report.payload_sha256.is_mismatch());
+    assert!(report.sha256_header.is_verified());
+    assert!(report.sha3_256_header.is_verified());
 
     Ok(())
 }

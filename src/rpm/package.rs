@@ -59,6 +59,165 @@ fn symlink(_original: &Path, _link: &Path) -> Result<(), Error> {
     Err(Error::UnsupportedSymlink)
 }
 
+/// The result of checking a single digest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DigestStatus {
+    /// The digest was present and matches the computed value.
+    Verified,
+    /// The digest tag was not present in the package headers.
+    NotPresent,
+    /// The digest was present but did not match the computed value.
+    Mismatch {
+        /// The value declared in the RPM header.
+        expected: String,
+        /// The value computed from the actual content.
+        actual: String,
+    },
+}
+
+impl DigestStatus {
+    /// Returns `true` if this digest was present and verified.
+    pub fn is_verified(&self) -> bool {
+        matches!(self, DigestStatus::Verified)
+    }
+
+    /// Returns `true` if this digest tag was not present.
+    pub fn is_not_present(&self) -> bool {
+        matches!(self, DigestStatus::NotPresent)
+    }
+
+    /// Returns `true` if this digest was present but mismatched.
+    pub fn is_mismatch(&self) -> bool {
+        matches!(self, DigestStatus::Mismatch { .. })
+    }
+
+    /// Check a digest by comparing the expected value (from a header lookup)
+    /// against the actual hash of the provided data.
+    ///
+    /// If the lookup returned an error (tag not present), returns `NotPresent`.
+    fn check_digest_against_tag<D: Digest>(expected: Result<&str, Error>, data: &[u8]) -> Self {
+        match expected {
+            Ok(expected) => {
+                let actual = hex::encode(D::digest(data));
+                if expected == actual {
+                    DigestStatus::Verified
+                } else {
+                    DigestStatus::Mismatch {
+                        expected: expected.to_string(),
+                        actual,
+                    }
+                }
+            }
+            Err(_) => DigestStatus::NotPresent,
+        }
+    }
+}
+
+/// Results of verifying all digests in the package.
+///
+/// Each field represents a specific digest type. Not all digests are present
+/// in all packages — v4 packages typically have MD5, SHA1, and SHA256, while
+/// v6 packages add SHA3-256 and SHA-512 variants.
+#[derive(Debug, Clone)]
+pub struct DigestReport {
+    /// SHA-1 of the header (signature header, v4 packages).
+    pub sha1_header: DigestStatus,
+    /// SHA-256 of the header (signature header).
+    pub sha256_header: DigestStatus,
+    /// SHA3-256 of the header (signature header, v6 packages).
+    pub sha3_256_header: DigestStatus,
+    /// SHA-256 of the compressed payload.
+    pub payload_sha256: DigestStatus,
+    /// SHA-512 of the compressed payload (v6 packages).
+    pub payload_sha512: DigestStatus,
+    /// SHA3-256 of the compressed payload (v6 packages).
+    pub payload_sha3_256: DigestStatus,
+}
+
+impl DigestReport {
+    /// Collapse into a `Result`: fails if any digest mismatched.
+    ///
+    /// Digests that are [`DigestStatus::NotPresent`] are **not** considered failures.
+    pub fn result(&self) -> Result<(), Error> {
+        let all = [
+            ("header SHA1", &self.sha1_header),
+            ("header SHA-256", &self.sha256_header),
+            ("header SHA3-256", &self.sha3_256_header),
+            ("payload SHA-256", &self.payload_sha256),
+            ("payload SHA-512", &self.payload_sha512),
+            ("payload SHA3-256", &self.payload_sha3_256),
+        ];
+        for (label, status) in all {
+            if let DigestStatus::Mismatch { expected, actual } = status {
+                return Err(Error::DigestMismatchError {
+                    digest: label,
+                    expected: expected.clone(),
+                    actual: actual.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns `true` if every present digest verified and none mismatched.
+    pub fn is_ok(&self) -> bool {
+        self.result().is_ok()
+    }
+}
+
+/// The result of verifying a single signature against the provided keys.
+#[cfg(feature = "signature-pgp")]
+#[derive(Debug)]
+pub struct SignatureCheckResult {
+    /// Parsed metadata about the signature (fingerprint, algorithm, etc.).
+    pub info: signature::pgp::SignatureInfo,
+    /// `None` if verified successfully, `Some(error)` if verification failed.
+    pub error: Option<Error>,
+}
+
+#[cfg(feature = "signature-pgp")]
+impl SignatureCheckResult {
+    /// Returns `true` if this signature was successfully verified.
+    pub fn is_verified(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+/// Results of verifying all digests and signatures in the package.
+#[cfg(feature = "signature-pgp")]
+#[derive(Debug)]
+pub struct SignatureReport {
+    /// Digest verification results.
+    pub digests: DigestReport,
+    /// Per-signature verification results, in the order they appear in the package.
+    pub signatures: Vec<SignatureCheckResult>,
+}
+
+#[cfg(feature = "signature-pgp")]
+impl SignatureReport {
+    /// Collapse into a `Result`: fails if any digest mismatched or if no signature
+    /// was successfully verified.
+    ///
+    /// When no signature verified, the error from the last failed attempt is returned
+    /// (preserving the original error type).
+    pub fn into_result(self) -> Result<(), Error> {
+        self.digests.result()?;
+        let mut last_err = None;
+        for result in self.signatures {
+            if result.error.is_none() {
+                return Ok(());
+            }
+            last_err = result.error;
+        }
+        Err(last_err.unwrap_or(Error::NoSignatureFound))
+    }
+
+    /// Returns `true` if digests are ok and at least one signature verified.
+    pub fn is_ok(&self) -> bool {
+        self.digests.is_ok() && self.signatures.iter().any(|s| s.is_verified())
+    }
+}
+
 /// A complete rpm file.
 ///
 /// Can either be created using the [`PackageBuilder`](crate::PackageBuilder)
@@ -402,155 +561,198 @@ impl Package {
             .collect())
     }
 
-    // @todo: verify_signature() and verify_digests() don't provide any feedback on whether a signature/digest
-    //        was present and verified or whether it was not present at all.
-    // https://github.com/rpm-rs/rpm/issues/128
-
     /// Verify header-only signatures.
     ///
     /// Legacy v3 signatures that cover the payload are not checked.
+    ///
+    /// This is a convenience wrapper around [`check_signatures`](Self::check_signatures)
+    /// that collapses the detailed report into a pass/fail `Result`.
     #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), Error>
     where
         V: signature::Verifying<Signature = Vec<u8>>,
     {
-        let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        self.metadata.header.write(&mut header_bytes)?;
-        self.verify_digests()?;
-
-        let openpgp_sigs = &self
-            .metadata
-            .signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
-
-        // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
-        if let Ok(openpgp_signatures) = openpgp_sigs {
-            let mut last_err = None;
-            for base64_sig in openpgp_signatures.iter() {
-                let signature = decode_sig(base64_sig)?;
-                signature::echo_signature("signature_header(header only)", &signature);
-                match verifier.verify(header_bytes.as_slice(), &signature) {
-                    Ok(()) => return Ok(()),
-                    Err(e) => last_err = Some(e),
-                }
-            }
-
-            return Err(last_err.unwrap_or(Error::NoSignatureFound));
-        } else {
-            let rsa_sig = &self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA);
-            let eddsa_sig = &self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
-
-            if !rsa_sig.is_ok() && !eddsa_sig.is_ok() {
-                return Err(Error::NoSignatureFound);
-            }
-
-            if let Ok(signature_header_only) = eddsa_sig {
-                signature::echo_signature("signature_header(header only)", signature_header_only);
-                verifier.verify(header_bytes.as_slice(), signature_header_only)?;
-            }
-
-            if let Ok(signature_header_only) = rsa_sig {
-                signature::echo_signature("signature_header(header only)", signature_header_only);
-                verifier.verify(header_bytes.as_slice(), signature_header_only)?;
-            }
-        }
-
-        Ok(())
+        self.check_signatures(verifier)?.into_result()
     }
 
-    /// Verify any digests which may be present in the RPM headers
+    /// Verify any digests which may be present in the RPM headers.
+    ///
+    /// This is a convenience wrapper around [`check_digests`](Self::check_digests)
+    /// that collapses the detailed report into a pass/fail `Result`.
     pub fn verify_digests(&self) -> Result<(), Error> {
+        self.check_digests()?.result()
+    }
+
+    /// Check all digests in the package and return a detailed report.
+    ///
+    /// Each digest type is individually checked and its status recorded.
+    /// Use [`DigestReport::result`] to collapse into a pass/fail `Result`,
+    /// or inspect individual fields for detailed information.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let pkg = rpm::Package::open("my-package.rpm")?;
+    /// let report = pkg.check_digests()?;
+    ///
+    /// // Quick pass/fail
+    /// report.result()?;
+    ///
+    /// // Or inspect individual digests
+    /// if report.sha256_header.is_verified() {
+    ///     println!("SHA-256 header digest verified");
+    /// }
+    /// if report.sha3_256_header.is_not_present() {
+    ///     println!("SHA3-256 header digest not present (v4 package?)");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn check_digests(&self) -> Result<DigestReport, Error> {
         let mut header = Vec::<u8>::with_capacity(1024);
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
 
-        let sha1_declared = self
+        // --- Header digests (from signature header) ---
+
+        let sha1_header = DigestStatus::check_digest_against_tag::<sha1::Sha1>(
+            self.metadata
+                .signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1),
+            header.as_slice(),
+        );
+
+        let sha256_header = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
+            self.metadata
+                .signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256),
+            header.as_slice(),
+        );
+
+        let sha3_256_header = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
+            self.metadata
+                .signature
+                .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256),
+            header.as_slice(),
+        );
+
+        // --- Payload digests (from main header) ---
+
+        let payload_sha256 = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
+            self.metadata
+                .header
+                .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
+                .map(|a| a[0]),
+            self.content.as_slice(),
+        );
+
+        let payload_sha512 = DigestStatus::check_digest_against_tag::<sha2::Sha512>(
+            self.metadata
+                .header
+                .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA512),
+            self.content.as_slice(),
+        );
+
+        let payload_sha3_256 = DigestStatus::check_digest_against_tag::<sha3::Sha3_256>(
+            self.metadata
+                .header
+                .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256),
+            self.content.as_slice(),
+        );
+
+        Ok(DigestReport {
+            sha1_header,
+            sha256_header,
+            sha3_256_header,
+            payload_sha256,
+            payload_sha512,
+            payload_sha3_256,
+        })
+    }
+
+    /// Check all digests and verify all signatures, returning a detailed report.
+    ///
+    /// Each digest is individually checked, and each signature in the package
+    /// is verified against the provided `verifier`. Use [`SignatureReport::into_result`]
+    /// to collapse into a pass/fail `Result`, or inspect individual fields.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rpm::signature::pgp::Verifier;
+    ///
+    /// let pkg = rpm::Package::open("my-package.rpm")?;
+    /// let verifier = Verifier::from_asc_bytes(b"-----BEGIN PGP PUBLIC KEY BLOCK-----\n...")?;
+    /// let report = pkg.check_signatures(&verifier)?;
+    ///
+    /// // Quick pass/fail
+    /// report.into_result()?;
+    ///
+    /// // Or inspect individual signatures
+    /// let report = pkg.check_signatures(&verifier)?;
+    /// for result in &report.signatures {
+    ///     if result.is_verified() {
+    ///         println!("Verified by key {:?}", result.info.fingerprint());
+    ///     } else {
+    ///         println!("Signature by {:?} failed: {}",
+    ///             result.info.fingerprint(), result.error.as_ref().unwrap());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "signature-pgp")]
+    pub fn check_signatures<V>(&self, verifier: V) -> Result<SignatureReport, Error>
+    where
+        V: signature::Verifying<Signature = Vec<u8>>,
+    {
+        let digests = self.check_digests()?;
+
+        let mut header_bytes = Vec::<u8>::with_capacity(1024);
+        self.metadata.header.write(&mut header_bytes)?;
+
+        let mut signatures = Vec::new();
+
+        let openpgp_sigs = self
             .metadata
             .signature
-            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA1);
-        let sha256_declared = self
-            .metadata
-            .signature
-            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA256);
-        let sha3_256_declared = self
-            .metadata
-            .signature
-            .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256);
+            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
 
-        if let Ok(sha1_declared) = sha1_declared {
-            let header_digest_sha1 = hex::encode(sha1::Sha1::digest(header.as_slice()));
-            if sha1_declared != header_digest_sha1 {
-                return Err(Error::DigestMismatchError);
+        if let Ok(openpgp_sigs) = openpgp_sigs {
+            for base64_sig in openpgp_sigs.iter() {
+                let sig_bytes = decode_sig(base64_sig)?;
+                signature::echo_signature("signature_header(header only)", &sig_bytes);
+
+                let parsed = Verifier::parse_signature(&sig_bytes)?;
+                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+                let error = verifier.verify(header_bytes.as_slice(), &sig_bytes).err();
+                signatures.push(SignatureCheckResult { info, error });
             }
         }
 
-        if let Ok(sha256) = sha256_declared {
-            let header_digest_sha256 = hex::encode(sha2::Sha256::digest(header.as_slice()));
-            if sha256 != header_digest_sha256 {
-                return Err(Error::DigestMismatchError);
+        // Legacy signature tags
+        for sig_result in [
+            self.metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
+            self.metadata
+                .signature
+                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
+        ] {
+            if let Ok(sig_bytes) = sig_result {
+                let parsed = Verifier::parse_signature(sig_bytes)?;
+                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+                let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
+                signatures.push(SignatureCheckResult { info, error });
             }
         }
 
-        if let Ok(sha3_256) = sha3_256_declared {
-            let header_digest_sha3_256 = hex::encode(sha3::Sha3_256::digest(header.as_slice()));
-            if sha3_256 != header_digest_sha3_256 {
-                return Err(Error::DigestMismatchError);
-            }
-        }
-
-        let payload_sha256 = self
-            .metadata
-            .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256);
-        let payload_sha3_256 = self
-            .metadata
-            .header
-            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA3_256);
-        let payload_sha512 = self
-            .metadata
-            .header
-            .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOAD_SHA512);
-
-        if let Ok(payload_sha256) = payload_sha256 {
-            let mut hasher = sha2::Sha256::default();
-            let payload_digest = {
-                hasher.update(self.content.as_slice());
-                hex::encode(hasher.finalize())
-            };
-            if payload_digest != payload_sha256[0] {
-                return Err(Error::DigestMismatchError);
-            }
-        }
-
-        if let Ok(payload_sha3_256) = payload_sha3_256 {
-            let mut hasher = sha3::Sha3_256::default();
-            let payload_digest = {
-                hasher.update(self.content.as_slice());
-                hex::encode(hasher.finalize())
-            };
-            if payload_digest != payload_sha3_256 {
-                return Err(Error::DigestMismatchError);
-            }
-        }
-
-        if let Ok(payload_sha512) = payload_sha512 {
-            let mut hasher = sha2::Sha512::default();
-            let payload_digest = {
-                hasher.update(self.content.as_slice());
-                hex::encode(hasher.finalize())
-            };
-            if payload_digest != payload_sha512 {
-                return Err(Error::DigestMismatchError);
-            }
-        }
-
-        Ok(())
+        Ok(SignatureReport {
+            digests,
+            signatures,
+        })
     }
 }
 

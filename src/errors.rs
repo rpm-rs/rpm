@@ -92,8 +92,12 @@ pub enum Error {
         key_ref: String,
     },
 
-    #[error("digests from content did not match those in the header")]
-    DigestMismatchError,
+    #[error("{digest} digest mismatch: expected {expected}, got {actual}")]
+    DigestMismatchError {
+        digest: &'static str,
+        expected: String,
+        actual: String,
+    },
 
     #[error("unable to find key with key-ref: {key_ref}")]
     KeyNotFoundError { key_ref: String },
