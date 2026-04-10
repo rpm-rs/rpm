@@ -2220,6 +2220,8 @@ impl PackageBuilder {
         };
 
         if let Some(raw_archive_sha256) = hash_values.get(&HashKind::Sha256) {
+            // RPM uses array types for RPMTAG_PAYLOADSHA256 and friends, but switched to string types when
+            // adding new payload checksum types.
             actual_records.extend([
                 IndexEntry::new(
                     IndexTag::RPMTAG_PAYLOADSHA256,

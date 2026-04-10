@@ -254,6 +254,16 @@ where
                     tag: entry.tag.to_string(),
                 })
             }
+            // Some tags that are typically String types are written as StringArray type for backwards compatibility reasons.
+            // e.g. PAYLOADSHA256
+            IndexData::StringArray(a) if a.len() == 1 => Ok(&a[0]),
+            IndexData::StringArray(_) if entry.num_items == 1 => {
+                let remaining = &self.store[entry.offset as usize..];
+                let nul = memchr::memchr(0, remaining).ok_or(Error::UnterminatedHeaderString)?;
+                std::str::from_utf8(&remaining[..nul]).map_err(|_| Error::InvalidUtf8 {
+                    tag: entry.tag.to_string(),
+                })
+            }
             _ => Err(Error::UnexpectedTagDataType {
                 expected_data_type: "string",
                 actual_data_type: entry.data.to_string(),
