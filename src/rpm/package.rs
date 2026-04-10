@@ -559,8 +559,7 @@ impl Package {
         report.payload_sha256 = DigestStatus::check_digest_against_tag::<sha2::Sha256>(
             self.metadata
                 .header
-                .get_entry_data_as_string_array(IndexTag::RPMTAG_PAYLOADSHA256)
-                .map(|a| a[0]),
+                .get_entry_data_as_string(IndexTag::RPMTAG_PAYLOADSHA256),
             self.content.as_slice(),
         );
 
@@ -1581,8 +1580,7 @@ impl PackageMetadata {
 
     /// Check header digests and verify header-only signatures, returning a detailed report.
     ///
-    /// Legacy v3 signatures that cover the payload are skipped (they require the full
-    /// package content). Payload digest fields are set to [`DigestStatus::NotChecked`].
+    /// Payload digest fields are set to [`DigestStatus::NotChecked`].
     /// To check everything, use [`Package::check_signatures`].
     #[cfg(feature = "signature-pgp")]
     pub fn check_signatures<V>(&self, verifier: V) -> Result<SignatureReport, Error>
