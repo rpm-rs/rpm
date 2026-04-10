@@ -577,7 +577,6 @@ bitflags! {
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
     pub struct FileVerifyFlags: u32 {
         const NONE 	= 0;
-        const MD5 	= 1 << 0;	      // from %verify(md5) - obsolete */
         const FILEDIGEST = 1 << 0;    // from %verify(filedigest) */
         const FILESIZE 	= 1 << 1;     // from %verify(size) */
         const LINKTO 	= 1 << 2;	  // from %verify(link)

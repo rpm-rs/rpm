@@ -107,6 +107,13 @@ pub enum Error {
     #[error("unsupported digest algorithm {0:?}")]
     UnsupportedDigestAlgorithm(DigestAlgorithm),
 
+    #[error("invalid digest length for {algo:?}: expected {expected}, got {actual}")]
+    InvalidDigestLength {
+        algo: DigestAlgorithm,
+        expected: usize,
+        actual: usize,
+    },
+
     #[cfg(feature = "signature-pgp")]
     #[error("unsupported PGP key type {0:?}")]
     UnsupportedPGPKeyType(pgp::crypto::public_key::PublicKeyAlgorithm),

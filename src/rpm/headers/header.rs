@@ -599,19 +599,26 @@ impl FileDigest {
         hex_digest: impl Into<String>,
     ) -> Result<Self, Error> {
         let hex = hex_digest.into();
-        let digest = FileDigest {
-            digest: hex,
-            algo: algorithm,
+
+        let expected_len = match algorithm {
+            DigestAlgorithm::Md5 => 32,
+            DigestAlgorithm::Sha2_224 => 56,
+            DigestAlgorithm::Sha2_256 | DigestAlgorithm::Sha3_256 => 64,
+            DigestAlgorithm::Sha2_384 => 96,
+            DigestAlgorithm::Sha2_512 | DigestAlgorithm::Sha3_512 => 128,
         };
 
-        Ok(match algorithm {
-            DigestAlgorithm::Md5 if digest.digest.len() == 32 => digest,
-            DigestAlgorithm::Sha2_256 if digest.digest.len() == 64 => digest,
-            DigestAlgorithm::Sha2_224 if digest.digest.len() == 60 => digest,
-            DigestAlgorithm::Sha2_384 if digest.digest.len() == 96 => digest,
-            DigestAlgorithm::Sha2_512 if digest.digest.len() == 128 => digest,
-            // @todo disambiguate mismatch of length from unsupported algorithm
-            digest_algo => return Err(Error::UnsupportedDigestAlgorithm(digest_algo)),
+        if hex.len() != expected_len {
+            return Err(Error::InvalidDigestLength {
+                algo: algorithm,
+                expected: expected_len,
+                actual: hex.len(),
+            });
+        }
+
+        Ok(FileDigest {
+            digest: hex,
+            algo: algorithm,
         })
     }
 
