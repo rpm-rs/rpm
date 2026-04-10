@@ -210,7 +210,7 @@
 //!     .build_and_sign(signer)?;
 //!
 //! // Write to a specific file
-//! pkg.write_to("./awesome.rpm")?;
+//! pkg.write_to("./target/awesome.rpm")?;
 //!
 //! // Or write to a directory with auto-generated filename (`target/awesome-1.0.0-1.x86_64.rpm`)
 //! pkg.write_to("./target")?;
