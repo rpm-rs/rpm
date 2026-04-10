@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Removed
+
+- Removed verification of the MD5 header+payload digest (`RPMSIGTAG_MD5`) and the associated dependency on `md5`. MD5 is well and truly obsolete cryptography these days.
+- Removed verification of legacy "RPM v3"-style signatures.
+
 ## 0.20.0
 
 Huge release! Testing has been improved dramatically, as has conformance / similarity against what RPM produces. There are also many breaking changes to be aware of, but they are worthwhile.

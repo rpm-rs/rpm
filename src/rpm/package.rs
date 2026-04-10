@@ -362,14 +362,6 @@ impl Package {
                 return Ok(vec![Verifier::parse_signature(eddsa_sig)?]);
             }
 
-            let rpm_v3_sig = self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
-            if let Ok(rpm_v3_sig) = rpm_v3_sig {
-                return Ok(vec![Verifier::parse_signature(rpm_v3_sig)?]);
-            }
-
             Err(Error::NoSignatureFound)
         }
     }
@@ -414,7 +406,9 @@ impl Package {
     //        was present and verified or whether it was not present at all.
     // https://github.com/rpm-rs/rpm/issues/128
 
-    /// Verify the signature as present within the RPM package.
+    /// Verify header-only signatures.
+    ///
+    /// Legacy v3 signatures that cover the payload are not checked.
     #[cfg(feature = "signature-meta")]
     pub fn verify_signature<V>(&self, verifier: V) -> Result<(), Error>
     where
@@ -451,12 +445,8 @@ impl Package {
                 .metadata
                 .signature
                 .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA);
-            let rpm_v3_sig = &self
-                .metadata
-                .signature
-                .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_PGP);
 
-            if !rsa_sig.is_ok() && !eddsa_sig.is_ok() && !rpm_v3_sig.is_ok() {
+            if !rsa_sig.is_ok() && !eddsa_sig.is_ok() {
                 return Err(Error::NoSignatureFound);
             }
 
@@ -469,16 +459,6 @@ impl Package {
                 signature::echo_signature("signature_header(header only)", signature_header_only);
                 verifier.verify(header_bytes.as_slice(), signature_header_only)?;
             }
-
-            if let Ok(signature_header_and_content) = rpm_v3_sig {
-                signature::echo_signature(
-                    "signature_header(header and content)",
-                    signature_header_and_content,
-                );
-                let header_and_content_cursor =
-                    io::Cursor::new(&header_bytes).chain(io::Cursor::new(&self.content));
-                verifier.verify(header_and_content_cursor, signature_header_and_content)?;
-            }
         }
 
         Ok(())
@@ -490,10 +470,6 @@ impl Package {
         // make sure to not hash any previous signatures in the header
         self.metadata.header.write(&mut header)?;
 
-        let md5_declared = self
-            .metadata
-            .signature
-            .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_MD5);
         let sha1_declared = self
             .metadata
             .signature
@@ -506,19 +482,6 @@ impl Package {
             .metadata
             .signature
             .get_entry_data_as_string(IndexSignatureTag::RPMSIGTAG_SHA3_256);
-
-        if let Ok(md5_declared) = md5_declared {
-            let header_and_content_digest_md5 = {
-                let mut hasher = md5::Md5::default();
-                hasher.update(&header);
-                hasher.update(&self.content);
-                let hash_result = hasher.finalize();
-                hash_result.to_vec()
-            };
-            if md5_declared != header_and_content_digest_md5 {
-                return Err(Error::DigestMismatchError);
-            }
-        }
 
         if let Ok(sha1_declared) = sha1_declared {
             let header_digest_sha1 = hex::encode(sha1::Sha1::digest(header.as_slice()));
