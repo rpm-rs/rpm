@@ -1479,14 +1479,18 @@ impl PackageMetadata {
             Ok(packets)
         } else {
             // Legacy signature tags
-            for sig_bytes in [
+            for sig_result in [
                 self.signature
                     .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
                 self.signature
                     .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
             ] {
-                if let Ok(sig_bytes) = sig_bytes {
-                    return Ok(vec![Verifier::parse_signature(sig_bytes)?]);
+                match sig_result {
+                    Ok(sig_bytes) => {
+                        return Ok(vec![Verifier::parse_signature(sig_bytes)?]);
+                    }
+                    Err(Error::TagNotFound(_)) => continue,
+                    Err(e) => return Err(e),
                 }
             }
 
@@ -1609,17 +1613,21 @@ impl PackageMetadata {
             }
         } else {
             // Legacy signature tags
-            for sig_bytes in [
+            for sig_result in [
                 self.signature
                     .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
                 self.signature
                     .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
             ] {
-                if let Ok(sig_bytes) = sig_bytes {
-                    let parsed = Verifier::parse_signature(sig_bytes)?;
-                    let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
-                    let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
-                    signatures.push(SignatureCheckResult { info, error });
+                match sig_result {
+                    Ok(sig_bytes) => {
+                        let parsed = Verifier::parse_signature(sig_bytes)?;
+                        let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+                        let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
+                        signatures.push(SignatureCheckResult { info, error });
+                    }
+                    Err(Error::TagNotFound(_)) => continue,
+                    Err(e) => return Err(e),
                 }
             }
         }
