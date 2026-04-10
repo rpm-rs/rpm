@@ -28,9 +28,9 @@ You **MAY** use AI assistance for contributing to this project, as long as you f
 
    The contributor is always the author and is fully accountable for the entirety of these contributions.
 
-   The contributor **MUST** fully review and understand their contribution prior to submitting.
+   The contributor **MUST** fully review and understand their contribution, and the purpose it serves, prior to submitting.
 
-   Contributions should be solving a clear problem, and ideally accompanied by tests that exercise the new/changed behavior.
+   Contributions **SHOULD** be solving a clear problem, and be accompanied by tests that exercise the new or changed behavior, if applicable.
 
 2. **Transparency**:
 
