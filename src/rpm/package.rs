@@ -1218,44 +1218,32 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_DIRNAMES);
 
-        // Return an empty list if the tags are not present
-        match (basenames, biject, dirs) {
-            (
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-            ) => Ok(vec![]),
-            (Ok(basenames), Ok(biject), Ok(dirs)) => {
-                let n = dirs.len();
-
-                let v = basenames
-                    .iter()
-                    .zip(biject.into_iter())
-                    .try_fold::<Vec<PathBuf>, _, _>(
-                        Vec::<PathBuf>::with_capacity(basenames.len()),
-                        |mut acc, item| {
-                            let (basename, dir_index) = item;
-                            if let Some(dir) = dirs.get(dir_index as usize) {
-                                acc.push(Path::new(dir).join(basename));
-                                Ok(acc)
-                            } else {
-                                Err(Error::InvalidTagIndex {
-                                    tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
-                                    index: dir_index,
-                                    bound: n as u32,
-                                })
-                            }
-                        },
-                    )?;
-                Ok(v)
-            }
-            (basenames, biject, dirs) => {
-                basenames?;
-                biject?;
-                dirs?;
-                unreachable!()
-            }
+        if matches!(&basenames, Err(Error::TagNotFound(_)))
+            && matches!(&biject, Err(Error::TagNotFound(_)))
+            && matches!(&dirs, Err(Error::TagNotFound(_)))
+        {
+            return Ok(Vec::new());
         }
+
+        let basenames = basenames?;
+        let biject = biject?;
+        let dirs = dirs?;
+
+        basenames
+            .iter()
+            .zip(biject)
+            .map(|(basename, dir_index)| {
+                if let Some(dir) = dirs.get(dir_index as usize) {
+                    Ok(Path::new(dir).join(basename))
+                } else {
+                    Err(Error::InvalidTagIndex {
+                        tag: IndexTag::RPMTAG_DIRINDEXES.to_string(),
+                        index: dir_index,
+                        bound: dirs.len() as u32,
+                    })
+                }
+            })
+            .collect()
     }
 
     /// The digest algorithm used per file.
@@ -1289,26 +1277,28 @@ impl PackageMetadata {
         let algorithm = self
             .get_file_digest_algorithm()
             .unwrap_or(DigestAlgorithm::Md5);
-        //
-        let modes = self
+
+        let modes = match self
             .header
-            .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES);
-        if let Err(Error::TagNotFound(_)) = modes {
-            return Ok(Vec::new());
-        }
+            .get_entry_data_as_u16_array(IndexTag::RPMTAG_FILEMODES)
+        {
+            Ok(modes) => modes,
+            Err(Error::TagNotFound(_)) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
 
         let users = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME);
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEUSERNAME)?;
         let groups = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME);
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEGROUPNAME)?;
         let digests = self
             .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS);
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILEDIGESTS)?;
         let mtimes = self
             .header
-            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES);
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEMTIMES)?;
         let sizes = self
             .header
             .get_entry_data_as_u64_array(IndexTag::RPMTAG_LONGFILESIZES)
@@ -1321,135 +1311,72 @@ impl PackageMetadata {
                             .map(|file_size| file_size as _)
                             .collect::<Vec<u64>>()
                     })
-            });
+            })?;
         let flags = self
             .header
-            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS);
+            .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS)?;
+        // TODO: verify this is correct behavior for links?
+        let links = self
+            .header
+            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS)?;
 
-        // Look for the file capabilities tag, but it's not required so don't error out if it's not
-        // present
+        // Optional tags — not present in all packages
         let caps = match self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILECAPS)
         {
-            Ok(caps) => Ok(Some(caps)),
-            Err(Error::TagNotFound(_)) => Ok(None),
+            Ok(caps) => Some(caps),
+            Err(Error::TagNotFound(_)) => None,
             Err(e) => return Err(e),
         };
-        // TODO: verify this is correct behavior for links?
-        let links = self
-            .header
-            .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS);
         let ima_signatures = match self
             .signature
             .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_FILESIGNATURES)
         {
-            Ok(ima_signatures) => Ok(Some(ima_signatures)),
-            Err(Error::TagNotFound(_)) => Ok(None),
+            Ok(ima_signatures) => Some(ima_signatures),
+            Err(Error::TagNotFound(_)) => None,
             Err(e) => return Err(e),
         };
 
-        match (
-            modes,
-            users,
-            groups,
-            digests,
-            mtimes,
-            sizes,
-            flags,
-            caps,
-            links,
-            ima_signatures,
-        ) {
-            (
-                Ok(modes),
-                Ok(users),
-                Ok(groups),
-                Ok(digests),
-                Ok(mtimes),
-                Ok(sizes),
-                Ok(flags),
-                Ok(caps),
-                Ok(links),
-                Ok(ima_signatures),
-            ) => {
-                let paths = self.get_file_paths()?;
-                let n = paths.len();
+        let paths = self.get_file_paths()?;
 
-                let v = itertools::multizip((
-                    paths.into_iter(),
-                    users,
-                    groups,
-                    modes,
-                    digests,
-                    mtimes,
-                    sizes,
-                    flags,
-                    links,
-                ))
-                .enumerate()
-                .try_fold::<Vec<FileEntry>, _, Result<_, Error>>(
-                    Vec::with_capacity(n),
-                    |mut acc, (idx, (path, user, group, mode, digest, mtime, size, flags, linkto))| {
-                        let digest = if digest.is_empty() {
-                            None
-                        } else {
-                            Some(FileDigest::new(algorithm, digest)?)
-                        };
-                        let cap = match &caps {
-                            Some(caps) => caps.get(idx).map(|s| (*s).to_owned()),
-                            None => None,
-                        };
-                        let ima_signature: Option<String> = match &ima_signatures {
-                            Some(ima_signatures) => ima_signatures.get(idx).map(|s| (*s).to_owned()),
-                            None => None,
-                        };
-                        acc.push(FileEntry {
-                            path,
-                            ownership: FileOwnership {
-                                user: user.to_owned(),
-                                group: group.to_owned(),
-                            },
-                            mode: mode.into(),
-                            modified_at: crate::Timestamp(mtime),
-                            digest,
-                            flags: FileFlags::from_bits_retain(flags),
-                            size: size as usize,
-                            caps: cap,
-                            linkto: linkto.to_owned(),
-                            ima_signature,
-                        });
-                        Ok(acc)
+        itertools::multizip((
+            paths, users, groups, modes, digests, mtimes, sizes, flags, links,
+        ))
+        .enumerate()
+        .map(
+            |(idx, (path, user, group, mode, digest, mtime, size, flags, linkto))| {
+                let digest = if digest.is_empty() {
+                    None
+                } else {
+                    Some(FileDigest::new(algorithm, digest)?)
+                };
+                let cap = caps
+                    .as_ref()
+                    .and_then(|c| c.get(idx))
+                    .map(|s| (*s).to_owned());
+                let ima_signature = ima_signatures
+                    .as_ref()
+                    .and_then(|s| s.get(idx))
+                    .map(|s| (*s).to_owned());
+                Ok(FileEntry {
+                    path,
+                    ownership: FileOwnership {
+                        user: user.to_owned(),
+                        group: group.to_owned(),
                     },
-                )?;
-                Ok(v)
-            }
-            (
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-            ) => Ok(vec![]),
-            (modes, users, groups, digests, mtimes, sizes, flags, caps, links, ima_signatures) => {
-                modes?;
-                users?;
-                groups?;
-                digests?;
-                mtimes?;
-                sizes?;
-                flags?;
-                caps?;
-                links?;
-                ima_signatures?;
-                unreachable!()
-            }
-        }
+                    mode: mode.into(),
+                    modified_at: crate::Timestamp(mtime),
+                    digest,
+                    flags: FileFlags::from_bits_retain(flags),
+                    size: size as usize,
+                    caps: cap,
+                    linkto: linkto.to_owned(),
+                    ima_signature,
+                })
+            },
+        )
+        .collect()
     }
 
     /// Return a list of changelog entries
@@ -1464,30 +1391,24 @@ impl PackageMetadata {
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_CHANGELOGTEXT);
 
-        // Return an empty list if the tags are not present
-        match (names, timestamps, descriptions) {
-            (
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-                Err(Error::TagNotFound(_)),
-            ) => Ok(vec![]),
-            (Ok(names), Ok(timestamps), Ok(descriptions)) => {
-                let v = Vec::from_iter(itertools::multizip((names, timestamps, descriptions)).map(
-                    |(name, timestamp, description)| ChangelogEntry {
-                        name: name.to_owned(),
-                        timestamp: timestamp as u64,
-                        description: description.to_owned(),
-                    },
-                ));
-                Ok(v)
-            }
-            (name, timestamp, description) => {
-                name?;
-                timestamp?;
-                description?;
-                unreachable!()
-            }
+        if matches!(&names, Err(Error::TagNotFound(_)))
+            && matches!(&timestamps, Err(Error::TagNotFound(_)))
+            && matches!(&descriptions, Err(Error::TagNotFound(_)))
+        {
+            return Ok(Vec::new());
         }
+
+        let names = names?;
+        let timestamps = timestamps?;
+        let descriptions = descriptions?;
+
+        Ok(itertools::multizip((names, timestamps, descriptions))
+            .map(|(name, timestamp, description)| ChangelogEntry {
+                name: name.to_owned(),
+                timestamp: timestamp as u64,
+                description: description.to_owned(),
+            })
+            .collect())
     }
 
     /// Return the raw bytes of each signature in the package's signature header.
