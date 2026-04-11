@@ -3,7 +3,7 @@ use pgp::{
     adapter::RsaSigner,
     types::{KeyVersion, Timestamp},
 };
-use rpm::{Package, signature::pgp::HsmSigner};
+use rpm::{Package, signature::pgp::BasicKeySigner};
 use rsa::{RsaPrivateKey, pkcs1v15};
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ fn main() {
     let rsa_signer =
         RsaSigner::new(rsa_key, KeyVersion::V4, Timestamp::now()).expect("create a PGP signer");
 
-    let pgp_signer = HsmSigner::new(rsa_signer);
+    let pgp_signer = BasicKeySigner::new(rsa_signer);
 
     let mut pkg = Package::open(args.input).expect("open source rpm");
     pkg.sign(pgp_signer)

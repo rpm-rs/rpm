@@ -475,6 +475,10 @@ impl Package {
     /// signing workflows: extract the header bytes, sign them externally, and
     /// apply the resulting signature with this method.
     ///
+    /// The provided signature bytes are not validated — it is the caller's
+    /// responsibility to ensure that the signature is a valid OpenPGP
+    /// signature over this package's header bytes.
+    ///
     /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated automatically.
     /// Signatures are deduplicated by issuer fingerprint, so signing with the
     /// same key replaces the previous signature rather than appending.
@@ -539,6 +543,10 @@ impl Package {
     /// signing workflows on disk: extract the header bytes (e.g. via
     /// [`PackageMetadata::open`] + [`PackageMetadata::header_bytes`]),
     /// sign them externally, and apply the resulting signature with this method.
+    ///
+    /// The provided signature bytes are not validated — it is the caller's
+    /// responsibility to ensure that the signature is a valid OpenPGP
+    /// signature over this package's header bytes.
     ///
     /// The signature header's reserved space is adjusted so that the new
     /// signature header occupies exactly the same number of bytes as the

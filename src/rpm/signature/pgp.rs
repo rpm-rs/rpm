@@ -507,25 +507,42 @@ impl traits::Verifying for Verifier {
     }
 }
 
-/// Signer for a key held on a secure processor (TPM, HSM, ...)
-pub struct HsmSigner<T> {
+/// Adapter that bridges a [`pgp::SigningKey`] implementation to the
+/// rpm-rs [`Signing`](traits::Signing) trait.
+///
+/// This is useful when the signing key is not a local key file — for
+/// example an HSM-backed key, a cloud KMS key, or any custom
+/// [`pgp::SigningKey`] implementation.
+///
+/// The [`pgp::adapter`] module provides ready-made `SigningKey`
+/// implementations — [`RsaSigner`](pgp::adapter::RsaSigner) and
+/// [`EcdsaSigner`](pgp::adapter::EcdsaSigner) — that wrap any Rust
+/// Crypto [`signature::Signer`], making it straightforward to plug in
+/// key backends such as PKCS#11 tokens or cloud KMS clients.
+///
+/// See `examples/hsm-signing.rs` for a complete example.
+pub struct BasicKeySigner<T> {
     secret_key: T,
 }
 
-impl<T> HsmSigner<T> {
-    /// Create a new [`HsmSigner`] with the underlying `secret_key`
+/// Deprecated alias for [`BasicKeySigner`].
+#[deprecated(since = "0.21.0", note = "renamed to `BasicKeySigner`")]
+pub type HsmSigner<T> = BasicKeySigner<T>;
+
+impl<T> BasicKeySigner<T> {
+    /// Create a new [`BasicKeySigner`] with the underlying `secret_key`
     pub fn new(secret_key: T) -> Self {
         Self { secret_key }
     }
 }
 
-impl<T> fmt::Debug for HsmSigner<T> {
+impl<T> fmt::Debug for BasicKeySigner<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HsmSigner").finish_non_exhaustive()
+        f.debug_struct("BasicKeySigner").finish_non_exhaustive()
     }
 }
 
-impl<T> traits::Signing for HsmSigner<T>
+impl<T> traits::Signing for BasicKeySigner<T>
 where
     T: KeyDetails + SigningKey,
 {
@@ -722,6 +739,64 @@ pub(crate) mod test {
         verifier
             .verify(&mut cursor, signature)
             .expect("failed to verify just signed signature");
+    }
+
+    mod basic_key_signer {
+        use super::*;
+        use pgp::adapter::RsaSigner;
+        use pgp::types::KeyVersion;
+        use rsa::{RsaPrivateKey, pkcs1v15};
+
+        fn prep_rsa() -> BasicKeySigner<RsaSigner<pkcs1v15::SigningKey<sha2::Sha256>, sha2::Sha256>>
+        {
+            let rsa_key = RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048)
+                .expect("failed to generate RSA key");
+            let rsa_key = pkcs1v15::SigningKey::<sha2::Sha256>::new(rsa_key);
+
+            let rsa_signer = RsaSigner::new(
+                rsa_key,
+                KeyVersion::V4,
+                pgp::types::Timestamp::from_secs(TEST_TIMESTAMP.0),
+            )
+            .expect("create PGP signer");
+
+            BasicKeySigner::new(rsa_signer)
+        }
+
+        #[test]
+        fn sign_produces_parseable_signature() {
+            let signer = prep_rsa();
+            let signature = signer
+                .sign(Cursor::new(TEST_DATA), TEST_TIMESTAMP)
+                .expect("signing should succeed");
+            Verifier::parse_signature(&signature).expect("signature should be parseable");
+        }
+
+        #[test]
+        fn sign_and_verify_with_signer_key() {
+            let signing_key = include_bytes!(
+                "../../../tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.secret"
+            );
+            let verification_key =
+                include_bytes!("../../../tests/assets/signing_keys/v4/rpm-testkey-v4-rsa4096.asc");
+
+            let signer = Signer::from_asc_bytes(signing_key.as_slice()).expect("SK parsing failed");
+            let verifier =
+                Verifier::from_asc_bytes(verification_key.as_slice()).expect("PK parsing failed");
+
+            // Use the Signer's internals to construct a BasicKeySigner
+            let basic_signer = BasicKeySigner::new(signer.signing_key.clone());
+
+            let signature = basic_signer
+                .sign(Cursor::new(TEST_DATA), TEST_TIMESTAMP)
+                .expect("signing should succeed");
+
+            Verifier::parse_signature(&signature).expect("signature should be parseable");
+
+            verifier
+                .verify(Cursor::new(TEST_DATA), &signature)
+                .expect("verification should succeed");
+        }
     }
 
     mod v4 {
