@@ -189,7 +189,6 @@ where
     /// I18NString, Bin), this reads from the store and allocates owned data.
     ///
     /// You probably don't want to use this, unless it's for e.g. debugging purposes.
-    #[allow(dead_code)]
     fn resolve_entry_data(&self, entry: &IndexEntry<T>) -> Result<IndexData, Error> {
         match &entry.data {
             IndexData::Null => Ok(IndexData::Null),

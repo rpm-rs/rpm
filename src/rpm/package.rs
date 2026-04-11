@@ -18,8 +18,6 @@ use crate::{CompressionType, Nevra, constants::*, decompress_stream, errors::*};
 use crate::signature::pgp::Verifier;
 #[cfg(feature = "signature-meta")]
 use crate::{Timestamp, signature};
-#[cfg(feature = "signature-pgp")]
-use pgp::base64::{Base64Decoder, Base64Reader};
 #[cfg(feature = "signature-meta")]
 use std::fmt::Debug;
 
@@ -1460,23 +1458,22 @@ impl PackageMetadata {
         }
     }
 
-    /// Parse all PGP signature packets from the package's signature header.
-    #[cfg(feature = "signature-pgp")]
-    fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
-        let openpgp_sigs = &self
+    /// Return the raw bytes of each signature in the package's signature header.
+    ///
+    /// OpenPGP signatures are base64-decoded; legacy RSA/DSA signatures are
+    /// returned as borrowed slices from the header store.
+    #[allow(dead_code)]
+    fn raw_signature_bytes(&self) -> Result<Vec<Cow<'_, [u8]>>, Error> {
+        let openpgp_sigs = self
             .signature
             .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
 
         // If RPMSIGTAG_OPENPGP exists, then the other tags (which should contain the same info) are not checked
         if let Ok(openpgp_sigs) = openpgp_sigs {
-            let mut packets = Vec::new();
-            for base64_sig in openpgp_sigs.iter() {
-                let mut signature = Vec::new();
-                let mut decoder = Base64Decoder::new(Base64Reader::new(base64_sig.as_bytes()));
-                decoder.read_to_end(&mut signature)?;
-                packets.push(Verifier::parse_signature(&signature)?);
-            }
-            Ok(packets)
+            openpgp_sigs
+                .iter()
+                .map(|s| decode_sig(s).map(Cow::Owned))
+                .collect()
         } else {
             // Legacy signature tags
             for sig_result in [
@@ -1486,9 +1483,7 @@ impl PackageMetadata {
                     .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
             ] {
                 match sig_result {
-                    Ok(sig_bytes) => {
-                        return Ok(vec![Verifier::parse_signature(sig_bytes)?]);
-                    }
+                    Ok(sig_bytes) => return Ok(vec![Cow::Borrowed(sig_bytes)]),
                     Err(Error::TagNotFound(_)) => continue,
                     Err(e) => return Err(e),
                 }
@@ -1496,6 +1491,14 @@ impl PackageMetadata {
 
             Err(Error::NoSignatureFound)
         }
+    }
+
+    #[cfg(feature = "signature-pgp")]
+    fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
+        self.raw_signature_bytes()?
+            .iter()
+            .map(|bytes| Verifier::parse_signature(bytes))
+            .collect()
     }
 
     /// Return parsed information about each OpenPGP header signature in the package.
@@ -1596,40 +1599,18 @@ impl PackageMetadata {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.header.write(&mut header_bytes)?;
 
+        let raw_sigs = match self.raw_signature_bytes() {
+            Ok(sigs) => sigs,
+            Err(Error::NoSignatureFound) => Vec::new(),
+            Err(e) => return Err(e),
+        };
+
         let mut signatures = Vec::new();
-
-        let openpgp_sigs = self
-            .signature
-            .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
-
-        if let Ok(openpgp_sigs) = openpgp_sigs {
-            for base64_sig in openpgp_sigs.iter() {
-                let sig_bytes = decode_sig(base64_sig)?;
-
-                let parsed = Verifier::parse_signature(&sig_bytes)?;
-                let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
-                let error = verifier.verify(header_bytes.as_slice(), &sig_bytes).err();
-                signatures.push(SignatureCheckResult { info, error });
-            }
-        } else {
-            // Legacy signature tags
-            for sig_result in [
-                self.signature
-                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RSA),
-                self.signature
-                    .get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_DSA),
-            ] {
-                match sig_result {
-                    Ok(sig_bytes) => {
-                        let parsed = Verifier::parse_signature(sig_bytes)?;
-                        let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
-                        let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
-                        signatures.push(SignatureCheckResult { info, error });
-                    }
-                    Err(Error::TagNotFound(_)) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
+        for sig_bytes in &raw_sigs {
+            let parsed = Verifier::parse_signature(sig_bytes)?;
+            let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
+            let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
+            signatures.push(SignatureCheckResult { info, error });
         }
 
         Ok(SignatureReport {
