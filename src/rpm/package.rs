@@ -499,6 +499,13 @@ impl Package {
         self.metadata.signatures()
     }
 
+    /// Return the raw bytes of each signature in the package's signature header.
+    ///
+    /// Delegates to [`PackageMetadata::raw_signatures`].
+    pub fn raw_signatures(&self) -> Result<Vec<Cow<'_, [u8]>>, Error> {
+        self.metadata.raw_signatures()
+    }
+
     /// Verify header-only signatures.
     ///
     /// Legacy v3 signatures that cover the payload are not checked.
@@ -1462,8 +1469,7 @@ impl PackageMetadata {
     ///
     /// OpenPGP signatures are base64-decoded; legacy RSA/DSA signatures are
     /// returned as borrowed slices from the header store.
-    #[allow(dead_code)]
-    fn raw_signature_bytes(&self) -> Result<Vec<Cow<'_, [u8]>>, Error> {
+    pub fn raw_signatures(&self) -> Result<Vec<Cow<'_, [u8]>>, Error> {
         let openpgp_sigs = self
             .signature
             .get_entry_data_as_string_array(IndexSignatureTag::RPMSIGTAG_OPENPGP);
@@ -1489,13 +1495,13 @@ impl PackageMetadata {
                 }
             }
 
-            Err(Error::NoSignatureFound)
+            Ok(Vec::new())
         }
     }
 
     #[cfg(feature = "signature-pgp")]
     fn parse_signature_packets(&self) -> Result<Vec<pgp::packet::Signature>, Error> {
-        self.raw_signature_bytes()?
+        self.raw_signatures()?
             .iter()
             .map(|bytes| Verifier::parse_signature(bytes))
             .collect()
@@ -1508,13 +1514,8 @@ impl PackageMetadata {
     /// Returns an empty `Vec` if the package is unsigned.
     #[cfg(feature = "signature-pgp")]
     pub fn signatures(&self) -> Result<Vec<signature::pgp::SignatureInfo>, Error> {
-        let packets = match self.parse_signature_packets() {
-            Ok(packets) => packets,
-            Err(Error::NoSignatureFound) => return Ok(Vec::new()),
-            Err(e) => return Err(e),
-        };
-
-        Ok(packets
+        Ok(self
+            .parse_signature_packets()?
             .iter()
             .map(signature::pgp::SignatureInfo::from_pgp_signature)
             .collect())
@@ -1599,14 +1600,8 @@ impl PackageMetadata {
         let mut header_bytes = Vec::<u8>::with_capacity(1024);
         self.header.write(&mut header_bytes)?;
 
-        let raw_sigs = match self.raw_signature_bytes() {
-            Ok(sigs) => sigs,
-            Err(Error::NoSignatureFound) => Vec::new(),
-            Err(e) => return Err(e),
-        };
-
         let mut signatures = Vec::new();
-        for sig_bytes in &raw_sigs {
+        for sig_bytes in &self.raw_signatures()? {
             let parsed = Verifier::parse_signature(sig_bytes)?;
             let info = signature::pgp::SignatureInfo::from_pgp_signature(&parsed);
             let error = verifier.verify(header_bytes.as_slice(), sig_bytes).err();
