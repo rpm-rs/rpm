@@ -449,16 +449,42 @@ impl Package {
         Ok(())
     }
 
+    /// Serialize the main header to bytes suitable for signing.
+    ///
+    /// Delegates to [`PackageMetadata::header_bytes`].
+    pub fn header_bytes(&self) -> Result<Vec<u8>, Error> {
+        self.metadata.header_bytes()
+    }
+
     /// Generate a fresh, unsigned signature header
     #[cfg(feature = "signature-meta")]
     pub fn clear_signatures(&mut self) -> Result<(), Error> {
-        // create a temporary byte repr of the header
-        let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        self.metadata.header.write(&mut header_bytes)?;
+        let header_bytes = self.header_bytes()?;
 
         self.metadata.signature = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
             .clear_signatures()
             .calculate_digests(&header_bytes)
+            .build()?;
+
+        Ok(())
+    }
+
+    /// Apply a pre-computed OpenPGP signature to the package.
+    ///
+    /// This is the counterpart to [`header_bytes`](Self::header_bytes) for remote
+    /// signing workflows: extract the header bytes, sign them externally, and
+    /// apply the resulting signature with this method.
+    ///
+    /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated automatically.
+    /// Signatures are deduplicated by issuer fingerprint, so signing with the
+    /// same key replaces the previous signature rather than appending.
+    #[cfg(feature = "signature-meta")]
+    pub fn apply_signature(&mut self, signature: Vec<u8>) -> Result<(), Error> {
+        let header_bytes = self.header_bytes()?;
+
+        self.metadata.signature = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
+            .calculate_digests(&header_bytes)
+            .add_openpgp_signature(signature)
             .build()?;
 
         Ok(())
@@ -501,21 +527,18 @@ impl Package {
         S: signature::Signing<Signature = Vec<u8>>,
     {
         let t = t.try_into().unwrap();
-        // create a temporary byte repr of the header
-        let mut header_bytes = Vec::<u8>::with_capacity(1024);
-        self.metadata.header.write(&mut header_bytes)?;
-
+        let header_bytes = self.header_bytes()?;
         let header_signature = signer.sign(header_bytes.as_slice(), t)?;
-        let sig_header = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
-            .calculate_digests(&header_bytes)
-            .add_openpgp_signature(header_signature)
-            .build()?;
-
-        self.metadata.signature = sig_header;
-        Ok(())
+        self.apply_signature(header_signature)
     }
 
-    /// Re-sign an RPM package on disk without reading or rewriting the payload.
+    /// Apply a pre-computed OpenPGP signature to an on-disk RPM package
+    /// without reading or rewriting the payload.
+    ///
+    /// This is the counterpart to [`PackageMetadata::header_bytes`] for remote
+    /// signing workflows on disk: extract the header bytes (e.g. via
+    /// [`PackageMetadata::open`] + [`PackageMetadata::header_bytes`]),
+    /// sign them externally, and apply the resulting signature with this method.
     ///
     /// The signature header's reserved space is adjusted so that the new
     /// signature header occupies exactly the same number of bytes as the
@@ -524,10 +547,10 @@ impl Package {
     /// Returns [`Error::InsufficientReservedSpace`] if the new signature header
     /// is too large to fit in the available space.
     #[cfg(feature = "signature-meta")]
-    pub fn resign_in_place<S>(path: impl AsRef<Path>, signer: S) -> Result<(), Error>
-    where
-        S: signature::Signing<Signature = Vec<u8>>,
-    {
+    pub fn apply_signature_in_place(
+        path: impl AsRef<Path>,
+        signature: Vec<u8>,
+    ) -> Result<(), Error> {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -540,17 +563,13 @@ impl Package {
 
         let old_sig_total = metadata.signature.size() + metadata.signature.padding_required();
 
-        // Serialize the main header for digests and signing
-        let mut header_bytes = Vec::with_capacity(1024);
-        metadata.header.write(&mut header_bytes)?;
-        let header_signature = signer.sign(header_bytes.as_slice(), Timestamp::now())?;
+        let header_bytes = metadata.header_bytes()?;
 
-        // Build with reserved_space = 0 to find minimum size.
-        // Using Some(0) keeps the reserved tag entry so the entry count
-        // matches the final header.
+        // Build with reserved_space = 0 to find minimum size. Using Some(0) keeps the
+        // reserved tag entry so the entry count matches the final header.
         let min_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
             .calculate_digests(&header_bytes)
-            .add_openpgp_signature(header_signature.clone())
+            .add_openpgp_signature(signature.clone())
             .reserved_space(0)
             .build()?;
 
@@ -572,7 +591,7 @@ impl Package {
 
         let new_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
             .calculate_digests(&header_bytes)
-            .add_openpgp_signature(header_signature)
+            .add_openpgp_signature(signature)
             .reserved_space(reserved)
             .build()?;
 
@@ -585,6 +604,27 @@ impl Package {
         // Seek past the lead and write the new signature header in-place
         file.seek(io::SeekFrom::Start(LEAD_SIZE as u64))?;
         new_sig.write_signature(&mut file)?;
+
+        Ok(())
+    }
+
+    /// Re-sign an RPM package on disk without reading or rewriting the payload.
+    ///
+    /// The signature header's reserved space is adjusted so that the new
+    /// signature header occupies exactly the same number of bytes as the
+    /// old one, allowing an in-place overwrite of just the signature header.
+    ///
+    /// Returns [`Error::InsufficientReservedSpace`] if the new signature header
+    /// is too large to fit in the available space.
+    #[cfg(feature = "signature-meta")]
+    pub fn resign_in_place<S>(path: impl AsRef<Path>, signer: S) -> Result<(), Error>
+    where
+        S: signature::Signing<Signature = Vec<u8>>,
+    {
+        let metadata = PackageMetadata::open(path.as_ref())?;
+        let header_bytes = metadata.header_bytes()?;
+        let header_signature = signer.sign(header_bytes.as_slice(), Timestamp::now())?;
+        Self::apply_signature_in_place(path, header_signature)?;
 
         Ok(())
     }
@@ -778,6 +818,19 @@ impl PackageMetadata {
         self.signature.write_signature(out)?;
         self.header.write(out)?;
         Ok(())
+    }
+
+    /// Serialize the main header to bytes suitable for signing.
+    ///
+    /// These are the bytes that a signing key should sign. This is useful for
+    /// remote signing workflows where the actual signing happens on a different
+    /// system: extract the header bytes with this method, send them to the remote
+    /// signer, and apply the resulting signature with
+    /// [`Package::apply_signature`] or [`Package::apply_signature_in_place`].
+    pub fn header_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut bytes = Vec::<u8>::with_capacity(1024);
+        self.header.write(&mut bytes)?;
+        Ok(bytes)
     }
 
     /// Whether this package is a source package, or not
