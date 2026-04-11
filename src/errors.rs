@@ -157,6 +157,11 @@ pub enum Error {
         reason: &'static str,
     },
 
+    #[error(
+        "insufficient reserved space for in-place resigning: need {needed} bytes but only {available} available"
+    )]
+    InsufficientReservedSpace { needed: u32, available: u32 },
+
     #[error("{0}")]
     InvalidFileCaps(String),
 }

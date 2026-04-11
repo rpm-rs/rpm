@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     fs,
-    io::{self, Read},
+    io::{self, Read, Seek},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -512,6 +512,80 @@ impl Package {
             .build()?;
 
         self.metadata.signature = sig_header;
+        Ok(())
+    }
+
+    /// Re-sign an RPM package on disk without reading or rewriting the payload.
+    ///
+    /// The signature header's reserved space is adjusted so that the new
+    /// signature header occupies exactly the same number of bytes as the
+    /// old one, allowing an in-place overwrite of just the signature header.
+    ///
+    /// Returns [`Error::InsufficientReservedSpace`] if the new signature header
+    /// is too large to fit in the available space.
+    #[cfg(feature = "signature-meta")]
+    pub fn resign_in_place<S>(path: impl AsRef<Path>, signer: S) -> Result<(), Error>
+    where
+        S: signature::Signing<Signature = Vec<u8>>,
+    {
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path.as_ref())?;
+
+        let metadata = {
+            let mut buf_reader = io::BufReader::new(&file);
+            PackageMetadata::parse(&mut buf_reader)?
+        };
+
+        let old_sig_total = metadata.signature.size() + metadata.signature.padding_required();
+
+        // Serialize the main header for digests and signing
+        let mut header_bytes = Vec::with_capacity(1024);
+        metadata.header.write(&mut header_bytes)?;
+        let header_signature = signer.sign(header_bytes.as_slice(), Timestamp::now())?;
+
+        // Build with reserved_space = 0 to find minimum size.
+        // Using Some(0) keeps the reserved tag entry so the entry count
+        // matches the final header.
+        let min_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
+            .calculate_digests(&header_bytes)
+            .add_openpgp_signature(header_signature.clone())
+            .reserved_space(0)
+            .build()?;
+
+        if min_sig.size() > old_sig_total {
+            return Err(Error::InsufficientReservedSpace {
+                needed: min_sig.size(),
+                available: old_sig_total,
+            });
+        }
+
+        // Fill the gap between the minimum-size header and the original with reserved space
+        // so the total size is unchanged.
+        //
+        // No alignment iteration is needed: the signature header must be 8-byte aligned,
+        // and both `old_sig_total` and `min_sig.size()`  are already multiples of 8,
+        // so their difference is too. Adding that many reserved bytes produces a header whose
+        // padding_required() is 0 and whose total matches exactly.
+        let reserved = old_sig_total - min_sig.size();
+
+        let new_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
+            .calculate_digests(&header_bytes)
+            .add_openpgp_signature(header_signature)
+            .reserved_space(reserved)
+            .build()?;
+
+        debug_assert_eq!(
+            new_sig.size() + new_sig.padding_required(),
+            old_sig_total,
+            "new signature header size must exactly match old size"
+        );
+
+        // Seek past the lead and write the new signature header in-place
+        file.seek(io::SeekFrom::Start(LEAD_SIZE as u64))?;
+        new_sig.write_signature(&mut file)?;
+
         Ok(())
     }
 

@@ -337,4 +337,11 @@ impl SignatureHeaderBuilder {
         self.openpgp_signatures.clear();
         self
     }
+
+    /// Set the amount of reserved space (in bytes) for later adding signatures
+    /// without rewriting the entire package.
+    pub fn reserved_space(mut self, size: u32) -> Self {
+        self.reserved_space = Some(size);
+        self
+    }
 }
