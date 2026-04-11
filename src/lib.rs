@@ -172,6 +172,44 @@
 //! # fn main() {}
 //! ```
 //!
+//! ### Remote signing
+//!
+//! For workflows where the signing key lives on a remote system (e.g. a
+//! signing service), you can split the signing process into two steps:
+//! extract the header bytes, sign them externally, and apply the resulting
+//! signature.
+//!
+//! ```
+//! # #[cfg(feature = "signature-pgp")]
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use rpm::signature::pgp::{Signer, Verifier};
+//! use rpm::signature::Signing;
+//!
+//! // Step 1: Extract the header bytes to be signed.
+//! // Only reads the metadata, not the payload.
+//! let metadata = rpm::PackageMetadata::open("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+//! let header_bytes = metadata.header_bytes()?;
+//!
+//! // Step 2: Sign the header bytes (this would normally happen on a remote system).
+//! let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
+//! let signature = signer.sign(header_bytes.as_slice(), rpm::Timestamp(1_600_000_000))?;
+//!
+//! // Step 3: Apply the signature.
+//! // For in-memory packages:
+//! let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+//! pkg.apply_signature(signature.clone())?;
+//!
+//! // Or apply directly to an on-disk package without loading the payload:
+//! # let dir = tempfile::tempdir()?;
+//! # let pkg_path = dir.path().join("test.rpm");
+//! # std::fs::copy("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm", &pkg_path)?;
+//! rpm::Package::apply_signature_in_place(&pkg_path, signature)?;
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "signature-pgp"))]
+//! # fn main() {}
+//! ```
+//!
 //! ### Build new package
 //!
 //! ```

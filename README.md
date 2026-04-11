@@ -155,6 +155,35 @@ for sig in &report.signatures {
 assert!(report.is_ok());
 ```
 
+#### Remote signing
+
+For workflows where the signing key lives on a remote system (e.g. a
+signing service), you can split the signing process into two steps:
+extract the header bytes, sign them externally, and apply the resulting
+signature.
+
+```rust
+use rpm::signature::pgp::Signer;
+use rpm::signature::Signing;
+
+// Step 1: Extract the header bytes to be signed.
+// Only reads the metadata, not the payload.
+let metadata = rpm::PackageMetadata::open("pkg.rpm")?;
+let header_bytes = metadata.header_bytes()?;
+
+// Step 2: Sign the header bytes (this would normally happen on a remote system).
+let signer = Signer::from_asc_file("signing_key.secret")?;
+let signature = signer.sign(header_bytes.as_slice(), rpm::Timestamp(1_600_000_000))?;
+
+// Step 3: Apply the signature.
+// For in-memory packages:
+let mut pkg = rpm::Package::open("pkg.rpm")?;
+pkg.apply_signature(signature.clone())?;
+
+// Or apply directly to an on-disk package without loading the payload:
+rpm::Package::apply_signature_in_place("pkg.rpm", signature)?;
+```
+
 #### Build new package
 
 ```rust
