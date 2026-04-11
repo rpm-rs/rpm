@@ -155,12 +155,26 @@ for sig in &report.signatures {
 assert!(report.is_ok());
 ```
 
-#### Remote signing
+#### Remote / HSM signing
 
-For workflows where the signing key lives on a remote system (e.g. a
-signing service), you can split the signing process into two steps:
-extract the header bytes, sign them externally, and apply the resulting
-signature.
+There are two approaches for signing with keys that are not directly
+accessible as local key files (e.g. HSMs, remote signing services, or
+cloud KMS):
+
+**Option 1: Implement the `Signing` trait.** If the signing call can be
+made synchronously (even over a network round-trip), implement the trait
+and pass it to the standard `Package::sign` or `Package::resign_in_place`
+methods. `BasicKeySigner` bridges any `pgp::SigningKey` to the rpm-rs
+`Signing` trait, and the `pgp::adapter` module provides ready-made
+`SigningKey` implementations (`RsaSigner`, `EcdsaSigner`) that wrap any
+Rust Crypto `signature::Signer` — making it straightforward to plug in
+key backends such as PKCS#11 tokens or cloud KMS clients. See
+`examples/hsm-signing.rs` for a complete example.
+
+**Option 2: Split extract / sign / apply.** If signing is fully
+asynchronous or out-of-band (different process, different machine, a
+queue or webhook), extract the header bytes, send them to the signer,
+and apply the returned signature separately:
 
 ```rust
 use rpm::signature::pgp::Signer;
