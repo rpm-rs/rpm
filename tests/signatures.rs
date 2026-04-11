@@ -1540,3 +1540,163 @@ mod correct_signature_tags {
         Ok(())
     }
 }
+
+mod in_place_signing {
+    use super::*;
+
+    /// Resign a package in-place with the *same* key to verify deduplication.
+    #[test]
+    fn test_resign_in_place_same_key() -> Result<(), Box<dyn std::error::Error>> {
+        resign_in_place_and_verify(
+            common::pkgs::v4::RPM_BASIC_RSA_SIGNED,
+            &fs::read(common::keys::v4::RSA_4K_PRIVATE)?,
+            &[&fs::read(common::keys::v4::RSA_4K_PUBLIC)?],
+            1,
+            "resign_in_place_same_key.rpm",
+        )?;
+
+        Ok(())
+    }
+
+    /// Resign a package in-place with a different key and verify the result.
+    /// Checks file size is unchanged, header+payload untouched, both the
+    /// original and new signatures verify, and the signature count is 2.
+    #[test]
+    fn test_resign_in_place_different_keys() -> Result<(), Box<dyn std::error::Error>> {
+        // v4: RSA-signed package, add EdDSA signature
+        resign_in_place_and_verify(
+            common::pkgs::v4::RPM_BASIC_RSA_SIGNED,
+            &fs::read(common::keys::v4::ED25519_PRIVATE)?,
+            &[
+                &fs::read(common::keys::v4::RSA_4K_PUBLIC)?,
+                &fs::read(common::keys::v4::ED25519_PUBLIC)?,
+            ],
+            2,
+            "resign_in_place_v4.rpm",
+        )?;
+
+        // v6: RSA-signed package, add EdDSA signature
+        resign_in_place_and_verify(
+            common::pkgs::v6::RPM_BASIC_RSA_SIGNED,
+            &fs::read(common::keys::v6::ED25519_PRIVATE)?,
+            &[
+                &fs::read(common::keys::v6::RSA_4K_PUBLIC)?,
+                &fs::read(common::keys::v6::ED25519_PUBLIC)?,
+            ],
+            2,
+            "resign_in_place_v6.rpm",
+        )?;
+
+        Ok(())
+    }
+
+    /// Sign an unsigned package in-place.
+    #[test]
+    fn test_resign_in_place_unsigned() -> Result<(), Box<dyn std::error::Error>> {
+        // v4: unsigned package, sign with EdDSA
+        resign_in_place_and_verify(
+            common::pkgs::v4::RPM_BASIC,
+            &fs::read(common::keys::v4::ED25519_PRIVATE)?,
+            &[&fs::read(common::keys::v4::ED25519_PUBLIC)?],
+            1,
+            "resign_in_place_unsigned_v4.rpm",
+        )?;
+
+        // v6: unsigned package, sign with EdDSA
+        resign_in_place_and_verify(
+            common::pkgs::v6::RPM_BASIC,
+            &fs::read(common::keys::v6::ED25519_PRIVATE)?,
+            &[&fs::read(common::keys::v6::ED25519_PUBLIC)?],
+            1,
+            "resign_in_place_unsigned_v6.rpm",
+        )?;
+
+        Ok(())
+    }
+
+    /// Resigning in-place when the new signature is too large for the reserved space
+    /// should return InsufficientReservedSpace.
+    #[test]
+    fn test_resign_in_place_insufficient_space() -> Result<(), Box<dyn std::error::Error>> {
+        // Build a signed package, then strip its reserved space so there is no room
+        // for a larger signature.
+        let signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::ED25519_PRIVATE)?)?;
+        let mut pkg =
+            rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "no reserved space")
+                .build_and_sign(&signer)?;
+
+        // Rebuild the signature header with zero reserved space
+        let compact_sig = rpm::SignatureHeaderBuilder::from_existing(&pkg.metadata.signature)?
+            .reserved_space(0)
+            .build()?;
+        pkg.metadata.signature = compact_sig;
+
+        let out = Path::new(common::CARGO_OUT_DIR).join("resign_in_place_no_space.rpm");
+        pkg.write_file(&out)?;
+
+        // Now try to resign in-place with a much larger key (RSA 4096).
+        // The RSA signature is ~500 bytes larger than EdDSA, so it won't fit.
+        let big_signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::RSA_4K_PRIVATE)?)?;
+        let result = rpm::Package::resign_in_place(&out, &big_signer);
+
+        assert!(
+            matches!(result, Err(rpm::Error::InsufficientReservedSpace { .. })),
+            "expected InsufficientReservedSpace error, got: {result:?}"
+        );
+
+        Ok(())
+    }
+
+    #[track_caller]
+    fn resign_in_place_and_verify(
+        src: &str,
+        signing_key: &[u8],
+        verification_keys: &[&[u8]],
+        expected_sig_count: usize,
+        out_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let out = Path::new(common::CARGO_OUT_DIR).join(out_name);
+        fs::copy(src, &out)?;
+
+        let original_bytes = fs::read(src)?;
+
+        let signer = Signer::from_asc_bytes(signing_key)?;
+        rpm::Package::resign_in_place(&out, &signer)?;
+
+        // File size must be unchanged (in-place means no shifting)
+        let resigned_bytes = fs::read(&out)?;
+        assert_eq!(
+            original_bytes.len(),
+            resigned_bytes.len(),
+            "in-place resign must not change file size"
+        );
+
+        // Main header and payload must be byte-identical
+        let orig_meta = rpm::PackageMetadata::open(src)?;
+        let orig_offsets = orig_meta.get_package_segment_offsets();
+        assert_eq!(
+            &original_bytes[orig_offsets.header as usize..],
+            &resigned_bytes[orig_offsets.header as usize..],
+            "main header and payload must be untouched"
+        );
+
+        let package = rpm::Package::open(&out)?;
+        package.verify_digests()?;
+
+        // Each verification key must verify
+        for key in verification_keys {
+            let verifier = Verifier::from_asc_bytes(key)?;
+            package.verify_signature(&verifier)?;
+        }
+
+        let sigs = package.signatures()?;
+        assert_eq!(
+            sigs.len(),
+            expected_sig_count,
+            "expected {expected_sig_count} signature(s), got {}",
+            sigs.len()
+        );
+
+        Ok(())
+    }
+}
