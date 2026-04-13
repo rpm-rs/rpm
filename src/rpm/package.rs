@@ -140,9 +140,25 @@ pub struct DigestReport {
 }
 
 impl DigestReport {
-    /// Collapse into a `Result`: fails if any digest mismatched.
+    /// Returns `true` if at least one header digest was present.
+    pub fn has_header_digest(&self) -> bool {
+        !self.sha1_header.is_not_present()
+            || !self.sha256_header.is_not_present()
+            || !self.sha3_256_header.is_not_present()
+    }
+
+    /// Returns `true` if at least one payload digest was present.
+    pub fn has_payload_digest(&self) -> bool {
+        !self.payload_sha256.is_not_present()
+            || !self.payload_sha512.is_not_present()
+            || !self.payload_sha3_256.is_not_present()
+    }
+
+    /// Collapse into a `Result`: fails if any digest mismatched or if no
+    /// header digests are present at all.
     ///
-    /// Digests that are [`DigestStatus::NotPresent`] are **not** considered failures.
+    /// Digests that are [`DigestStatus::NotPresent`] are **not** individually
+    /// considered failures, but at least one header digest must be present.
     pub fn result(&self) -> Result<(), Error> {
         let all = [
             ("header SHA1", &self.sha1_header),
@@ -525,7 +541,16 @@ impl Package {
     /// This is a convenience wrapper around [`check_digests`](Self::check_digests)
     /// that collapses the detailed report into a pass/fail `Result`.
     pub fn verify_digests(&self) -> Result<(), Error> {
-        self.check_digests()?.result()
+        let digests = self.check_digests()?;
+
+        if !digests.has_header_digest() {
+            return Err(Error::NoHeaderDigestError);
+        }
+
+        // payload digest existence could be checked here, but since it only started to exist
+        // in 2017, it would be a bit much to assume that it will exist and fail otherwise.
+
+        digests.result()
     }
 
     /// Check all digests in the package and return a detailed report.
@@ -1568,7 +1593,13 @@ impl PackageMetadata {
     /// Only header digests are verified. To verify all digests including payload,
     /// use [`Package::verify_digests`].
     pub fn verify_digests(&self) -> Result<(), Error> {
-        self.check_digests()?.result()
+        let digests = self.check_digests()?;
+
+        if !digests.has_header_digest() {
+            return Err(Error::NoHeaderDigestError);
+        }
+
+        digests.result()
     }
 
     /// Verify header-only signatures.
