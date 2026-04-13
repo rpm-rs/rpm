@@ -154,14 +154,13 @@
 //! }
 //!
 //! // Inspect each signature with its metadata
-//! for result in &report.signatures {
-//!     if let Some(fp) = result.info.fingerprint() {
-//!         print!("Signature {}: ", fp);
-//!     }
-//!     if result.is_verified() {
-//!         println!("OK");
-//!     } else {
-//!         println!("FAILED: {}", result.error.as_ref().unwrap());
+//! for sig in &report.signatures {
+//!     let key_ref = sig.info.fingerprint()
+//!         .or(sig.info.key_id())
+//!         .unwrap_or("unknown");
+//!     match sig.result() {
+//!         Ok(()) => println!("Signature {key_ref}: OK"),
+//!         Err(err) => println!("Signature {key_ref}: FAILED: {err}"),
 //!     }
 //! }
 //!
