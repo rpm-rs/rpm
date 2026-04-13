@@ -99,6 +99,12 @@ pub enum Error {
         actual: String,
     },
 
+    #[error("no header digests found in package")]
+    NoHeaderDigestError,
+
+    #[error("no payload digests found in package")]
+    NoPayloadDigestError,
+
     #[error("unable to find key with key-ref: {key_ref}")]
     KeyNotFoundError { key_ref: String },
 
