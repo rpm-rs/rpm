@@ -198,6 +198,14 @@ pub struct SignatureCheckResult {
 
 #[cfg(feature = "signature-pgp")]
 impl SignatureCheckResult {
+    /// Returns `Ok(())` if verified, or `Err` with the verification error.
+    pub fn result(&self) -> Result<(), &Error> {
+        match &self.error {
+            None => Ok(()),
+            Some(e) => Err(e),
+        }
+    }
+
     /// Returns `true` if this signature was successfully verified.
     pub fn is_verified(&self) -> bool {
         self.error.is_none()
@@ -224,11 +232,11 @@ impl SignatureReport {
     pub fn into_result(self) -> Result<(), Error> {
         self.digests.result()?;
         let mut last_err = None;
-        for result in self.signatures {
-            if result.error.is_none() {
+        for sig in self.signatures {
+            if sig.is_verified() {
                 return Ok(());
             }
-            last_err = result.error;
+            last_err = sig.error;
         }
         Err(last_err.unwrap_or(Error::NoSignatureFound))
     }
@@ -571,10 +579,15 @@ impl Package {
     ///
     /// // Or inspect individual digests
     /// if report.sha256_header.is_verified() {
-    ///     println!("SHA-256 header digest verified");
+    ///     println!("SHA-256 header digest: OK");
     /// }
-    /// if report.sha3_256_header.is_not_present() {
-    ///     println!("SHA3-256 header digest not present (v4 package?)");
+    /// match &report.sha3_256_header {
+    ///     rpm::DigestStatus::Verified => println!("SHA3-256 header digest: OK"),
+    ///     rpm::DigestStatus::NotPresent => println!("SHA3-256 header digest: not present"),
+    ///     rpm::DigestStatus::NotChecked => println!("SHA3-256 header digest: not checked"),
+    ///     rpm::DigestStatus::Mismatch { expected, actual } => {
+    ///         println!("SHA3-256 header digest: MISMATCH (expected {expected}, got {actual})");
+    ///     }
     /// }
     /// # Ok(())
     /// # }
@@ -631,12 +644,13 @@ impl Package {
     ///
     /// // Or inspect individual signatures
     /// let report = pkg.check_signatures(&verifier)?;
-    /// for result in &report.signatures {
-    ///     if result.is_verified() {
-    ///         println!("Verified by key {:?}", result.info.fingerprint());
-    ///     } else {
-    ///         println!("Signature by {:?} failed: {}",
-    ///             result.info.fingerprint(), result.error.as_ref().unwrap());
+    /// for sig in &report.signatures {
+    ///     let key_ref = sig.info.fingerprint()
+    ///         .or(sig.info.key_id())
+    ///         .unwrap_or("unknown");
+    ///     match sig.result() {
+    ///         Ok(()) => println!("Signature {key_ref}: OK"),
+    ///         Err(err) => println!("Signature {key_ref}: FAILED: {err}"),
     ///     }
     /// }
     /// # Ok(())
