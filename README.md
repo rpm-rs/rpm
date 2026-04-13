@@ -131,6 +131,14 @@ let report = pkg.check_signatures(verifier)?;
 if report.digests.sha256_header.is_verified() {
     println!("SHA-256 header digest: OK");
 }
+match &report.digests.sha3_256_header {
+    rpm::DigestStatus::Verified => println!("SHA3-256 header digest: OK"),
+    rpm::DigestStatus::NotPresent => println!("SHA3-256 header digest: not present"),
+    rpm::DigestStatus::NotChecked => println!("SHA3-256 header digest: not checked"),
+    rpm::DigestStatus::Mismatch { expected, actual } => {
+        println!("SHA3-256 header digest: MISMATCH (expected {expected}, got {actual})");
+    }
+}
 
 // Inspect each signature with its metadata
 for result in &report.signatures {
