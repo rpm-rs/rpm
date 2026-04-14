@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DigestStatus`, `DigestReport`, `SignatureCheckResult`, and `SignatureReport` types for structured verification results.
 - `PackageMetadata::signatures()`, `check_digests()`, `verify_digests()`, `verify_signature()`, and `check_signatures()` have been added to allow verifying header digests and signatures without reading the package payload. Payload digest fields are set to `DigestStatus::NotChecked`.
 - `Package::raw_signatures()` and `PackageMetadata::raw_signatures()` have been added to allow access to the signatures without needing the `signature-pgp` feature enabled - users can process the raw signature bytes with their own selection of PGP library.
+- `Package::canonical_filename()` returns the standard RPM filename (`NVRA.rpm`, e.g. `foo-1.0.0-1.x86_64.rpm`) without writing the package to disk.
 
 ### Deprecated
 
