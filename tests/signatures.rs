@@ -1647,6 +1647,137 @@ mod in_place_signing {
         Ok(())
     }
 
+    /// Clear signatures from a signed on-disk package in-place.
+    /// File size must be unchanged, digests must still verify, and no signatures remain.
+    /// Then re-sign in-place to verify the reclaimed reserved space is usable.
+    #[test]
+    fn test_clear_signatures_in_place() -> Result<(), Box<dyn std::error::Error>> {
+        // Start with signed v4 package
+        let out = Path::new(common::CARGO_OUT_DIR).join("clear_sig_in_place.rpm");
+        fs::copy(common::pkgs::v4::RPM_BASIC_RSA_SIGNED, &out)?;
+        let original_size = fs::metadata(&out)?.len();
+
+        // Clear signatures in-place
+        rpm::Package::clear_signatures_in_place(&out)?;
+        assert_eq!(
+            fs::metadata(&out)?.len(),
+            original_size,
+            "file size must not change"
+        );
+
+        // Header and payload must be byte-identical
+        let original_bytes = fs::read(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
+        let cleared_bytes = fs::read(&out)?;
+        let orig_meta = rpm::PackageMetadata::open(common::pkgs::v4::RPM_BASIC_RSA_SIGNED)?;
+        let orig_offsets = orig_meta.get_package_segment_offsets();
+        assert_eq!(
+            &original_bytes[orig_offsets.header as usize..],
+            &cleared_bytes[orig_offsets.header as usize..],
+            "header and payload must be untouched"
+        );
+
+        // Digests should pass, signatures should be gone
+        let pkg = rpm::Package::open(&out)?;
+        pkg.verify_digests()?;
+        assert!(pkg.signatures()?.is_empty(), "expected no signatures");
+
+        let verifier = Verifier::from_asc_file(common::keys::v4::RSA_4K_PUBLIC)?;
+        assert!(
+            matches!(
+                pkg.verify_signature(verifier),
+                Err(rpm::Error::NoSignatureFound)
+            ),
+            "verification should fail with NoSignatureFound"
+        );
+
+        // Re-sign in-place to verify the reclaimed reserved space is usable
+        let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        rpm::Package::resign_in_place(&out, &ed_signer)?;
+        assert_eq!(
+            fs::metadata(&out)?.len(),
+            original_size,
+            "file size must not change after re-signing"
+        );
+
+        let pkg = rpm::Package::open(&out)?;
+        pkg.verify_digests()?;
+        let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+        pkg.verify_signature(&ed_verifier)?;
+        assert_eq!(pkg.signatures()?.len(), 1);
+
+        Ok(())
+    }
+
+    /// Apply two small signatures sequentially in-place and verify both are present,
+    /// the file size is unchanged, and header+payload are untouched.
+    #[test]
+    fn test_apply_multiple_signatures_in_place() -> Result<(), Box<dyn std::error::Error>> {
+        let out = Path::new(common::CARGO_OUT_DIR).join("apply_multi_sig_in_place.rpm");
+        fs::copy(common::pkgs::v4::RPM_BASIC, &out)?;
+        let original_size = fs::metadata(&out)?.len();
+
+        // Extract header bytes and sign externally with EdDSA
+        let ed_signer = Signer::from_asc_file(common::keys::v4::ED25519_PRIVATE)?;
+        let metadata = rpm::PackageMetadata::open(&out)?;
+        let header_bytes = metadata.header_bytes()?;
+        let ed_sig = rpm::signature::Signing::sign(
+            &ed_signer,
+            header_bytes.as_slice(),
+            rpm::Timestamp(1_600_000_000),
+        )?;
+
+        // First in-place apply
+        rpm::Package::apply_signature_in_place(&out, ed_sig)?;
+        assert_eq!(
+            fs::metadata(&out)?.len(),
+            original_size,
+            "file size changed after first apply"
+        );
+
+        // Extract header bytes again (unchanged) and sign with ECDSA
+        let ecdsa_signer = Signer::from_asc_file(common::keys::v4::ECDSA_NISTP256_PRIVATE)?;
+        let metadata = rpm::PackageMetadata::open(&out)?;
+        let header_bytes = metadata.header_bytes()?;
+        let ecdsa_sig = rpm::signature::Signing::sign(
+            &ecdsa_signer,
+            header_bytes.as_slice(),
+            rpm::Timestamp(1_600_000_000),
+        )?;
+
+        // Second in-place apply
+        rpm::Package::apply_signature_in_place(&out, ecdsa_sig)?;
+        assert_eq!(
+            fs::metadata(&out)?.len(),
+            original_size,
+            "file size changed after second apply"
+        );
+
+        // Header and payload must be byte-identical to original
+        let original_bytes = fs::read(common::pkgs::v4::RPM_BASIC)?;
+        let resigned_bytes = fs::read(&out)?;
+        let orig_meta = rpm::PackageMetadata::open(common::pkgs::v4::RPM_BASIC)?;
+        let orig_offsets = orig_meta.get_package_segment_offsets();
+        assert_eq!(
+            &original_bytes[orig_offsets.header as usize..],
+            &resigned_bytes[orig_offsets.header as usize..],
+            "header and payload must be untouched"
+        );
+
+        // Both signatures must verify
+        let pkg = rpm::Package::open(&out)?;
+        pkg.verify_digests()?;
+
+        let ed_verifier = Verifier::from_asc_file(common::keys::v4::ED25519_PUBLIC)?;
+        pkg.verify_signature(&ed_verifier)?;
+
+        let ecdsa_verifier = Verifier::from_asc_file(common::keys::v4::ECDSA_NISTP256_PUBLIC)?;
+        pkg.verify_signature(&ecdsa_verifier)?;
+
+        assert_eq!(pkg.signatures()?.len(), 2, "expected 2 signatures");
+
+        Ok(())
+    }
+
     #[track_caller]
     fn resign_in_place_and_verify(
         src: &str,

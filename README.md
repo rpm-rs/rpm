@@ -198,6 +198,27 @@ pkg.apply_signature(signature.clone())?;
 rpm::Package::apply_signature_in_place("pkg.rpm", signature)?;
 ```
 
+#### In-place signing and clearing
+
+For large packages, it is often desirable to sign or clear signatures without reading
+or rewriting the payload. These methods modify only the signature header on disk, using
+the reserved space to keep the file size unchanged:
+
+```rust
+use rpm::signature::pgp::{Signer, Verifier};
+
+// Re-sign a package on disk (reads only the metadata, not the payload)
+let signer = Signer::from_asc_file("signing_key.secret")?;
+rpm::Package::resign_in_place("pkg.rpm", &signer)?;
+
+// Remove all signatures, converting their space to reserved space
+// so that signatures can be added back later
+rpm::Package::clear_signatures_in_place("pkg.rpm")?;
+
+// Re-sign the cleared package — the reserved space from clearing is reused
+rpm::Package::resign_in_place("pkg.rpm", &signer)?;
+```
+
 #### Build new package
 
 ```rust

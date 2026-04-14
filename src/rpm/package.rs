@@ -616,6 +616,60 @@ impl Package {
         Ok(())
     }
 
+    /// Remove all signatures from an on-disk RPM package without reading or
+    /// rewriting the payload.
+    ///
+    /// The space previously occupied by signatures is converted to reserved
+    /// space, so the file size is unchanged. This preserves the ability to
+    /// later add signatures in-place via [`sign_in_place`](Self::sign_in_place)
+    /// or [`apply_signature_in_place`](Self::apply_signature_in_place).
+    ///
+    /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated.
+    #[cfg(feature = "signature-meta")]
+    pub fn clear_signatures_in_place(path: impl AsRef<Path>) -> Result<(), Error> {
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path.as_ref())?;
+
+        let metadata = {
+            let mut buf_reader = io::BufReader::new(&file);
+            PackageMetadata::parse(&mut buf_reader)?
+        };
+
+        let old_sig_total = metadata.signature.size() + metadata.signature.padding_required();
+
+        let header_bytes = metadata.header_bytes()?;
+
+        // Build with no signatures and reserved_space = 0 to find minimum size.
+        let min_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
+            .clear_signatures()
+            .calculate_digests(&header_bytes)
+            .reserved_space(0)
+            .build()?;
+
+        // Clearing signatures can only shrink the header, so the difference
+        // is always non-negative — fill it with reserved space.
+        let reserved = old_sig_total - min_sig.size();
+
+        let new_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
+            .clear_signatures()
+            .calculate_digests(&header_bytes)
+            .reserved_space(reserved)
+            .build()?;
+
+        debug_assert_eq!(
+            new_sig.size() + new_sig.padding_required(),
+            old_sig_total,
+            "new signature header size must exactly match old size"
+        );
+
+        file.seek(io::SeekFrom::Start(LEAD_SIZE as u64))?;
+        new_sig.write_signature(&mut file)?;
+
+        Ok(())
+    }
+
     /// Re-sign an RPM package on disk without reading or rewriting the payload.
     ///
     /// The signature header's reserved space is adjusted so that the new
