@@ -22,17 +22,19 @@ This library does not build software like rpmbuild. It is meant for finished art
 ### Status
 
 - [x] RPM Creation
-- [x] Basic RPM Reading
-- [x] RPM Signing and Signature Verification
 - [x] High Level API for RPM Reading
+- [x] RPM Signing and Signature Verification
+- [x] RPM signing using an external signing service or HSM
 
 ### Examples
 
+-------------------
+
 ### Read package and access metadata
 
-```rust
-use rpm::signature::pgp::{Signer, Verifier};
+#### Check basic metadata
 
+```rust
 let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
 
 let name = pkg.metadata.get_name()?;
@@ -47,51 +49,18 @@ for changelog in pkg.metadata.get_changelog_entries()? {
 }
 ```
 
-#### Sign existing package and verify package signature
+#### Query dependencies
 
 ```rust
-use rpm::signature::pgp::{Signer, Verifier};
+let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-rich-deps-1.0-1.noarch.rpm")?;
 
-let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
-let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
+for dep in pkg.metadata.get_requires()? {
+    println!("{dep}");
+    // e.g. "glibc >= 2.17", "bash", "rpm-libs = 4.14.3-1.el8"
+}
 
-let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
-pkg.sign(signer)?;
-pkg.write_to("./with_signature.rpm")?;
-
-let pkg = rpm::Package::open("./with_signature.rpm")?;
-pkg.verify_signature(verifier)?;
-```
-
-#### Sign with a specific subkey
-
-```rust
-use rpm::signature::pgp::Signer;
-
-let subkey_fingerprint = hex::decode("715619ae2365d909eb991ff97a509cd76a0bac92f0e17c1c2525812852cedfc5")?;
-
-let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?
-    .with_signing_key(&subkey_fingerprint)?;
-
-let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
-pkg.sign(signer)?;
-```
-
-#### Verify using a keyring with multiple certificates
-
-```rust
-use rpm::signature::pgp::Verifier;
-
-// Keyring files containing multiple OpenPGP certificates are supported.
-// The verifier will try each certificate until it finds one that matches.
-let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?;
-
-let pkg = rpm::Package::open("./tests/assets/RPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm")?;
-pkg.verify_signature(verifier)?;
-
-// You can also narrow down to a specific certificate by fingerprint:
-let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?
-    .with_key(&hex::decode("d996aedc0d64d1e621b95ad2e964f9fb30d073b5")?)?;
+// Other dependency types: get_provides(), get_conflicts(), get_obsoletes(),
+// get_recommends(), get_suggests(), get_enhances(), get_supplements()
 ```
 
 #### Inspect package signatures
@@ -117,7 +86,55 @@ for sig in pkg.signatures()? {
 }
 ```
 
-#### Detailed verification reports
+#### List and read file contents
+
+```rust
+let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+
+// List file metadata without reading the payload
+for entry in pkg.metadata.get_file_entries()? {
+    println!("{} ({} bytes, {:o})", entry.path.display(), entry.size, entry.mode.permissions());
+}
+
+// Iterate over file contents (decompresses the payload)
+for entry in pkg.files()? {
+    let file = entry?;
+    println!("{}: {} bytes", file.metadata.path.display(), file.content.len());
+}
+```
+
+#### Extract package contents to disk
+
+Extract all files, directories, and symlinks from the package payload into a target directory -
+files are written relative to the target directory (not installed to their absolute paths).
+
+```rust
+// The directory must not already exist and its parent must exist.
+let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+pkg.extract("./extracted-pkg")?;
+// Creates ./extracted-pkg/ with the package's file tree inside it
+```
+
+### Verify signatures
+
+#### Verify using a keyring with multiple certificates
+
+```rust
+use rpm::signature::pgp::Verifier;
+
+// Keyring files containing multiple OpenPGP certificates are supported.
+// The verifier will try each certificate until it finds one that matches.
+let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?;
+
+let pkg = rpm::Package::open("./tests/assets/RPMS/v4/signed/rpm-basic-with-rsa4096-2.3.4-5.el9.noarch.rpm")?;
+pkg.verify_signature(verifier)?;
+
+// You can also narrow down to a specific certificate by fingerprint:
+let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v4/rpm-testkey-v4-keyring.asc")?
+    .with_key(&hex::decode("d996aedc0d64d1e621b95ad2e964f9fb30d073b5")?)?;
+```
+
+#### Check individual signatures and digests
 
 ```rust
 use rpm::signature::pgp::Verifier;
@@ -127,7 +144,10 @@ let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v6/rpm-testk
 
 let report = pkg.check_signatures(verifier)?;
 
-// Inspect individual digest results
+// Check overall pass/fail
+assert!(report.is_ok());
+
+// Or inspect individual digest results
 if report.digests.sha256_header.is_verified() {
     println!("SHA-256 header digest: OK");
 }
@@ -140,7 +160,7 @@ match &report.digests.sha3_256_header {
     }
 }
 
-// Inspect each signature with its metadata
+// Inspect each signature with its metadata and whether it was verified (only one signature must verify to "pass")
 for sig in &report.signatures {
     let key_ref = sig.info.fingerprint()
         .or(sig.info.key_id())
@@ -150,12 +170,41 @@ for sig in &report.signatures {
         Err(err) => println!("Signature {key_ref}: FAILED: {err}"),
     }
 }
-
-// Or just check overall pass/fail
-assert!(report.is_ok());
 ```
 
-#### Remote / HSM signing
+### Sign packages
+
+#### Sign an existing package and verify package signature
+
+```rust
+use rpm::signature::pgp::{Signer, Verifier};
+
+let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
+let verifier = Verifier::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.asc")?;
+
+let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm")?;
+pkg.sign(signer)?;
+pkg.write_to("./tmp/with_signature.rpm")?;
+
+let pkg = rpm::Package::open("./tmp/with_signature.rpm")?;
+pkg.verify_signature(verifier)?;
+```
+
+#### Sign with a specific subkey
+
+```rust
+use rpm::signature::pgp::Signer;
+
+let subkey_fingerprint = hex::decode("715619ae2365d909eb991ff97a509cd76a0bac92f0e17c1c2525812852cedfc5")?;
+
+let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret")?
+    .with_signing_key(&subkey_fingerprint)?;
+
+let mut pkg = rpm::Package::open("./tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
+pkg.sign(signer)?;
+```
+
+### Remote / HSM signing
 
 There are two approaches for signing with keys that are not directly
 accessible as local key files (e.g. HSMs, remote signing services, or
@@ -198,7 +247,7 @@ pkg.apply_signature(signature.clone())?;
 rpm::Package::apply_signature_in_place("pkg.rpm", signature)?;
 ```
 
-#### In-place signing and clearing
+#### In-place signing and clearing of signatures
 
 For large packages, it is often desirable to sign or clear signatures without reading
 or rewriting the payload. These methods modify only the signature header on disk, using
@@ -219,7 +268,7 @@ rpm::Package::clear_signatures_in_place("pkg.rpm")?;
 rpm::Package::resign_in_place("pkg.rpm", &signer)?;
 ```
 
-#### Build new package
+### Build a new package
 
 ```rust
 use rpm::signature::pgp::Signer;
@@ -298,8 +347,8 @@ let pkg = rpm::PackageBuilder::new("test", "1.0.0", "MIT", "x86_64", "some aweso
     .build_and_sign(signer)?;
 
 // Write to a specific file
-pkg.write_to("./target/awesome.rpm")?;
+pkg.write_to("/tmp/awesome.rpm")?;
 
 // Or write to a directory with auto-generated filename (`target/awesome-0.1.0-1.x86_64.rpm`)
-pkg.write_to("./target")?;
+pkg.write_to("/tmp")?;
 ```
