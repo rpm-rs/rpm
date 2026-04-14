@@ -226,6 +226,36 @@
 //! # fn main() {}
 //! ```
 //!
+//! ### In-place signing and clearing
+//!
+//! For large packages, it is often desirable to sign or clear signatures without reading
+//! or rewriting the payload. These methods modify only the signature header on disk,
+//! using the reserved space to keep the file size unchanged:
+//!
+//! ```
+//! # #[cfg(feature = "signature-pgp")]
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use rpm::signature::pgp::Signer;
+//!
+//! # let dir = tempfile::tempdir()?;
+//! # let pkg_path = dir.path().join("test.rpm");
+//! # std::fs::copy("./tests/assets/RPMS/v6/signed/rpm-basic-with-rsa4k-2.3.4-5.el9.noarch.rpm", &pkg_path)?;
+//! // Re-sign a package on disk (reads only the metadata, not the payload)
+//! let signer = Signer::from_asc_file("./tests/assets/signing_keys/v6/rpm-testkey-v6-rsa4k.secret")?;
+//! rpm::Package::resign_in_place(&pkg_path, &signer)?;
+//!
+//! // Remove all signatures, converting their space to reserved space
+//! // so that signatures can be added back later
+//! rpm::Package::clear_signatures_in_place(&pkg_path)?;
+//!
+//! // Re-sign the cleared package — the reserved space from clearing is reused
+//! rpm::Package::resign_in_place(&pkg_path, &signer)?;
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "signature-pgp"))]
+//! # fn main() {}
+//! ```
+//!
 //! ### Build new package
 //!
 //! ```
