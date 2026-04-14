@@ -11,20 +11,23 @@ A pure rust library for parsing and creating RPM files.
 - Easy to use API
 - Pure rust to make it easy to use in larger Projects
 - Independence of Spec files. Pure programmatic interface for Packaging.
-- Compatibility from Enterprise Linux 8 (RHEL, Alma, Rocky, CentOS Stream) to Fedora (I may extend test cases for SUSE)
+- Compatibility from Enterprise Linux 8 (RHEL, Alma, Rocky, CentOS Stream) to Fedora
 
 ### Non Goals
 
-RPM has a lot of cryptic features. I do not want to re-implement all of them. This library focuses on
-the ones that I assume as useful.
-This library does not build software like rpmbuild. It is meant for finished artifacts that need to be packaged as RPM.
+RPM has a lot of features. I do not want to re-implement all of them.
+
+- This library is for working with RPM packages on their own - installing RPMs and manipulating the system rpmdb is not supported
+- This library does not build software like rpmbuild - it is meant for finished artifacts that need to be packaged as RPM
+- Obsolete cryptography (md5, DSA) not supported
+- Legacy RPMv3 signatures not supported (e.g. `SIGPGP`, `SIGGPG`)
 
 ### Status
 
 - [x] RPM Creation
-- [x] High Level API for RPM Reading
 - [x] RPM Signing and Signature Verification
-- [x] RPM signing using an external signing service or HSM
+- [x] RPM signing using an external signing service or Hardware Signing Module (HSM)
+- [x] High-level APIs for parsing RPM files, reading RPM metadata, and extracting payloads
 
 ### Examples
 
