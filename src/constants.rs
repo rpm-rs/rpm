@@ -560,6 +560,20 @@ bitflags! {
     }
 }
 
+impl DependencyFlags {
+    /// Return the version comparator as a string (`"<"`, `">"`, `"="`, `"<="`, `">="`, or `""`).
+    pub fn comparator_str(self) -> &'static str {
+        match self & (DependencyFlags::LESS | DependencyFlags::GREATER | DependencyFlags::EQUAL) {
+            DependencyFlags::LE => "<=",
+            DependencyFlags::GE => ">=",
+            DependencyFlags::LESS => "<",
+            DependencyFlags::GREATER => ">",
+            DependencyFlags::EQUAL => "=",
+            _ => "",
+        }
+    }
+}
+
 bitflags! {
     /// Flags to configure scriptlet execution,
     #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
