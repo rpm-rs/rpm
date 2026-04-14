@@ -645,6 +645,17 @@ impl Dependency {
     }
 }
 
+impl std::fmt::Display for Dependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cmp = self.flags.comparator_str();
+        if cmp.is_empty() || self.version.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            write!(f, "{} {} {}", self.name, cmp, self.version)
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum HashKind {
     Sha256,
