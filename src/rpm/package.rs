@@ -289,10 +289,17 @@ impl Package {
         self.write(&mut io::BufWriter::new(fs::File::create(path)?))
     }
 
+    /// Returns the canonical RPM filename (e.g. `foo-1.0.0-1.x86_64.rpm`).
+    ///
+    /// This is the standard `NVRA.rpm` form used by RPM repositories and build systems.
+    pub fn canonical_filename(&self) -> Result<String, Error> {
+        Ok(format!("{}.rpm", self.metadata.get_nevra()?.nvra()))
+    }
+
     /// Write the RPM package to a file or directory
     ///
-    /// If `path` is an existing directory, the package will be written with an auto-generated
-    /// filename based on the package NEVRA (name-version-release.arch.rpm).
+    /// If `path` is an existing directory, the package will be written to that directory using the
+    /// [`canonical_filename()`](Self::canonical_filename).
     /// Otherwise, `path` is treated as a file path (ensuring it has a .rpm extension).
     ///
     /// Returns the actual path where the package was written.
@@ -315,7 +322,7 @@ impl Package {
     /// ```
     pub fn write_to(&self, path: impl AsRef<Path>) -> Result<PathBuf, Error> {
         let path = path.as_ref();
-        let filename = format!("{}.rpm", self.metadata.get_nevra()?.nvra());
+        let filename = self.canonical_filename()?;
 
         let output_path = if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
             path.join(filename)
