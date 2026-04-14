@@ -464,7 +464,6 @@ impl Package {
     }
 
     /// Generate a fresh, unsigned signature header
-    #[cfg(feature = "signature-meta")]
     pub fn clear_signatures(&mut self) -> Result<(), Error> {
         let header_bytes = self.header_bytes()?;
 
@@ -489,7 +488,6 @@ impl Package {
     /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated automatically.
     /// Signatures are deduplicated by issuer fingerprint, so signing with the
     /// same key replaces the previous signature rather than appending.
-    #[cfg(feature = "signature-meta")]
     pub fn apply_signature(&mut self, signature: Vec<u8>) -> Result<(), Error> {
         let header_bytes = self.header_bytes()?;
 
@@ -561,7 +559,6 @@ impl Package {
     ///
     /// Returns [`Error::InsufficientReservedSpace`] if the new signature header
     /// is too large to fit in the available space.
-    #[cfg(feature = "signature-meta")]
     pub fn apply_signature_in_place(
         path: impl AsRef<Path>,
         signature: Vec<u8>,
@@ -632,7 +629,6 @@ impl Package {
     /// or [`apply_signature_in_place`](Self::apply_signature_in_place).
     ///
     /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated.
-    #[cfg(feature = "signature-meta")]
     pub fn clear_signatures_in_place(path: impl AsRef<Path>) -> Result<(), Error> {
         let mut file = fs::OpenOptions::new()
             .read(true)
