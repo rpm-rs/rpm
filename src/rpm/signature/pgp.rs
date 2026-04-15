@@ -181,7 +181,14 @@ impl Signer {
         let (keys_iter, _) =
             SignedSecretKey::from_string_many(input).map_err(Error::KeyLoadSecretKeyError)?;
 
-        let signed_keys: Vec<SignedSecretKey> = keys_iter.filter_map(|res| res.ok()).collect();
+        let signed_keys: Vec<SignedSecretKey> = keys_iter
+            .filter_map(|res| res.ok())
+            .filter(|key| {
+                key.verify_bindings()
+                    .map_err(|e| log::warn!("Skipping key with invalid bindings: {e}"))
+                    .is_ok()
+            })
+            .collect();
 
         // Find the first cert that has a usable signing key (primary or subkey
         // with a supported algorithm).
@@ -392,6 +399,8 @@ impl Verifier {
             if let Ok(key) = res
                 && validate_algorithm(key.algorithm()).is_ok()
             {
+                key.verify_bindings()
+                    .map_err(Error::KeyBindingVerificationError)?;
                 self.public_keys.push(key);
                 found_any = true;
             }
@@ -428,6 +437,49 @@ impl Verifier {
     }
 }
 
+/// Check whether a signature packet contains a KeyFlags subpacket.
+fn has_key_flags(sig: &pgp::packet::Signature) -> bool {
+    sig.config()
+        .map(|c| {
+            c.hashed_subpackets()
+                .any(|p| matches!(p.data, SubpacketData::KeyFlags(_)))
+        })
+        .unwrap_or(false)
+}
+
+/// Check whether any of the given signatures grant the signing capability.
+/// Per RFC 9580, if none of the signatures contain a key flags subpacket
+/// at all, the key is general-purpose and can sign.
+fn sigs_grant_signing<'a>(sigs: impl Iterator<Item = &'a pgp::packet::Signature>) -> bool {
+    let mut found_any_key_flags = false;
+    for sig in sigs.filter(|s| has_key_flags(s)) {
+        found_any_key_flags = true;
+        if sig.key_flags().sign() {
+            return true;
+        }
+    }
+    !found_any_key_flags
+}
+
+/// Check whether a primary key is authorized for signing.
+///
+/// The signing capability flag can appear in the key's direct signatures
+/// or in any user ID self-signature.
+fn primary_key_can_sign(key: &SignedPublicKey) -> bool {
+    sigs_grant_signing(
+        key.details
+            .direct_signatures
+            .iter()
+            .chain(key.details.users.iter().flat_map(|u| u.signatures.iter())),
+    )
+}
+
+/// Check whether a subkey is authorized for signing based on its
+/// binding signatures.
+fn subkey_can_sign(sub_key: &pgp::composed::SignedPublicSubKey) -> bool {
+    sigs_grant_signing(sub_key.signatures.iter())
+}
+
 impl traits::Verifying for Verifier {
     type Signature = Vec<u8>;
 
@@ -442,6 +494,13 @@ impl traits::Verifying for Verifier {
         if fingerprints.is_empty() {
             // No issuer fingerprint in the signature — try each primary key.
             for public_key in &self.public_keys {
+                if !primary_key_can_sign(public_key) {
+                    log::trace!(
+                        "Skipping primary key {:?} (no signing capability)",
+                        public_key.fingerprint()
+                    );
+                    continue;
+                }
                 log::trace!(
                     "Signature has no issuer ref, attempting primary key: {:?}",
                     public_key.fingerprint()
@@ -463,6 +522,11 @@ impl traits::Verifying for Verifier {
 
                 // Check primary key
                 if public_key.fingerprint() == **fingerprint {
+                    if !primary_key_can_sign(public_key) {
+                        return Err(Error::KeyLacksSigningCapability {
+                            key_ref: format!("{:?}", fingerprint),
+                        });
+                    }
                     log::trace!(
                         "Primary key fingerprint {:?} matches signature",
                         public_key.fingerprint()
@@ -482,6 +546,11 @@ impl traits::Verifying for Verifier {
                 // Check subkeys
                 for sub_key in &public_key.public_subkeys {
                     if sub_key.fingerprint() == **fingerprint {
+                        if !subkey_can_sign(sub_key) {
+                            return Err(Error::KeyLacksSigningCapability {
+                                key_ref: format!("{:?}", sub_key.fingerprint()),
+                            });
+                        }
                         log::trace!(
                             "Subkey fingerprint {:?} matches signature",
                             sub_key.fingerprint()
@@ -870,10 +939,12 @@ pub(crate) mod test {
             );
         }
 
-        /// Explicitly select the primary key via `with_signing_key` and verify
-        /// the result is equivalent to the default behavior.
+        /// Explicitly select the certification-only primary key via
+        /// `with_signing_key`. Signing succeeds (the signer doesn't enforce
+        /// key flags), but verification must reject the signature because
+        /// the primary key lacks the signing capability flag.
         #[test]
-        fn with_signing_key_primary() {
+        fn with_signing_key_primary_rejected_by_verifier() {
             let (signer, verifier) = prep();
 
             let signed_key = signer.signed_keys.first().unwrap();
@@ -888,7 +959,17 @@ pub(crate) mod test {
                 "should be using the primary key"
             );
 
-            super::sign_verify_roundtrip(&signer, &verifier);
+            let signature = signer
+                .sign(Cursor::new(TEST_DATA), TEST_TIMESTAMP)
+                .expect("signing should succeed");
+
+            let err = verifier
+                .verify(Cursor::new(TEST_DATA), &signature)
+                .unwrap_err();
+            assert!(
+                matches!(err, Error::KeyLacksSigningCapability { .. }),
+                "expected KeyLacksSigningCapability, got: {err:?}"
+            );
         }
 
         /// Verify that `with_signing_key` returns an error when given a fingerprint that
@@ -1007,6 +1088,94 @@ pub(crate) mod test {
                     "signature should contain the user ID from the selected key's certificate"
                 );
             }
+        }
+    }
+
+    mod binding_verification {
+        use super::*;
+        use pgp::composed::{ArmorOptions, Deserializable, SignedPublicKey, SignedSecretKey};
+        use pgp::packet::Signature;
+
+        /// Corrupt the binding signature on a public key's subkey by replacing it
+        /// with a reconstructed signature with a wrong hash prefix. This survives
+        /// the serialize → parse round-trip but fails cryptographic verification.
+        fn corrupt_public_subkey_binding(key: &mut SignedPublicKey) {
+            assert!(
+                !key.public_subkeys.is_empty(),
+                "test key must have at least one subkey"
+            );
+            let orig = &key.public_subkeys[0].signatures[0];
+            let tampered_sig = Signature::from_config(
+                orig.config().expect("config").clone(),
+                [0xFF, 0xFF],
+                orig.signature().expect("sig bytes").clone(),
+            )
+            .expect("from_config");
+            key.public_subkeys[0].signatures[0] = tampered_sig;
+        }
+
+        /// Corrupt the binding signature on a secret key's subkey.
+        fn corrupt_secret_subkey_binding(key: &mut SignedSecretKey) {
+            assert!(
+                !key.secret_subkeys.is_empty(),
+                "test key must have at least one subkey"
+            );
+            let orig = &key.secret_subkeys[0].signatures[0];
+            let tampered_sig = Signature::from_config(
+                orig.config().expect("config").clone(),
+                [0xFF, 0xFF],
+                orig.signature().expect("sig bytes").clone(),
+            )
+            .expect("from_config");
+            key.secret_subkeys[0].signatures[0] = tampered_sig;
+        }
+
+        /// Verify that `Verifier::from_asc` rejects a public key whose subkey
+        /// binding signature has been corrupted.
+        #[test]
+        fn verifier_rejects_corrupted_subkey_binding() {
+            let _ = env_logger::try_init();
+            let raw =
+                include_bytes!("../../../tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.asc");
+            let (mut key, _) = SignedPublicKey::from_armor_single(std::io::Cursor::new(raw))
+                .expect("should parse");
+
+            corrupt_public_subkey_binding(&mut key);
+
+            let tampered = key
+                .to_armored_string(ArmorOptions::default())
+                .expect("re-armor should succeed");
+
+            let err = Verifier::from_asc(&tampered).unwrap_err();
+            assert!(
+                matches!(err, Error::KeyBindingVerificationError(_)),
+                "expected KeyBindingVerificationError, got: {err:?}"
+            );
+        }
+
+        /// Verify that `Signer::from_asc` skips a certificate whose subkey
+        /// binding signature has been corrupted. With only one cert in the
+        /// keyring and no valid key remaining, loading fails.
+        #[test]
+        fn signer_rejects_corrupted_subkey_binding() {
+            let _ = env_logger::try_init();
+            let raw = include_bytes!(
+                "../../../tests/assets/signing_keys/v6/rpm-testkey-v6-ed25519.secret"
+            );
+            let (mut key, _) = SignedSecretKey::from_armor_single(std::io::Cursor::new(raw))
+                .expect("should parse");
+
+            corrupt_secret_subkey_binding(&mut key);
+
+            let tampered = key
+                .to_armored_string(ArmorOptions::default())
+                .expect("re-armor should succeed");
+
+            let err = Signer::from_asc(&tampered).unwrap_err();
+            assert!(
+                matches!(err, Error::KeyLoadSecretKeyError(_)),
+                "expected KeyLoadSecretKeyError (no matching key), got: {err:?}"
+            );
         }
     }
 }
