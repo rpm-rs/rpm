@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Package::raw_signatures()` and `PackageMetadata::raw_signatures()` have been added to allow access to the signatures without needing the `signature-pgp` feature enabled - users can process the raw signature bytes with their own selection of PGP library.
 - `Package::canonical_filename()` returns the standard RPM filename (`NVRA.rpm`, e.g. `foo-1.0.0-1.x86_64.rpm`) without writing the package to disk.
 
+### Changed
+
+- Verify subkey binding signatures and self-signatures when loading OpenPGP keys. Previously, key flags (e.g. signing capability) were read from binding signatures without verifying them against the primary key, allowing a tampered key to present unauthorized subkeys.
+- Signature verification now rejects signatures from keys that lack the signing capability flag, returning `Error::KeyLacksSigningCapability`. Keys with no key flags subpacket are treated as general-purpose per RFC 9580.
+
 ### Deprecated
 
 - `HsmSigner` has been renamed to `BasicKeySigner`. The old name remains as a deprecated type alias.

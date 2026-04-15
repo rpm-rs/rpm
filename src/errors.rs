@@ -85,6 +85,10 @@ pub enum Error {
     ),
 
     #[cfg(feature = "signature-pgp")]
+    #[error("key binding signature verification failed: {0}")]
+    KeyBindingVerificationError(pgp::errors::Error),
+
+    #[cfg(feature = "signature-pgp")]
     #[error("error verifying signature with key {key_ref}: {source}")]
     VerificationError {
         #[source]
@@ -107,6 +111,9 @@ pub enum Error {
 
     #[error("unable to find key with key-ref: {key_ref}")]
     KeyNotFoundError { key_ref: String },
+
+    #[error("key {key_ref} lacks signing capability")]
+    KeyLacksSigningCapability { key_ref: String },
 
     #[error("unknown compressor type {0} - supported types: gzip, zstd, xz, bzip2 and none")]
     UnknownCompressorType(String),
