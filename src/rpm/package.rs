@@ -489,10 +489,7 @@ impl Package {
     /// Signatures are deduplicated by issuer fingerprint, so signing with the
     /// same key replaces the previous signature rather than appending.
     pub fn apply_signature(&mut self, signature: Vec<u8>) -> Result<(), Error> {
-        let header_bytes = self.header_bytes()?;
-
         self.metadata.signature = SignatureHeaderBuilder::from_existing(&self.metadata.signature)?
-            .calculate_digests(&header_bytes)
             .add_openpgp_signature(signature)
             .build()?;
 
@@ -575,14 +572,20 @@ impl Package {
 
         let old_sig_total = metadata.signature.size() + metadata.signature.padding_required();
 
-        let header_bytes = metadata.header_bytes()?;
+        let existing = SignatureHeaderBuilder::from_existing(&metadata.signature)?;
+
+        if !existing.has_reserved_space() {
+            return Err(Error::InsufficientReservedSpace {
+                needed: old_sig_total + 1,
+                available: old_sig_total,
+            });
+        }
 
         // Build with reserved_space = 0 to find minimum size. Using Some(0) keeps the
         // reserved tag entry so the entry count matches the final header.
-        let min_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
-            .calculate_digests(&header_bytes)
+        let min_sig = existing
             .add_openpgp_signature(signature.clone())
-            .reserved_space(0)
+            .reserved_space(Some(0))
             .build()?;
 
         if min_sig.size() > old_sig_total {
@@ -602,9 +605,8 @@ impl Package {
         let reserved = old_sig_total - min_sig.size();
 
         let new_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
-            .calculate_digests(&header_bytes)
             .add_openpgp_signature(signature)
-            .reserved_space(reserved)
+            .reserved_space(Some(reserved))
             .build()?;
 
         debug_assert_eq!(
@@ -627,8 +629,6 @@ impl Package {
     /// space, so the file size is unchanged. This preserves the ability to
     /// later add signatures in-place via [`sign_in_place`](Self::sign_in_place)
     /// or [`apply_signature_in_place`](Self::apply_signature_in_place).
-    ///
-    /// Header digests (SHA-256, SHA-1, SHA3-256) are recalculated.
     pub fn clear_signatures_in_place(path: impl AsRef<Path>) -> Result<(), Error> {
         let mut file = fs::OpenOptions::new()
             .read(true)
@@ -642,13 +642,10 @@ impl Package {
 
         let old_sig_total = metadata.signature.size() + metadata.signature.padding_required();
 
-        let header_bytes = metadata.header_bytes()?;
-
         // Build with no signatures and reserved_space = 0 to find minimum size.
         let min_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
             .clear_signatures()
-            .calculate_digests(&header_bytes)
-            .reserved_space(0)
+            .reserved_space(Some(0))
             .build()?;
 
         // Clearing signatures can only shrink the header, so the difference
@@ -657,8 +654,7 @@ impl Package {
 
         let new_sig = SignatureHeaderBuilder::from_existing(&metadata.signature)?
             .clear_signatures()
-            .calculate_digests(&header_bytes)
-            .reserved_space(reserved)
+            .reserved_space(Some(reserved))
             .build()?;
 
         debug_assert_eq!(
