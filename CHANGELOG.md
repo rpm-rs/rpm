@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.21.0
+
 ### Added
 
 - `Package::resign_in_place()` for re-signing an on-disk RPM package without reading or rewriting the payload, consuming the signature header's "reserved space" so that the new header fits in exactly the same byte range, allowing an in-place overwrite. Returns `Error::InsufficientReservedSpace` if the new signature is too large to fit.
