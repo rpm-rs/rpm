@@ -1627,7 +1627,7 @@ mod in_place_signing {
 
         // Rebuild the signature header with zero reserved space
         let compact_sig = rpm::SignatureHeaderBuilder::from_existing(&pkg.metadata.signature)?
-            .reserved_space(0)
+            .reserved_space(Some(0))
             .build()?;
         pkg.metadata.signature = compact_sig;
 
@@ -1639,6 +1639,27 @@ mod in_place_signing {
         let big_signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::RSA_4K_PRIVATE)?)?;
         let result = rpm::Package::resign_in_place(&out, &big_signer);
 
+        assert!(
+            matches!(result, Err(rpm::Error::InsufficientReservedSpace { .. })),
+            "expected InsufficientReservedSpace error, got: {result:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Resigning in-place a package that has no reserved space tag at all
+    /// should return InsufficientReservedSpace.
+    #[test]
+    fn test_resign_in_place_no_reserved_tag() -> Result<(), Box<dyn std::error::Error>> {
+        let signer = Signer::from_asc_bytes(&fs::read(common::keys::v4::ED25519_PRIVATE)?)?;
+        let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "no reserved tag")
+            .using_config(rpm::BuildConfig::default().reserved_space(None))
+            .build_and_sign(&signer)?;
+
+        let out = Path::new(common::CARGO_OUT_DIR).join("resign_in_place_no_reserved_tag.rpm");
+        pkg.write_file(&out)?;
+
+        let result = rpm::Package::resign_in_place(&out, &signer);
         assert!(
             matches!(result, Err(rpm::Error::InsufficientReservedSpace { .. })),
             "expected InsufficientReservedSpace error, got: {result:?}"

@@ -37,6 +37,7 @@ pub struct BuildConfig {
     format: RpmFormat,
     compression: CompressionWithLevel,
     source_date: Option<Timestamp>,
+    reserved_space: Option<u32>,
 }
 
 impl From<RpmFormat> for BuildConfig {
@@ -61,6 +62,7 @@ impl BuildConfig {
             format: RpmFormat::V4,
             compression: CompressionWithLevel::default(),
             source_date: None,
+            reserved_space: Some(SignatureHeaderBuilder::DEFAULT_RESERVED_SPACE),
         }
     }
 
@@ -70,6 +72,7 @@ impl BuildConfig {
             format: RpmFormat::V6,
             compression: CompressionWithLevel::default(),
             source_date: None,
+            reserved_space: Some(SignatureHeaderBuilder::DEFAULT_RESERVED_SPACE),
         }
     }
 
@@ -141,6 +144,17 @@ impl BuildConfig {
     /// change in future versions of the library.
     pub fn compression(mut self, compression: impl Into<CompressionWithLevel>) -> Self {
         self.compression = compression.into();
+        self
+    }
+
+    /// Set the amount of reserved space (in bytes) in the signature header
+    /// for later adding signatures in-place (without rewriting the payload).
+    ///
+    /// Defaults to `Some(4128)`. Set to `None` to omit reserved space
+    /// entirely, producing a smaller package when in-place re-signing is
+    /// not needed.
+    pub fn reserved_space(mut self, size: Option<u32>) -> Self {
+        self.reserved_space = size;
         self
     }
 }
@@ -1350,12 +1364,15 @@ impl PackageBuilder {
     /// Build the package
     pub fn build(self) -> Result<Package, Error> {
         let fmt = self.config.format;
+        let reserved_space = self.config.reserved_space;
         let (lead, header_idx_tag, content) = self.prepare_data()?;
 
         let mut header = Vec::with_capacity(128);
         header_idx_tag.write(&mut header)?;
         let sig_header = {
-            let mut builder = SignatureHeaderBuilder::new().format(fmt);
+            let mut builder = SignatureHeaderBuilder::new()
+                .format(fmt)
+                .reserved_space(reserved_space);
 
             // V6 packages shouldn't populate the content length header.
             if fmt == RpmFormat::V4 {

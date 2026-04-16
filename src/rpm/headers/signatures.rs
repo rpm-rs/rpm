@@ -53,7 +53,7 @@ impl SignatureHeaderBuilder {
     /// Requires the format to be set; otherwise the reserved space is not written.
     ///
     /// RPM uses a default of %__gpg_reserved_space (4096) + 32 bytes
-    const DEFAULT_RESERVED_SPACE: u32 = 4128;
+    pub const DEFAULT_RESERVED_SPACE: u32 = 4128;
 
     pub fn new() -> Self {
         Self {
@@ -137,6 +137,8 @@ impl SignatureHeaderBuilder {
         }
         // Detect format and preserve reserved space from existing header.
         // v6 uses RPMSIGTAG_RESERVED (999), v4 uses RPMSIGTAG_RESERVEDSPACE (1008).
+        // If neither tag is present, reserved_space must be None — not the
+        // default from new() — so we don't fabricate space that wasn't there.
         if let Ok(data) = header.get_entry_data_as_binary(IndexSignatureTag::RPMSIGTAG_RESERVED) {
             builder.format = Some(RpmFormat::V6);
             builder.reserved_space = Some(data.len() as u32);
@@ -145,6 +147,8 @@ impl SignatureHeaderBuilder {
         {
             builder.format = Some(RpmFormat::V4);
             builder.reserved_space = Some(data.len() as u32);
+        } else {
+            builder.reserved_space = None;
         }
         Ok(builder)
     }
@@ -338,10 +342,15 @@ impl SignatureHeaderBuilder {
         self
     }
 
+    /// Whether this builder includes a reserved space tag.
+    pub fn has_reserved_space(&self) -> bool {
+        self.reserved_space.is_some()
+    }
+
     /// Set the amount of reserved space (in bytes) for later adding signatures
     /// without rewriting the entire package.
-    pub fn reserved_space(mut self, size: u32) -> Self {
-        self.reserved_space = Some(size);
+    pub fn reserved_space(mut self, size: Option<u32>) -> Self {
+        self.reserved_space = size;
         self
     }
 }
