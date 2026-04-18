@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 use std::io::Read;
@@ -15,6 +17,7 @@ use digest::Digest;
 use super::compressor::Compressor;
 use super::headers::*;
 use super::payload;
+use super::util::{ChecksummingWriter, HashKind};
 use crate::errors::*;
 use crate::{Evr, Timestamp, constants::*};
 
@@ -24,13 +27,7 @@ use crate::signature;
 use crate::Package;
 use crate::PackageMetadata;
 
-use crate::{CompressionType, CompressionWithLevel};
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum RpmFormat {
-    V4,
-    V6,
-}
+use crate::{CompressionType, CompressionWithLevel, RpmFormat};
 
 #[derive(Copy, Clone, PartialEq)]
 pub struct BuildConfig {

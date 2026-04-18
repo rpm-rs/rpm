@@ -112,7 +112,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -136,7 +136,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -156,7 +156,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -176,7 +176,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -200,7 +200,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -224,7 +224,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -244,7 +244,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -269,7 +269,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -293,7 +293,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -313,7 +313,7 @@ mod fixtures {
                 flags: FileFlags::GHOST,
                 digest: None,
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -333,7 +333,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -496,7 +496,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -520,7 +520,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -544,7 +544,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -568,7 +568,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -592,7 +592,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -612,7 +612,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -636,7 +636,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -660,7 +660,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -683,7 +683,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("=".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -706,7 +706,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("=".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -729,7 +729,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -752,7 +752,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -771,7 +771,7 @@ mod fixtures {
                 flags: FileFlags::GHOST,
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -796,7 +796,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -819,7 +819,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -842,7 +842,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -865,7 +865,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -885,7 +885,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "normal".to_owned(),
+                linkto: Some("normal".to_owned()),
                 ima_signature: None,
             }
         );
@@ -908,7 +908,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -930,7 +930,7 @@ mod fixtures {
                 flags: FileFlags::empty(),
                 digest: None,
                 caps: Some("".to_owned()),
-                linkto: "../dir".to_owned(),
+                linkto: Some("../dir".to_owned()),
                 ima_signature: None,
             }
         );
@@ -957,7 +957,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -980,7 +980,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1003,7 +1003,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1026,7 +1026,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1049,7 +1049,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("cap_sys_ptrace,cap_sys_admin=ep".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1077,7 +1077,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: Some("".to_owned()),
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1132,7 +1132,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1158,7 +1158,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1185,7 +1185,7 @@ mod fixtures {
                     algo: DigestAlgorithm::Sha2_256,
                 }),
                 caps: None,
-                linkto: "".to_owned(),
+                linkto: None,
                 ima_signature: None,
             }
         );
@@ -1243,7 +1243,7 @@ mod fixtures {
                         algo: DigestAlgorithm::Sha2_256,
                     }),
                     caps: None,
-                    linkto: "".to_owned(),
+                    linkto: None,
                     ima_signature: None,
                 }
             );

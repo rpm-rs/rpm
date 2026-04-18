@@ -1,4 +1,70 @@
+use std::collections::HashMap;
+
+use digest::DynDigest;
+use sha2::{Sha256, Sha512};
+use sha3::Sha3_256;
+
 use crate::errors::Error;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum HashKind {
+    Sha256,
+    Sha512,
+    Sha3_256,
+}
+
+impl HashKind {
+    fn build(self) -> Box<dyn DynDigest> {
+        match self {
+            Self::Sha256 => Box::new(Sha256::default()),
+            Self::Sha512 => Box::new(Sha512::default()),
+            Self::Sha3_256 => Box::new(Sha3_256::default()),
+        }
+    }
+}
+
+/// A wrapper for calculating the checksum of the contents written to it
+pub struct ChecksummingWriter<W> {
+    writer: W,
+    engines: HashMap<HashKind, Box<dyn DynDigest>>,
+    bytes_written: usize,
+}
+
+impl<W> ChecksummingWriter<W> {
+    pub fn new(writer: W, kinds: &[HashKind]) -> Self {
+        Self {
+            writer,
+            engines: kinds
+                .iter()
+                .map(|&k| (k, k.build()))
+                .collect::<HashMap<_, _>>(),
+            bytes_written: 0,
+        }
+    }
+
+    pub fn into_digests(self) -> (HashMap<HashKind, String>, usize) {
+        let map = self
+            .engines
+            .into_iter()
+            .map(|(k, e)| (k, hex::encode(e.finalize())))
+            .collect();
+        (map, self.bytes_written)
+    }
+}
+
+impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        for eng in self.engines.values_mut() {
+            eng.update(buf);
+        }
+        self.bytes_written += buf.len();
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
 
 /// Allowed special characters in RPM package names (matching RPM's ALLOWED_CHARS_NAME).
 const ALLOWED_CHARS_NAME: &[u8] = b".-_+%{}";
@@ -268,6 +334,72 @@ mod tests {
                 validate_version("release", "1-beta"),
                 Err(Error::InvalidCharacters { .. })
             ));
+        }
+    }
+
+    mod checksumming_writer {
+        use super::*;
+        use std::io::Write;
+
+        #[test]
+        fn test_checksumming_writer_empty() {
+            let mut buf: Vec<u8> = Vec::new();
+            let writer = ChecksummingWriter::new(
+                &mut buf,
+                &[HashKind::Sha256, HashKind::Sha512, HashKind::Sha3_256],
+            );
+            let (hash_values, len) = writer.into_digests();
+            assert!(buf.is_empty());
+            for kind in [HashKind::Sha256, HashKind::Sha512, HashKind::Sha3_256] {
+                if let Some(digest) = hash_values.get(&kind) {
+                    match kind {
+                        HashKind::Sha256 => assert_eq!(
+                            digest,
+                            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        ),
+                        HashKind::Sha512 => assert_eq!(
+                            digest,
+                            "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+                        ),
+                        HashKind::Sha3_256 => assert_eq!(
+                            digest,
+                            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+                        ),
+                    }
+                }
+            }
+            assert_eq!(len, 0);
+        }
+
+        #[test]
+        fn test_checksumming_writer_with_data() {
+            let mut buf: Vec<u8> = Vec::new();
+            let mut writer = ChecksummingWriter::new(
+                &mut buf,
+                &[HashKind::Sha256, HashKind::Sha512, HashKind::Sha3_256],
+            );
+            writer.write_all(b"hello world!").unwrap();
+            let (hash_values, len) = writer.into_digests();
+            assert_eq!(buf.as_slice(), b"hello world!");
+            for kind in [HashKind::Sha256, HashKind::Sha512, HashKind::Sha3_256] {
+                if let Some(digest) = hash_values.get(&kind) {
+                    match kind {
+                        HashKind::Sha256 => assert_eq!(
+                            digest,
+                            "7509e5bda0c762d2bac7f90d758b5b2263fa01ccbc542ab5e3df163be08e6ca9"
+                        ),
+                        HashKind::Sha512 => assert_eq!(
+                            digest,
+                            "db9b1cd3262dee37756a09b9064973589847caa8e53d31a9d142ea2701b1b28abd97838bb9a27068ba305dc8d04a45a1fcf079de54d607666996b3cc54f6b67c"
+                        ),
+                        HashKind::Sha3_256 => assert_eq!(
+                            digest,
+                            "9c24b06143c07224c897bac972e6e92b46cf18063f1a469ebe2f7a0966306105",
+                        ),
+                    }
+                }
+            }
+            assert_eq!(len, b"hello world!".len());
         }
     }
 }

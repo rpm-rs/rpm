@@ -167,19 +167,30 @@ where
             .collect()
     }
 
-    pub fn entry_is_present(&self, tag: T) -> bool {
-        self.index_entries
-            .iter()
-            .any(|entry| entry.tag == tag.to_u32())
+    /// Check whether the header contains an entry for the given tag.
+    ///
+    /// Accepts either a typed tag (e.g. `IndexTag::RPMTAG_NAME`) or a raw `u32`.
+    pub fn entry_is_present(&self, tag: impl Into<u32>) -> bool {
+        let tag = tag.into();
+        self.index_entries.iter().any(|entry| entry.tag == tag)
     }
 
-    pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, Error> {
+    /// Look up a tag in the header and resolve its data.
+    ///
+    /// Accepts either a typed tag (e.g. `IndexTag::RPMTAG_NAME`) or a raw `u32`.
+    /// Returns `Error::TagNotFound` if the tag is not present.
+    pub fn entry(&self, tag: impl Into<u32>) -> Result<IndexData, Error> {
+        let tag = tag.into();
+        self.resolve_entry_data(self.find_entry_or_err(tag)?)
+    }
+
+    /// Find the raw index entry for a tag, or return `Error::TagNotFound`.
+    pub(crate) fn find_entry_or_err(&self, tag: impl Into<u32>) -> Result<&IndexEntry<T>, Error> {
+        let tag = tag.into();
         self.index_entries
             .iter()
-            .find(|entry| entry.tag == tag.to_u32())
-            .ok_or_else(|| Error::TagNotFound(tag.to_string()))
-        // @todo: this could be more efficient, if the tag is an integer, we can just pass around
-        // an integer, and the name of the tag (or "unknown") can be easily derived from that
+            .find(|entry| entry.tag == tag)
+            .ok_or(Error::TagNotFound(tag))
     }
 
     /// Resolve an entry's data from the store, returning a filled owned `IndexData`.
@@ -676,7 +687,7 @@ pub struct FileEntry {
     /// Defines any capabilities on the file.
     pub caps: Option<String>,
     /// Defines a target of a symlink (if the file is a symbolic link).
-    pub linkto: String,
+    pub linkto: Option<String>,
     /// Integrity Measurement Architecture (IMA) signature.
     pub ima_signature: Option<String>,
 }

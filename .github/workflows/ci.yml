@@ -30,7 +30,7 @@ jobs:
         rust:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -46,7 +46,7 @@ jobs:
           - stable
           - 1.88.0
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -68,7 +68,7 @@ jobs:
           - "windows-latest"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -86,11 +86,25 @@ jobs:
         rust:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
       - run: cargo test --features test-with-podman
+
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist
+      - run: pip install dist/*.whl pytest
+      - run: pytest tests/python/
 
   fmt:
     name: Rustfmt
@@ -100,7 +114,7 @@ jobs:
         rust:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -116,7 +130,7 @@ jobs:
         rust:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
@@ -132,12 +146,11 @@ jobs:
         rust:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
           components: clippy
-
 
       - run: cargo install cargo-tarpaulin
       - run: cargo tarpaulin --out xml

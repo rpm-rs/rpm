@@ -415,6 +415,7 @@ fn resign_and_verify_with_keys(
     Ok(())
 }
 
+#[cfg(feature = "payload")]
 mod keyring {
     use super::*;
 

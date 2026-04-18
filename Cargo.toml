@@ -27,11 +27,27 @@ required-features = ["test-with-podman"]
 path = "tests/compat.rs"
 
 [[test]]
+name = "building"
+required-features = ["payload"]
+path = "tests/building.rs"
+
+[[test]]
+name = "compare"
+required-features = ["payload"]
+path = "tests/compare.rs"
+
+[[test]]
+name = "payload"
+required-features = ["payload"]
+path = "tests/payload.rs"
+
+[[test]]
 name = "signatures"
 required-features = ["signature-meta"]
 path = "tests/signatures.rs"
 
 [dependencies]
+pyo3 = { version = "0.28", optional = true }
 base64 = "0.22"
 bitflags = "2"
 thiserror = "2"
@@ -42,7 +58,7 @@ num-derive = "0.4"
 num = "0.4"
 enum-primitive-derive = "0.3"
 enum-display-derive = "0.1"
-digest = "0.10.0"
+digest = "0.10"
 sha3 = "0.10"
 sha2 = "0.10"
 sha1 = "0.10"
@@ -71,10 +87,14 @@ pgp = "0.19.0"
 [features]
 default = [
     "signature-pgp",
+    "payload",
     "gzip-compression",
     "zstd-compression",
     "xz-compression",
 ]
+
+payload = []
+python = ["pyo3/extension-module", "liblzma?/static", "payload"]
 
 gzip-compression = ["flate2"]
 zstd-compression = ["zstd"]
@@ -85,10 +105,42 @@ signature-pgp = ["signature-meta", "pgp", "chrono", "getrandom"]
 signature-meta = []
 
 # Segregate tests that require podman to be installed
-test-with-podman = ["signature-pgp"]
+test-with-podman = ["signature-pgp", "payload"]
 
 zstdmt = ["zstd-compression", "zstd/zstdmt"]
 
 [[example]]
 name = "hsm-signing"
 required-features = ["signature-pgp"]
+
+[[example]]
+name = "parse-repo"
+
+[[example]]
+name = "inspect-rpm"
+
+[[example]]
+name = "verify-signatures"
+required-features = ["signature-pgp"]
+
+[[example]]
+name = "build-rpm"
+required-features = ["payload"]
+
+[[example]]
+name = "compare-versions"
+
+[[example]]
+name = "extract-rpm"
+required-features = ["payload"]
+
+[[example]]
+name = "sign-rpm"
+required-features = ["signature-pgp"]
+
+[[example]]
+name = "remote-signing"
+required-features = ["signature-pgp"]
+
+[[example]]
+name = "diff-rpms"
