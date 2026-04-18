@@ -89,6 +89,7 @@ impl Lead {
         Ok(())
     }
 
+    #[cfg(feature = "payload")]
     pub(crate) fn new(name: &str) -> Self {
         let mut name_arr = [0; 66];
         // the last byte needs to be the null terminator

@@ -388,7 +388,7 @@ fn test_build_with_new_file_api() -> Result<(), Box<dyn std::error::Error>> {
             }
             "/usr/bin/test_link" => {
                 assert_eq!(entry.mode.file_type(), FileType::SymbolicLink);
-                assert_eq!(&entry.linkto, "/usr/bin/test_target");
+                assert_eq!(entry.linkto.as_deref(), Some("/usr/bin/test_target"));
             }
             "/var/log/testapp" => {
                 assert_eq!(entry.mode.file_type(), FileType::Dir);

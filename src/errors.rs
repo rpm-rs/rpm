@@ -2,7 +2,7 @@ use std::{io, str::Utf8Error};
 
 use thiserror::Error;
 
-use crate::{DigestAlgorithm, TimestampError};
+use crate::{DigestAlgorithm, TimestampError, constants::format_tag_id};
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
@@ -34,8 +34,8 @@ pub enum Error {
     UnterminatedHeaderString,
     #[error("invalid UTF-8 in tag {tag} (encoding is guaranteed as utf-8)")]
     InvalidUtf8 { tag: String },
-    #[error("unable to find tag {0}")]
-    TagNotFound(String),
+    #[error("unable to find tag {}", format_tag_id(*.0))]
+    TagNotFound(u32),
     #[error("unable to find scriptlet")]
     ScriptletNotFound,
     #[error("tag {tag} has data type {actual_data_type}, not {expected_data_type}")]

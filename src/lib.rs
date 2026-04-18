@@ -85,6 +85,7 @@
 //! #### List and read file contents
 //!
 //! ```
+//! # #[cfg(feature = "payload")]
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
 //!
@@ -100,6 +101,8 @@
 //! }
 //! # Ok(())
 //! # }
+//! # #[cfg(not(feature = "payload"))]
+//! # fn main() {}
 //! ```
 //!
 //! #### Extract package contents to disk
@@ -108,6 +111,7 @@
 //! files are written relative to the target directory (not installed to their absolute paths).
 //!
 //! ```no_run
+//! # #[cfg(feature = "payload")]
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // The directory must not already exist and its parent must exist.
 //! let pkg = rpm::Package::open("tests/assets/RPMS/v6/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
@@ -115,6 +119,8 @@
 //! // Creates ./extracted-pkg/ with the package's file tree inside it
 //! # Ok(())
 //! # }
+//! # #[cfg(not(feature = "payload"))]
+//! # fn main() {}
 //! ```
 //!
 //! ### Verify signatures

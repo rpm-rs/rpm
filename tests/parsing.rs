@@ -1,5 +1,7 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(feature = "payload")]
+use std::io::Write;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use pretty_assertions::assert_eq;
@@ -28,16 +30,19 @@ fn test_package_segment_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     assert_boundaries(common::pkgs::v6::RPM_BASIC_MLDSA_SIGNED.as_ref())?;
     assert_boundaries(common::pkgs::v6::RPM_BASIC_MULTI_SIGNED.as_ref())?;
 
-    let mut temp = tempfile::NamedTempFile::new()?;
+    #[cfg(feature = "payload")]
+    {
+        let mut temp = tempfile::NamedTempFile::new()?;
 
-    let constructed_pkg =
-        rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "").build()?;
-    constructed_pkg.write(&mut temp)?;
-    temp.flush()?;
-    assert_boundaries(temp.path())?;
-    temp.close()?;
+        let constructed_pkg =
+            rpm::PackageBuilder::new("empty-package", "0", "MIT", "x86_64", "").build()?;
+        constructed_pkg.write(&mut temp)?;
+        temp.flush()?;
+        assert_boundaries(temp.path())?;
+        temp.close()?;
+    }
 
-    #[cfg(feature = "signature-meta")]
+    #[cfg(all(feature = "payload", feature = "signature-meta"))]
     {
         use rpm::signature::pgp::Signer;
         let signer = Signer::from_asc_file(common::keys::v4::RSA_4K_PRIVATE)?;
@@ -1123,4 +1128,52 @@ fn test_rich_deps_package() -> Result<(), Box<dyn std::error::Error>> {
     assert!(rich_conflicts.contains(&"(pkgPP and pkgQQ)"));
 
     Ok(())
+}
+
+#[test]
+fn test_entry_is_present() {
+    let meta = PackageMetadata::open(common::pkgs::v6::RPM_BASIC).unwrap();
+    assert!(meta.header.entry_is_present(IndexTag::RPMTAG_NAME));
+    assert!(!meta.header.entry_is_present(IndexTag::RPMTAG_PREFIXES));
+    // Raw u32 should also work
+    assert!(meta.header.entry_is_present(1000u32)); // RPMTAG_NAME
+    assert!(!meta.header.entry_is_present(9999u32));
+}
+
+#[test]
+fn test_entry_by_typed_tag() {
+    let meta = PackageMetadata::open(common::pkgs::v6::RPM_BASIC).unwrap();
+    let data = meta.header.entry(IndexTag::RPMTAG_NAME).unwrap();
+    match data {
+        IndexData::StringTag(ref s) => assert_eq!(s, "rpm-basic"),
+        _ => panic!("expected StringTag, got {data}"),
+    }
+}
+
+#[test]
+fn test_entry_by_raw_u32() {
+    let meta = PackageMetadata::open(common::pkgs::v6::RPM_BASIC).unwrap();
+    let data = meta.header.entry(1000u32).unwrap(); // RPMTAG_NAME
+    match data {
+        IndexData::StringTag(ref s) => assert_eq!(s, "rpm-basic"),
+        _ => panic!("expected StringTag, got {data}"),
+    }
+}
+
+#[test]
+fn test_entry_not_found() {
+    let meta = PackageMetadata::open(common::pkgs::v6::RPM_BASIC).unwrap();
+    let err = meta.header.entry(9999u32).unwrap_err();
+    assert!(matches!(err, Error::TagNotFound(9999)));
+}
+
+#[test]
+fn test_tag_not_found_display() {
+    let meta = PackageMetadata::open(common::pkgs::v6::RPM_BASIC).unwrap();
+    let err = meta.header.entry(IndexTag::RPMTAG_PREFIXES).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("RPMTAG_PREFIXES"),
+        "expected tag name in error: {msg}"
+    );
 }
