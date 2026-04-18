@@ -966,7 +966,7 @@ mod stripped_cpio_tests {
             flags: crate::FileFlags::empty(),
             digest: None,
             caps: None,
-            linkto: String::new(),
+            linkto: None,
             ima_signature: None,
         }
     }

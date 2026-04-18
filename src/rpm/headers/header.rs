@@ -676,7 +676,7 @@ pub struct FileEntry {
     /// Defines any capabilities on the file.
     pub caps: Option<String>,
     /// Defines a target of a symlink (if the file is a symbolic link).
-    pub linkto: String,
+    pub linkto: Option<String>,
     /// Integrity Measurement Architecture (IMA) signature.
     pub ima_signature: Option<String>,
 }

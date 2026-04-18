@@ -445,7 +445,7 @@ impl Package {
                     if file_path.exists() || file_path.symlink_metadata().is_ok() {
                         fs::remove_file(&file_path)?;
                     }
-                    symlink(&file_entry.linkto, &file_path)?;
+                    symlink(file_entry.linkto.as_deref().unwrap_or(""), &file_path)?;
                 }
                 // Skip file types we don't handle (e.g. device nodes, FIFOs, sockets)
                 _ => {}
@@ -1573,7 +1573,11 @@ impl PackageMetadata {
                     flags: FileFlags::from_bits_retain(flags),
                     size: size as usize,
                     caps: cap,
-                    linkto: linkto.to_owned(),
+                    linkto: if linkto.is_empty() {
+                        None
+                    } else {
+                        Some(linkto.to_owned())
+                    },
                     ima_signature,
                 })
             },
