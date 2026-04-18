@@ -167,10 +167,12 @@ where
             .collect()
     }
 
-    pub fn entry_is_present(&self, tag: T) -> bool {
-        self.index_entries
-            .iter()
-            .any(|entry| entry.tag == tag.to_u32())
+    /// Check whether the header contains an entry for the given tag.
+    ///
+    /// Accepts either a typed tag (e.g. `IndexTag::RPMTAG_NAME`) or a raw `u32`.
+    pub fn entry_is_present(&self, tag: impl Into<u32>) -> bool {
+        let tag = tag.into();
+        self.index_entries.iter().any(|entry| entry.tag == tag)
     }
 
     pub(crate) fn find_entry_or_err(&self, tag: T) -> Result<&IndexEntry<T>, Error> {
