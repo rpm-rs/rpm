@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-This ought to be the last major API-changing release for a long time (maybe ever). `PackageBuilder` is now pass-by-reference instead of pass-by-value, which significantly helps ergonomics in some cases (by avoiding the need to re-assign variables constantly when calling methods on `PackageBuilder` in loops).
+## 0.22.0
+
+This should (hopefully) be the last majorly API-changing release. The changes should be minor until 1.0.
 
 ### Breaking Changes
 
-- The `PackageBuilder` API is now pass-by-reference
+- `PackageBuilder` is now pass-by-reference instead of pass-by-value, which significantly helps ergonomics in some cases (by avoiding the need to re-assign variables constantly when calling methods on `PackageBuilder` in loops).
 
 ## 0.21.0
 

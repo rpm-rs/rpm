@@ -4,13 +4,15 @@
 
 ## RPM-RS
 
-A pure rust library for parsing and creating RPM files.
+A pure rust library for working with RPM files.
+
+This is **not**, nor is it intended to be, a full replacement for the original `rpm` library / tools.
 
 ### Goals
 
 - Easy to use API
-- Pure rust to make it easy to use in larger Projects
-- Independence of Spec files. Pure programmatic interface for Packaging.
+- Independence from Spec files. Purely programmatic interface for Packaging.
+- Pure rust to make it easy to use in larger projects, independent from libraries provided by the host OS
 - Compatibility from Enterprise Linux 8 (RHEL, Alma, Rocky, CentOS Stream) to Fedora
 
 ### Non Goals

@@ -873,7 +873,7 @@ impl PackageMetadata {
         })
     }
 
-    /// Write the RPM header to a buffer
+    /// Write the RPM metadata sections (lead + sig header + main header) to a buffer
     pub fn write(&self, out: &mut impl io::Write) -> Result<(), Error> {
         self.lead.write(out)?;
         self.signature.write_signature(out)?;
