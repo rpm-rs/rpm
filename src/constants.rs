@@ -472,7 +472,9 @@ pub enum IndexSignatureTag {
 ///
 /// Each and every header has a particular header tag that identifies the type of
 /// the header the format / information contained in that header.
-pub trait Tag: num::FromPrimitive + PartialEq + std::fmt::Display + std::fmt::Debug + Copy {
+pub trait Tag:
+    num::FromPrimitive + Into<u32> + PartialEq + std::fmt::Display + std::fmt::Debug + Copy
+{
     fn tag_type_name() -> &'static str;
     fn to_u32(&self) -> u32;
 }
