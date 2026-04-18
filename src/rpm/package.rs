@@ -1,18 +1,23 @@
 use std::{
     borrow::Cow,
     fs,
-    io::{self, Read, Seek},
+    io::{self, Seek},
     path::{Path, PathBuf},
     str::FromStr,
 };
 
-#[cfg(unix)]
+#[cfg(feature = "payload")]
+use std::io::Read;
+
+#[cfg(all(unix, feature = "payload"))]
 use std::os::unix::fs::PermissionsExt;
 
 use digest::Digest;
 use num_traits::FromPrimitive;
 
-use crate::{CompressionType, Nevra, constants::*, decompress_stream, errors::*};
+#[cfg(feature = "payload")]
+use crate::decompress_stream;
+use crate::{CompressionType, Nevra, constants::*, errors::*};
 
 #[cfg(feature = "signature-pgp")]
 use crate::signature::pgp::Verifier;
@@ -23,15 +28,22 @@ use std::fmt::Debug;
 
 use super::Lead;
 use super::headers::*;
+#[cfg(feature = "payload")]
 use super::payload;
 
-#[cfg(unix)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum RpmFormat {
+    V4,
+    V6,
+}
+
+#[cfg(all(unix, feature = "payload"))]
 fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Error> {
     std::os::unix::fs::symlink(original, link)?;
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "payload"))]
 fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Error> {
     let original = original.as_ref();
 
@@ -52,7 +64,7 @@ fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), Err
     Ok(())
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(all(not(any(unix, windows)), feature = "payload"))]
 fn symlink(_original: &Path, _link: &Path) -> Result<(), Error> {
     Err(Error::UnsupportedSymlink)
 }
@@ -307,6 +319,7 @@ impl Package {
     /// # Examples
     ///
     /// ```no_run
+    /// # #[cfg(feature = "payload")]
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let pkg = rpm::PackageBuilder::new("foo", "1.0.0", "MIT", "x86_64", "test").build()?;
     ///
@@ -319,6 +332,8 @@ impl Package {
     /// // Creates: /tmp/custom-name.rpm
     /// # Ok(())
     /// # }
+    /// # #[cfg(not(feature = "payload"))]
+    /// # fn main() {}
     /// ```
     pub fn write_to(&self, path: impl AsRef<Path>) -> Result<PathBuf, Error> {
         let path = path.as_ref();
@@ -348,6 +363,7 @@ impl Package {
     /// }
     /// # Ok(()) }
     /// ```
+    #[cfg(feature = "payload")]
     pub fn files(&self) -> Result<FileIterator<'_>, Error> {
         let file_entries = self.metadata.get_file_entries()?;
         let archive = decompress_stream(
@@ -385,6 +401,7 @@ impl Package {
     /// let package = rpm::Package::open("tests/assets/RPMS/v4/rpm-basic-2.3.4-5.el9.noarch.rpm")?;
     /// package.extract(&package.metadata.get_name()?)?;
     /// ```
+    #[cfg(feature = "payload")]
     pub fn extract(&self, dest: impl AsRef<Path>) -> Result<(), Error> {
         fs::create_dir(&dest)?;
 
@@ -1517,7 +1534,6 @@ impl PackageMetadata {
         let flags = self
             .header
             .get_entry_data_as_u32_array(IndexTag::RPMTAG_FILEFLAGS)?;
-        // TODO: verify this is correct behavior for links?
         let links = self
             .header
             .get_entry_data_as_string_array(IndexTag::RPMTAG_FILELINKTOS)?;
@@ -1773,18 +1789,21 @@ impl PackageMetadata {
     }
 }
 
+#[cfg(feature = "payload")]
 pub struct FileIterator<'a> {
     file_entries: Vec<FileEntry>,
     archive: Box<dyn io::Read + 'a>,
     count: usize,
 }
 
+#[cfg(feature = "payload")]
 #[derive(Debug)]
 pub struct RpmFile {
     pub metadata: FileEntry,
     pub content: Vec<u8>,
 }
 
+#[cfg(feature = "payload")]
 impl Iterator for FileIterator<'_> {
     type Item = Result<RpmFile, Error>;
 
@@ -1832,6 +1851,7 @@ impl Iterator for FileIterator<'_> {
     }
 }
 
+#[cfg(feature = "payload")]
 impl ExactSizeIterator for FileIterator<'_> {
     fn len(&self) -> usize {
         self.file_entries.len() - self.count
