@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.1
+
+### Changed
+
+- Made the Python bindings "abi3" compatible, such that the built packages do not need to be rebuilt for each version of Python.
+
 ## 0.23.0
 
 ### Added
