@@ -918,3 +918,57 @@ fn test_roundtrip_all_fixtures() -> Result<(), Box<dyn std::error::Error>> {
     fs::remove_dir(&temp_dir)?;
     Ok(())
 }
+
+/// A writer that performs short writes, returning at most `max_bytes` per call.
+struct ShortWriter<W> {
+    inner: W,
+    max_bytes: usize,
+}
+
+impl<W: std::io::Write> std::io::Write for ShortWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = buf.len().min(self.max_bytes);
+        self.inner.write(&buf[..n])
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Verify that Package::write produces identical output when the underlying
+/// writer performs short writes (returning fewer bytes than requested per call).
+#[test]
+fn test_roundtrip_with_short_writes() -> Result<(), Box<dyn std::error::Error>> {
+    use sha2::{Digest, Sha256};
+    use std::fs;
+
+    let fixtures = vec![
+        common::pkgs::v4::RPM_EMPTY,
+        common::pkgs::v4::RPM_BASIC,
+        common::pkgs::v6::RPM_EMPTY,
+        common::pkgs::v6::RPM_BASIC,
+    ];
+
+    for fixture_path in fixtures {
+        let original_bytes = fs::read(fixture_path)?;
+        let original_hash = Sha256::digest(&original_bytes);
+
+        let pkg = Package::open(fixture_path)?;
+
+        let mut buf = Vec::new();
+        let mut short = ShortWriter {
+            inner: &mut buf,
+            max_bytes: 3,
+        };
+        pkg.write(&mut short)?;
+
+        let written_hash = Sha256::digest(&buf);
+        assert_eq!(
+            original_hash, written_hash,
+            "Short-write roundtrip checksum mismatch for {}",
+            fixture_path
+        );
+    }
+
+    Ok(())
+}

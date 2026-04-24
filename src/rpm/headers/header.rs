@@ -861,14 +861,10 @@ impl<T: Tag> IndexEntry<T> {
     }
 
     pub(crate) fn write_index(&self, out: &mut impl std::io::Write) -> Result<(), Error> {
-        let mut written = out.write(&self.tag.to_be_bytes())?;
-        written += out.write(&self.data.type_as_u32().to_be_bytes())?;
-        written += out.write(&self.offset.to_be_bytes())?;
-        written += out.write(&self.num_items.to_be_bytes())?;
-        debug_assert_eq!(
-            INDEX_ENTRY_SIZE as usize, written,
-            "there should be 16 bytes written"
-        );
+        out.write_all(&self.tag.to_be_bytes())?;
+        out.write_all(&self.data.type_as_u32().to_be_bytes())?;
+        out.write_all(&self.offset.to_be_bytes())?;
+        out.write_all(&self.num_items.to_be_bytes())?;
         Ok(())
     }
 
