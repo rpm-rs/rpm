@@ -58,7 +58,8 @@ impl<W: std::io::Write> std::io::Write for ChecksummingWriter<W> {
             eng.update(buf);
         }
         self.bytes_written += buf.len();
-        self.writer.write(buf)
+        self.writer.write_all(buf)?;
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -400,6 +401,48 @@ mod tests {
                 }
             }
             assert_eq!(len, b"hello world!".len());
+        }
+
+        /// A writer that performs short writes, returning at most `max_bytes` per call.
+        struct ShortWriter<W> {
+            inner: W,
+            max_bytes: usize,
+        }
+
+        impl<W: Write> Write for ShortWriter<W> {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                let n = buf.len().min(self.max_bytes);
+                self.inner.write(&buf[..n])
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.inner.flush()
+            }
+        }
+
+        #[test]
+        fn test_checksumming_writer_short_writes() {
+            let data = b"hello world!";
+
+            // Reference: digest without ChecksummingWriter
+            let mut ref_buf: Vec<u8> = Vec::new();
+            let mut ref_writer = ChecksummingWriter::new(&mut ref_buf, &[HashKind::Sha256]);
+            ref_writer.write_all(data).unwrap();
+            let (ref_digests, _) = ref_writer.into_digests();
+            let expected = ref_digests.get(&HashKind::Sha256).unwrap().clone();
+
+            // Test: wrap a short-writing inner writer (max 3 bytes per write)
+            let mut buf: Vec<u8> = Vec::new();
+            let short = ShortWriter {
+                inner: &mut buf,
+                max_bytes: 3,
+            };
+            let mut writer = ChecksummingWriter::new(short, &[HashKind::Sha256]);
+            writer.write_all(data).unwrap();
+            let (digests, len) = writer.into_digests();
+
+            assert_eq!(buf.as_slice(), data);
+            assert_eq!(len, data.len());
+            assert_eq!(digests.get(&HashKind::Sha256).unwrap(), &expected);
         }
     }
 }

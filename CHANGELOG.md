@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Header::entry()` for fetching the an arbitrary tag or u32 (interpreted as a tag) from the header
 - Many new examples
 
+### Fixed
+
+- Fixed incorrect file digests when the underlying writer performs short writes (e.g. sockets, pipes, or slow I/O).
+- Fixed silent data loss in header index serialization under short writes.
+
 ### Changed
 
 - Made an optional `payload` feature so that users who only need metadata parsing functions (no building, no file access or extraction) can avoid compression library dependencies.
