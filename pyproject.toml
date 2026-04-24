@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rpm-rs"
-version = "0.22.0"
+dynamic = ["version"]
 description = "Python bindings for rpm-rs: build, parse, sign and inspect RPM packages"
 license = { text = "Apache-2.0 OR MIT" }
 readme = "PYTHON_README.md"
