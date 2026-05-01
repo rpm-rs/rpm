@@ -1485,6 +1485,23 @@ impl PyVerifier {
 // ---------------------------------------------------------------------------
 
 /// Parsed information about a single OpenPGP signature embedded in an RPM package.
+#[pyclass(name = "SignatureVersion", eq, eq_int, hash, frozen, from_py_object)]
+#[derive(Clone, PartialEq, Hash)]
+pub enum PySignatureVersion {
+    V4 = 4,
+    V6 = 6,
+}
+
+#[pymethods]
+impl PySignatureVersion {
+    fn __repr__(&self) -> &str {
+        match self {
+            PySignatureVersion::V4 => "SignatureVersion.V4",
+            PySignatureVersion::V6 => "SignatureVersion.V6",
+        }
+    }
+}
+
 #[pyclass(name = "SignatureInfo", frozen)]
 struct PySignatureInfo(crate::signature::pgp::SignatureInfo);
 
@@ -1522,6 +1539,22 @@ impl PySignatureInfo {
             crate::signature::pgp::SignatureAlgorithm::MlDsa87Ed448 => "ML-DSA-87+Ed448",
             _ => "Unsupported",
         })
+    }
+
+    /// The OpenPGP signature version.
+    ///
+    /// Raises `ValueError` if the version is not recognized.
+    #[getter]
+    fn version(&self) -> PyResult<PySignatureVersion> {
+        match self.0.version() {
+            crate::signature::pgp::SignatureVersion::V4 => Ok(PySignatureVersion::V4),
+            crate::signature::pgp::SignatureVersion::V6 => Ok(PySignatureVersion::V6),
+            crate::signature::pgp::SignatureVersion::Unsupported(v) => {
+                Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "unsupported OpenPGP signature version: {v}"
+                )))
+            }
+        }
     }
 
     /// The hash algorithm name (e.g. "SHA256", "SHA512"), or None.
@@ -2521,6 +2554,7 @@ pub fn rpm_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPackageBuilder>()?;
     m.add_class::<PySigner>()?;
     m.add_class::<PyVerifier>()?;
+    m.add_class::<PySignatureVersion>()?;
     m.add_class::<PySignatureInfo>()?;
     m.add_class::<PyDigestStatus>()?;
     m.add_class::<PyDigestReport>()?;

@@ -100,6 +100,8 @@ for sig in pkg.signatures():
         print(f"Fingerprint: {sig.fingerprint}")
     if sig.key_id:
         print(f"Key ID: {sig.key_id}")
+    if sig.version == SignatureVersion.V6:
+        print("This is a v6 signature")
 
 # Raw OpenPGP signature packets are also available
 for raw_sig in pkg.raw_signatures():
