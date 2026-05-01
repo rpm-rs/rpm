@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from rpm_rs import Package, Signer, SignatureInfo, Verifier
+from rpm_rs import Package, Signer, SignatureInfo, SignatureVersion, Verifier
 
 from conftest import (
     RPM_BASIC,
@@ -152,6 +152,7 @@ class TestSignatureInfo:
         assert len(sig.fingerprint) > 16
         assert sig.algorithm is not None
         assert sig.hash_algorithm is not None
+        assert sig.version == SignatureVersion.V6
 
     def test_signature_created_timestamp(self):
         pkg = Package.open(RPM_BASIC)
@@ -178,6 +179,8 @@ class TestSignatureInfo:
         pkg = Package.open(RPM_MULTI_SIGNED)
         sigs = pkg.signatures()
         assert len(sigs) > 1
+        for sig in sigs:
+            assert sig.version == SignatureVersion.V6
 
 
 class TestRawSignatures:

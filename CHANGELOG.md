@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.2
+
+### Added
+
+- Added `SignatureVersion` enum to the Python bindings with `V4` and `V6` variants.
+- Added `SignatureInfo.version` property to the Python bindings, returning a `SignatureVersion` value. Raises `ValueError` for unrecognized versions.
+
 ## 0.23.1
 
 ### Changed
