@@ -1064,9 +1064,19 @@ impl PyPackageMetadata {
         PyPackageSegmentOffsets(self.0.get_package_segment_offsets())
     }
 
+    /// Return parsed information about each OpenPGP signature embedded in the package.
+    ///
+    /// Returns a list of `SignatureInfo` objects, or an empty list if the package is unsigned.
+    fn signatures(&self) -> PyResult<Vec<PySignatureInfo>> {
+        self.0
+            .signatures()
+            .map(|sigs| sigs.into_iter().map(PySignatureInfo).collect())
+            .map_err(to_pyerr)
+    }
+
     /// Return the raw bytes of each signature in the package's signature header.
     ///
-    /// Returns a list of ``bytes`` objects. Returns an empty list if unsigned.
+    /// Returns a list of `bytes` objects. Returns an empty list if unsigned.
     fn raw_signatures(&self) -> PyResult<Vec<Vec<u8>>> {
         self.0
             .raw_signatures()

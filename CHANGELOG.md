@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.4
+
+### Added
+
+- Added `signatures()` to `PackageMetadata`, mirroring the Rust API.
+
 ## 0.23.3
 
 ### Changed
