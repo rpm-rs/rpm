@@ -3,6 +3,7 @@
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +30,10 @@ class TestSignerConstruction:
 
     def test_from_file(self):
         signer = Signer.from_file(PRIVATE_KEY)
+        assert signer is not None
+
+    def test_from_file_pathlike(self):
+        signer = Signer.from_file(Path(PRIVATE_KEY))
         assert signer is not None
 
     def test_invalid_key_raises(self):
@@ -64,6 +69,10 @@ class TestVerifierConstruction:
 
     def test_from_file(self):
         verifier = Verifier.from_file(PUBLIC_KEY)
+        assert verifier is not None
+
+    def test_from_file_pathlike(self):
+        verifier = Verifier.from_file(Path(PUBLIC_KEY))
         assert verifier is not None
 
     def test_invalid_key_raises(self):

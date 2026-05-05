@@ -1,5 +1,7 @@
 """Tests for PackageMetadata."""
 
+from pathlib import Path
+
 import pytest
 
 from rpm_rs import (
@@ -32,6 +34,10 @@ class TestOpen:
         assert m.version == "2.3.4"
         assert m.release == "5.el9"
         assert m.arch == "noarch"
+
+    def test_open_pathlike(self):
+        m = PackageMetadata.open(Path(RPM_BASIC))
+        assert m.name == "rpm-basic"
 
     def test_from_bytes(self):
         with open(RPM_BASIC, "rb") as f:
