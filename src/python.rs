@@ -12,6 +12,7 @@
 
 use std::cmp::Ordering;
 use std::io::{BufReader, Cursor};
+use std::path::PathBuf;
 
 use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -714,7 +715,7 @@ pub struct PyPackageMetadata(pub(crate) crate::PackageMetadata);
 impl PyPackageMetadata {
     /// Open and parse only the metadata (headers) from an RPM file on disk.
     #[staticmethod]
-    fn open(path: &str) -> PyResult<Self> {
+    fn open(path: PathBuf) -> PyResult<Self> {
         crate::PackageMetadata::open(path)
             .map(PyPackageMetadata)
             .map_err(to_pyerr)
@@ -1159,7 +1160,7 @@ pub struct PyPackage(pub(crate) crate::Package);
 impl PyPackage {
     /// Open and parse a complete RPM package from a file path.
     #[staticmethod]
-    fn open(path: &str) -> PyResult<Self> {
+    fn open(path: PathBuf) -> PyResult<Self> {
         crate::Package::open(path).map(PyPackage).map_err(to_pyerr)
     }
 
@@ -1180,7 +1181,7 @@ impl PyPackage {
     }
 
     /// Write the full package to a file at the given path.
-    fn write_file(&self, path: &str) -> PyResult<()> {
+    fn write_file(&self, path: PathBuf) -> PyResult<()> {
         self.0.write_file(path).map_err(to_pyerr)
     }
 
@@ -1191,7 +1192,7 @@ impl PyPackage {
     /// path (a `.rpm` extension is ensured).
     ///
     /// Returns the actual path where the package was written.
-    fn write_to(&self, path: &str) -> PyResult<String> {
+    fn write_to(&self, path: PathBuf) -> PyResult<String> {
         self.0
             .write_to(path)
             .map(|p| p.to_string_lossy().into_owned())
@@ -1342,7 +1343,7 @@ impl PyPackage {
     /// The existing signature is replaced and the signature header is padded
     /// to the same size using reserved space, so the file size is unchanged.
     #[staticmethod]
-    fn resign_in_place(path: &str, signer: &PySigner) -> PyResult<()> {
+    fn resign_in_place(path: PathBuf, signer: &PySigner) -> PyResult<()> {
         crate::Package::resign_in_place(path, signer.0.clone()).map_err(to_pyerr)
     }
 
@@ -1351,7 +1352,7 @@ impl PyPackage {
     /// The raw signature bytes are added to the signature header; reserved
     /// space is consumed to keep the file size unchanged.
     #[staticmethod]
-    fn apply_signature_in_place(path: &str, signature: Vec<u8>) -> PyResult<()> {
+    fn apply_signature_in_place(path: PathBuf, signature: Vec<u8>) -> PyResult<()> {
         crate::Package::apply_signature_in_place(path, signature).map_err(to_pyerr)
     }
 
@@ -1360,7 +1361,7 @@ impl PyPackage {
     /// The space previously occupied by signatures is converted to reserved
     /// space, so the file size is unchanged.
     #[staticmethod]
-    fn clear_signatures_in_place(path: &str) -> PyResult<()> {
+    fn clear_signatures_in_place(path: PathBuf) -> PyResult<()> {
         crate::Package::clear_signatures_in_place(path).map_err(to_pyerr)
     }
 }
@@ -1391,7 +1392,7 @@ impl PySigner {
 
     /// Create a signer from an ASCII-armored secret key file.
     #[classmethod]
-    fn from_file(_cls: &Bound<'_, PyType>, path: &str) -> PyResult<Self> {
+    fn from_file(_cls: &Bound<'_, PyType>, path: PathBuf) -> PyResult<Self> {
         crate::signature::pgp::Signer::from_asc_file(path)
             .map(PySigner)
             .map_err(to_pyerr)
@@ -1451,7 +1452,7 @@ impl PyVerifier {
 
     /// Create a verifier from an ASCII-armored public key file.
     #[classmethod]
-    fn from_file(_cls: &Bound<'_, PyType>, path: &str) -> PyResult<Self> {
+    fn from_file(_cls: &Bound<'_, PyType>, path: PathBuf) -> PyResult<Self> {
         crate::signature::pgp::Verifier::from_asc_file(path)
             .map(PyVerifier)
             .map_err(to_pyerr)
@@ -1463,7 +1464,7 @@ impl PyVerifier {
     }
 
     /// Append additional public key(s) from an ASCII-armored file.
-    fn load_from_asc_file(&mut self, path: &str) -> PyResult<()> {
+    fn load_from_asc_file(&mut self, path: PathBuf) -> PyResult<()> {
         self.0.load_from_asc_file(path).map_err(to_pyerr)
     }
 

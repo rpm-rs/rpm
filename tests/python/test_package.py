@@ -3,6 +3,7 @@
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 from rpm_rs import FileEntry, FileType, Package, PackageMetadata, RpmFile
 
@@ -12,6 +13,10 @@ from conftest import RPM_BASIC, RPM_EMPTY, RPM_FILE_TYPES, RPM_SIGNED
 class TestOpen:
     def test_open(self):
         pkg = Package.open(RPM_BASIC)
+        assert pkg.metadata.name == "rpm-basic"
+
+    def test_open_pathlike(self):
+        pkg = Package.open(Path(RPM_BASIC))
         assert pkg.metadata.name == "rpm-basic"
 
     def test_from_bytes(self):
@@ -84,19 +89,16 @@ class TestRoundtrip:
 
     def test_write_file(self):
         pkg = Package.open(RPM_BASIC)
-        with tempfile.NamedTemporaryFile(suffix=".rpm", delete=False) as f:
-            path = f.name
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "output.rpm"
             pkg.write_file(path)
             pkg2 = Package.open(path)
             assert pkg2.metadata.name == pkg.metadata.name
-        finally:
-            os.unlink(path)
 
     def test_write_to_directory(self):
         pkg = Package.open(RPM_BASIC)
         with tempfile.TemporaryDirectory() as tmpdir:
-            actual_path = pkg.write_to(tmpdir)
+            actual_path = pkg.write_to(Path(tmpdir))
             assert os.path.isfile(actual_path)
             assert actual_path.startswith(tmpdir)
             assert actual_path.endswith(".rpm")

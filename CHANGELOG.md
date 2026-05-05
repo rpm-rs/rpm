@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.3
+
+### Changed
+
+- Python API accepts "path-like objects" (str, bytes, pathlib.Path) instead of just strings.
+
 ## 0.23.2
 
 ### Added
