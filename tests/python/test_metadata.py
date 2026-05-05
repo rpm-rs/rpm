@@ -12,6 +12,7 @@ from rpm_rs import (
     FileType,
     PackageMetadata,
     Scriptlet,
+    SignatureInfo,
     SignatureTag,
     Tag,
 )
@@ -237,19 +238,21 @@ class TestScriptlets:
             m.pre_install_script()
 
 
-class TestRawSignatures:
+class TestSignatures:
     def test_unsigned_metadata(self):
         m = PackageMetadata.open(RPM_BASIC)
-        sigs = m.raw_signatures()
-        assert isinstance(sigs, list)
-        assert len(sigs) == 0
+        assert m.signatures() == []
+        assert m.raw_signatures() == []
 
     def test_signed_metadata(self):
         m = PackageMetadata.open(RPM_SIGNED)
-        sigs = m.raw_signatures()
-        assert isinstance(sigs, list)
+        sigs = m.signatures()
         assert len(sigs) > 0
-        assert all(isinstance(s, bytes) for s in sigs)
+        assert all(isinstance(s, SignatureInfo) for s in sigs)
+        assert sigs[0].fingerprint is not None
+        raw = m.raw_signatures()
+        assert len(raw) > 0
+        assert all(isinstance(s, bytes) for s in raw)
 
 
 class TestChangelog:
