@@ -1,6 +1,6 @@
 """Compare the headers of two RPM packages and report differences."""
 
-import sys
+import argparse
 
 from rpm_rs import PackageMetadata, SignatureTag, Tag
 
@@ -60,12 +60,13 @@ def diff_headers(label, a_entries, b_entries, enum_cls):
         print(f"\n  {count} difference(s)")
 
 
-if len(sys.argv) < 3:
-    print("Usage: diff_rpms.py <rpm-a> <rpm-b>", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("rpm_a", help="First RPM file")
+parser.add_argument("rpm_b", help="Second RPM file")
+args = parser.parse_args()
 
-a = PackageMetadata.open(sys.argv[1])
-b = PackageMetadata.open(sys.argv[2])
+a = PackageMetadata.open(args.rpm_a)
+b = PackageMetadata.open(args.rpm_b)
 
 print("Comparing:")
 print(f"  A: {a.nevra()}")

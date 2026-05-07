@@ -1,10 +1,12 @@
 """Build a simple RPM package from scratch."""
 
-import sys
+import argparse
 
 from rpm_rs import FileOptions, PackageBuilder
 
-output = sys.argv[1] if len(sys.argv) > 1 else "example.rpm"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("output", nargs="?", default=".", help="Output RPM path or directory")
+args = parser.parse_args()
 
 builder = PackageBuilder(
     "example-package",
@@ -36,5 +38,5 @@ builder.with_file_contents(
 )
 
 pkg = builder.build()
-pkg.write_file(output)
-print(f"Built: {output}")
+path = pkg.write_to(args.output)
+print(f"Built: {path}")

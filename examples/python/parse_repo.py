@@ -1,16 +1,17 @@
 """Recursively scan a directory for RPM files and parse their metadata."""
 
+import argparse
 import sys
 import time
 from pathlib import Path
 
 from rpm_rs import PackageMetadata
 
-if len(sys.argv) < 2:
-    print("Usage: parse_repo.py <directory>", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("directory", help="Directory to scan for RPM files")
+args = parser.parse_args()
 
-repo_dir = Path(sys.argv[1])
+repo_dir = Path(args.directory)
 total = 0
 errors = 0
 

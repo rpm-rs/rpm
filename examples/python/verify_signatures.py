@@ -1,21 +1,21 @@
 """Verify the signatures and digests of an RPM package."""
 
+import argparse
 import sys
 
 from rpm_rs import Package, Verifier
 
-if len(sys.argv) < 2:
-    print("Usage: verify_signatures.py <rpm-file> [public-key]", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("rpm", help="Path to the RPM file")
+parser.add_argument("-k", "--key", action="append", default=[], help="Path to a public key file (ASCII-armored)")
+args = parser.parse_args()
 
-pkg = Package.open(sys.argv[1])
+pkg = Package.open(args.rpm)
 
-if len(sys.argv) > 2:
-    verifier = Verifier.from_file(sys.argv[2])
-    has_key = True
-else:
-    verifier = Verifier()
-    has_key = False
+verifier = Verifier()
+for key_file in args.key:
+    verifier.load_from_asc_file(key_file)
+has_key = bool(args.key)
 
 report = pkg.check_signatures(verifier)
 digests = report.digests

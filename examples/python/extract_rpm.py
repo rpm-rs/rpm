@@ -1,16 +1,16 @@
 """Extract an RPM's payload to a directory."""
 
-import sys
+import argparse
 
 from rpm_rs import Package
 
-if len(sys.argv) < 2:
-    print("Usage: extract_rpm.py <rpm-file> [destination]", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("rpm", help="Path to the RPM file")
+parser.add_argument("destination", nargs="?", default=".", help="Output directory")
+args = parser.parse_args()
 
-dest = sys.argv[2] if len(sys.argv) > 2 else "."
-
-pkg = Package.open(sys.argv[1])
+dest = args.destination
+pkg = Package.open(args.rpm)
 nevra = pkg.metadata.nevra()
 print(f"Extracting {nevra} to {dest}/")
 

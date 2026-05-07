@@ -9,15 +9,17 @@ In a real deployment, step 2 would happen on a remote signing service
 (e.g. an HSM, Sigstore, or a signing server behind an API).
 """
 
-import sys
+import argparse
 
 from rpm_rs import Package, Signer
 
-if len(sys.argv) < 4:
-    print("Usage: remote_signing.py <rpm-file> <private-key> <output>", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("rpm", help="Path to the RPM file")
+parser.add_argument("key", help="Path to the private key file (ASCII-armored)")
+parser.add_argument("output", help="Output path for the signed RPM")
+args = parser.parse_args()
 
-rpm_path, key_path, output_path = sys.argv[1], sys.argv[2], sys.argv[3]
+rpm_path, key_path, output_path = args.rpm, args.key, args.output
 
 pkg = Package.open(rpm_path)
 

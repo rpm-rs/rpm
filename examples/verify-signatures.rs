@@ -9,19 +9,19 @@ struct Args {
     /// Path to the RPM file
     rpm: PathBuf,
 
-    /// Path to a public key file (ASCII-armored)
+    /// Path(s) to public key file(s) (ASCII-armored)
     #[arg(short, long)]
-    key: Option<PathBuf>,
+    key: Vec<PathBuf>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let pkg = Package::open(&args.rpm)?;
 
-    let verifier = match &args.key {
-        Some(path) => Verifier::from_asc_file(path)?,
-        None => Verifier::new(),
-    };
+    let mut verifier = Verifier::new();
+    for path in &args.key {
+        verifier.load_from_asc_file(path)?;
+    }
 
     let report = pkg.check_signatures(verifier)?;
 
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let ok = if args.key.is_some() {
+    let ok = if !args.key.is_empty() {
         report.is_ok()
     } else {
         report.digests.is_ok()

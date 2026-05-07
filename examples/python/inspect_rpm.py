@@ -1,14 +1,14 @@
 """Inspect an RPM package and print a detailed summary."""
 
-import sys
+import argparse
 
 from rpm_rs import PackageMetadata
 
-if len(sys.argv) < 2:
-    print("Usage: inspect_rpm.py <rpm-file>", file=sys.stderr)
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("rpm", help="Path to the RPM file")
+args = parser.parse_args()
 
-meta = PackageMetadata.open(sys.argv[1])
+meta = PackageMetadata.open(args.rpm)
 nevra = meta.nevra()
 
 print(f"Name         : {nevra.name}")
