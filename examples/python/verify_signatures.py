@@ -7,7 +7,13 @@ from rpm_rs import Package, Verifier
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("rpm", help="Path to the RPM file")
-parser.add_argument("-k", "--key", action="append", default=[], help="Path to a public key file (ASCII-armored)")
+parser.add_argument(
+    "-k",
+    "--key",
+    action="append",
+    default=[],
+    help="Path to a public key file (ASCII-armored)",
+)
 args = parser.parse_args()
 
 pkg = Package.open(args.rpm)

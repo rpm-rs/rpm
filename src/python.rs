@@ -446,6 +446,81 @@ impl PyScriptlet {
 }
 
 // ---------------------------------------------------------------------------
+// Trigger
+// ---------------------------------------------------------------------------
+
+/// An RPM trigger entry (package, file, or transactional file trigger).
+#[pyclass(name = "Trigger", frozen)]
+pub struct PyTrigger(crate::Trigger);
+
+#[pymethods]
+impl PyTrigger {
+    fn __repr__(&self) -> String {
+        format!(
+            "Trigger(conditions={}, script_len={})",
+            self.0.conditions.len(),
+            self.0.script.len()
+        )
+    }
+
+    /// The script body.
+    #[getter]
+    fn script(&self) -> &str {
+        &self.0.script
+    }
+
+    /// The interpreter and arguments (e.g. `["/bin/sh"]`).
+    #[getter]
+    fn program(&self) -> Vec<String> {
+        self.0.program.clone()
+    }
+
+    /// The trigger conditions.
+    #[getter]
+    fn conditions(&self) -> Vec<PyTriggerCondition> {
+        self.0
+            .conditions
+            .iter()
+            .cloned()
+            .map(PyTriggerCondition)
+            .collect()
+    }
+}
+
+/// A single condition within a trigger entry.
+#[pyclass(name = "TriggerCondition", frozen)]
+pub struct PyTriggerCondition(crate::TriggerCondition);
+
+#[pymethods]
+impl PyTriggerCondition {
+    fn __repr__(&self) -> String {
+        format!(
+            "TriggerCondition(name={:?}, version={:?})",
+            self.0.name, self.0.version
+        )
+    }
+
+    /// Target package name or file path.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// Dependency flags as a `DependencyFlags` IntFlag value.
+    #[getter]
+    fn flags(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let cls = py.import("rpm_rs")?.getattr("DependencyFlags")?;
+        Ok(cls.call1((self.0.flags.bits(),))?.into())
+    }
+
+    /// Version constraint (empty string if unconstrained).
+    #[getter]
+    fn version(&self) -> &str {
+        &self.0.version
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Evr
 // ---------------------------------------------------------------------------
 
@@ -1058,6 +1133,62 @@ impl PyPackageMetadata {
             .map_err(to_pyerr)
     }
 
+    // --- Scriptlets (continued) ---
+
+    /// The verify scriptlet (%verifyscript), or raises RuntimeError if not present.
+    fn verify_script(&self) -> PyResult<PyScriptlet> {
+        self.0
+            .get_verify_script()
+            .map(PyScriptlet::from)
+            .map_err(to_pyerr)
+    }
+
+    // --- Triggers ---
+
+    /// List of package trigger entries (%triggerin, %triggerun, etc.).
+    fn triggers(&self) -> PyResult<Vec<PyTrigger>> {
+        self.0
+            .get_triggers()
+            .map(|v| v.into_iter().map(PyTrigger).collect())
+            .map_err(to_pyerr)
+    }
+
+    /// List of file trigger entries (%filetriggerin, %filetriggerun, etc.).
+    fn file_triggers(&self) -> PyResult<Vec<PyTrigger>> {
+        self.0
+            .get_file_triggers()
+            .map(|v| v.into_iter().map(PyTrigger).collect())
+            .map_err(to_pyerr)
+    }
+
+    /// List of transactional file trigger entries (%transfiletriggerin, etc.).
+    fn trans_file_triggers(&self) -> PyResult<Vec<PyTrigger>> {
+        self.0
+            .get_trans_file_triggers()
+            .map(|v| v.into_iter().map(PyTrigger).collect())
+            .map_err(to_pyerr)
+    }
+
+    // --- Digests ---
+
+    /// Return the raw header bytes for signing workflows.
+    fn header_bytes(&self) -> PyResult<Vec<u8>> {
+        self.0.header_bytes().map_err(to_pyerr)
+    }
+
+    /// Verify that all header digests are correct.
+    /// Raises RuntimeError if any digest does not match.
+    fn verify_digests(&self) -> PyResult<()> {
+        self.0.verify_digests().map_err(to_pyerr)
+    }
+
+    /// Check header digests and return a detailed report.
+    ///
+    /// Payload digest fields are set to `NotChecked`.
+    fn check_digests(&self) -> PyResult<PyDigestReport> {
+        self.0.check_digests().map(PyDigestReport).map_err(to_pyerr)
+    }
+
     /// Return the byte offsets of each segment (lead, signature header, header, payload)
     /// as they would appear in the on-disk package file.
     fn package_segment_offsets(&self) -> PyPackageSegmentOffsets {
@@ -1082,6 +1213,42 @@ impl PyPackageMetadata {
             .raw_signatures()
             .map(|sigs| sigs.into_iter().map(|s| s.into_owned()).collect())
             .map_err(to_pyerr)
+    }
+
+    /// Verify the package's header PGP signature against a `Verifier`.
+    ///
+    /// Raises RuntimeError if verification fails or no signature is present.
+    /// Payload signatures are not checked; use `Package.verify_signature()` for full verification.
+    fn verify_signature(&self, verifier: &PyVerifier) -> PyResult<()> {
+        self.0
+            .verify_signature(verifier.0.clone())
+            .map_err(to_pyerr)
+    }
+
+    /// Check header digests and verify header-only signatures, returning a detailed report.
+    ///
+    /// Returns a `SignatureReport` with per-digest and per-signature results.
+    /// Unlike `verify_signature()`, this does not raise on failure — inspect
+    /// the report to see which digests and signatures passed or failed.
+    ///
+    /// Payload digest fields are set to `NotChecked`.
+    fn check_signatures(&self, verifier: &PyVerifier) -> PyResult<PySignatureReport> {
+        let report = self
+            .0
+            .check_signatures(verifier.0.clone())
+            .map_err(to_pyerr)?;
+        let ok = report.is_ok();
+        let digest_report = report.digests;
+        let sig_results = report
+            .signatures
+            .into_iter()
+            .map(|r| (r.info, r.error.map(|e| e.to_string())))
+            .collect();
+        Ok(PySignatureReport {
+            digest_report,
+            sig_results,
+            ok,
+        })
     }
 }
 
@@ -1224,13 +1391,13 @@ impl PyPackage {
         PyPackageMetadata(self.0.metadata.clone())
     }
 
-    /// The canonical filename for this package (e.g. ``name-version-release.arch.rpm``).
+    /// The canonical filename for this package (e.g. `name-version-release.arch.rpm`).
     fn canonical_filename(&self) -> PyResult<String> {
         self.0.canonical_filename().map_err(to_pyerr)
     }
 
     /// Extract all files from the package payload into the given destination directory.
-    fn extract(&self, destination: &str) -> PyResult<()> {
+    fn extract(&self, destination: PathBuf) -> PyResult<()> {
         self.0.extract(destination).map_err(to_pyerr)
     }
 
@@ -1703,6 +1870,16 @@ impl PyDigestReport {
         PyDigestStatus(self.0.payload_sha3_256.clone())
     }
 
+    /// True if at least one header digest was present.
+    fn has_header_digest(&self) -> bool {
+        self.0.has_header_digest()
+    }
+
+    /// True if at least one payload digest was present.
+    fn has_payload_digest(&self) -> bool {
+        self.0.has_payload_digest()
+    }
+
     /// True if every present digest verified and none mismatched.
     fn is_ok(&self) -> bool {
         self.0.is_ok()
@@ -1879,7 +2056,7 @@ pub enum PyRpmFormat {
 ///     compression_level: Compression level (integer). Default depends on algorithm.
 ///     source_date: Fixed timestamp (seconds since Unix epoch) for reproducible builds.
 ///     reserved_space: Size in bytes of reserved space for in-place re-signing.
-///         If omitted, the library default (4128 bytes) is used. Pass ``0`` to
+///         If omitted, the library default (4128 bytes) is used. Pass `0` to
 ///         disable reserved space entirely (no tag is written).
 #[pyclass(name = "BuildConfig")]
 pub struct PyBuildConfig(crate::BuildConfig);
@@ -1934,11 +2111,11 @@ impl PyBuildConfig {
 /// Options for a file entry in an RPM package (destination path, permissions, flags, etc.).
 ///
 /// Use the static constructors to create the appropriate kind of file options:
-/// - ``FileOptions.new(path, ...)`` for regular files
-/// - ``FileOptions.dir(path, ...)`` for directories
-/// - ``FileOptions.symlink(path, target, ...)`` for symbolic links
-/// - ``FileOptions.ghost(path, ...)`` for ghost files
-/// - ``FileOptions.ghost_dir(path, ...)`` for ghost directories
+/// - `FileOptions.new(path, ...)` for regular files
+/// - `FileOptions.dir(path, ...)` for directories
+/// - `FileOptions.symlink(path, target, ...)` for symbolic links
+/// - `FileOptions.ghost(path, ...)` for ghost files
+/// - `FileOptions.ghost_dir(path, ...)` for ghost directories
 ///
 /// Common keyword arguments (all optional):
 ///     user: Owning user name.
@@ -2438,6 +2615,138 @@ impl PyPackageBuilder {
         self.0.verify_script(script);
     }
 
+    // --- Triggers ---
+
+    /// Add a `%triggerin` script that fires when the target package is installed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trigger_in(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trigger_in(target, condition, script);
+    }
+
+    /// Add a `%triggerun` script that fires just before the target package is removed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trigger_un(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trigger_un(target, condition, script);
+    }
+
+    /// Add a `%triggerpostun` script that fires after the target package is removed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trigger_postun(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trigger_postun(target, condition, script);
+    }
+
+    /// Add a `%triggerprein` script that fires just before the target package is installed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trigger_prein(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trigger_prein(target, condition, script);
+    }
+
+    /// Add a `%filetriggerin` script that fires when a file matching the target path is installed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn file_trigger_in(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.file_trigger_in(target, condition, script);
+    }
+
+    /// Add a `%filetriggerun` script that fires when a file matching the target path is removed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn file_trigger_un(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.file_trigger_un(target, condition, script);
+    }
+
+    /// Add a `%filetriggerpostun` script that fires after a file matching the target path is removed.
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn file_trigger_postun(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.file_trigger_postun(target, condition, script);
+    }
+
+    /// Add a `%transfiletriggerin` script (transactional file trigger on install).
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trans_file_trigger_in(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trans_file_trigger_in(target, condition, script);
+    }
+
+    /// Add a `%transfiletriggerun` script (transactional file trigger on uninstall).
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trans_file_trigger_un(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trans_file_trigger_un(target, condition, script);
+    }
+
+    /// Add a `%transfiletriggerpostun` script (transactional file trigger after uninstall).
+    #[pyo3(signature = (target, script, flags=None, version=None))]
+    fn trans_file_trigger_postun(
+        &mut self,
+        target: &str,
+        script: &str,
+        flags: Option<u32>,
+        version: Option<&str>,
+    ) {
+        let condition = make_trigger_condition(flags, version);
+        self.0.trans_file_trigger_postun(target, condition, script);
+    }
+
     /// Build the package and return a `Package` object.
     fn build(&mut self) -> PyResult<PyPackage> {
         self.0.build().map(PyPackage).map_err(to_pyerr)
@@ -2449,6 +2758,17 @@ impl PyPackageBuilder {
             .build_and_sign(signer.0.clone())
             .map(PyPackage)
             .map_err(to_pyerr)
+    }
+}
+
+/// Helper to construct a trigger condition from optional Python arguments.
+fn make_trigger_condition(
+    flags: Option<u32>,
+    version: Option<&str>,
+) -> Option<(crate::DependencyFlags, &str)> {
+    match (flags, version) {
+        (Some(f), Some(v)) => Some((crate::DependencyFlags::from_bits_retain(f), v)),
+        _ => None,
     }
 }
 
@@ -2557,6 +2877,8 @@ pub fn rpm_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFileOwnership>()?;
     m.add_class::<PyChangelogEntry>()?;
     m.add_class::<PyScriptlet>()?;
+    m.add_class::<PyTrigger>()?;
+    m.add_class::<PyTriggerCondition>()?;
     m.add_class::<PyDigestAlgorithm>()?;
     m.add_class::<PyCompressionType>()?;
     m.add_class::<PyRpmFormat>()?;

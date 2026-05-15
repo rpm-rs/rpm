@@ -87,6 +87,10 @@ class TestVerifierConstruction:
         verifier = Verifier(open(PUBLIC_KEY, "rb").read())
         verifier.load_from_asc_file(OTHER_PUBLIC_KEY)
 
+    def test_empty_verifier(self):
+        verifier = Verifier()
+        assert verifier is not None
+
     def test_with_key_invalid_hex(self):
         verifier = Verifier(open(PUBLIC_KEY, "rb").read())
         with pytest.raises(ValueError, match="invalid hex"):
@@ -150,27 +154,29 @@ class TestSignatureInfo:
         signer = Signer.from_file(PRIVATE_KEY)
         pkg.sign(signer)
 
-        sigs = pkg.signatures()
-        assert isinstance(sigs, list)
-        assert len(sigs) > 0
+        for target in [pkg, pkg.metadata]:
+            sigs = target.signatures()
+            assert isinstance(sigs, list)
+            assert len(sigs) > 0
 
-        sig = sigs[0]
-        assert isinstance(sig, SignatureInfo)
-        assert sig.fingerprint is not None
-        assert isinstance(sig.fingerprint, str)
-        assert len(sig.fingerprint) > 16
-        assert sig.algorithm is not None
-        assert sig.hash_algorithm is not None
-        assert sig.version == SignatureVersion.V6
+            sig = sigs[0]
+            assert isinstance(sig, SignatureInfo)
+            assert sig.fingerprint is not None
+            assert isinstance(sig.fingerprint, str)
+            assert len(sig.fingerprint) > 16
+            assert sig.algorithm is not None
+            assert sig.hash_algorithm is not None
+            assert sig.version == SignatureVersion.V6
 
     def test_signature_created_timestamp(self):
         pkg = Package.open(RPM_BASIC)
         signer = Signer.from_file(PRIVATE_KEY)
         pkg.sign(signer, timestamp=1_600_000_000)
 
-        sigs = pkg.signatures()
-        assert len(sigs) > 0
-        assert sigs[0].created == 1_600_000_000
+        for target in [pkg, pkg.metadata]:
+            sigs = target.signatures()
+            assert len(sigs) > 0
+            assert sigs[0].created == 1_600_000_000
 
     def test_signature_repr(self):
         pkg = Package.open(RPM_BASIC)
@@ -181,30 +187,25 @@ class TestSignatureInfo:
 
     def test_unsigned_package_empty(self):
         pkg = Package.open(RPM_BASIC)
-        sigs = pkg.signatures()
-        assert sigs == []
+        for target in [pkg, pkg.metadata]:
+            assert target.signatures() == []
+            assert target.raw_signatures() == []
 
     def test_multi_signed_package(self):
         pkg = Package.open(RPM_MULTI_SIGNED)
-        sigs = pkg.signatures()
-        assert len(sigs) > 1
-        for sig in sigs:
-            assert sig.version == SignatureVersion.V6
+        for target in [pkg, pkg.metadata]:
+            sigs = target.signatures()
+            assert len(sigs) > 1
+            for sig in sigs:
+                assert sig.version == SignatureVersion.V6
 
-
-class TestRawSignatures:
-    def test_unsigned_package(self):
-        pkg = Package.open(RPM_BASIC)
-        sigs = pkg.raw_signatures()
-        assert isinstance(sigs, list)
-        assert len(sigs) == 0
-
-    def test_signed_package(self):
+    def test_raw_signatures(self):
         pkg = Package.open(RPM_SIGNED)
-        sigs = pkg.raw_signatures()
-        assert isinstance(sigs, list)
-        assert len(sigs) > 0
-        assert all(isinstance(s, bytes) for s in sigs)
+        for target in [pkg, pkg.metadata]:
+            sigs = target.raw_signatures()
+            assert isinstance(sigs, list)
+            assert len(sigs) > 0
+            assert all(isinstance(s, bytes) for s in sigs)
 
 
 class TestRemoteSigning:
@@ -246,22 +247,64 @@ class TestRemoteSigning:
             pkg.verify_signature(verifier)
 
 
-class TestEmptyVerifier:
-    def test_empty_verifier(self):
-        verifier = Verifier()
-        assert verifier is not None
+class TestCheckSignatures:
+    def test_check_signatures_valid(self):
+        pkg = Package.open(RPM_SIGNED)
+        verifier = Verifier.from_file(PUBLIC_KEY)
+        for target in [pkg, pkg.metadata]:
+            report = target.check_signatures(verifier)
+            assert report.is_ok()
+            assert report.digests.is_ok()
+            assert len(report.signatures) > 0
+            assert all(s.is_verified for s in report.signatures)
 
-    def test_empty_verifier_check_digests(self):
+    def test_check_signatures_wrong_key(self):
+        pkg = Package.open(RPM_SIGNED)
+        verifier = Verifier.from_file(OTHER_PUBLIC_KEY)
+        for target in [pkg, pkg.metadata]:
+            report = target.check_signatures(verifier)
+            assert report.digests.is_ok()
+            assert not report.is_ok()
+
+    def test_check_signatures_unsigned(self):
+        pkg = Package.open(RPM_BASIC)
+        verifier = Verifier.from_file(PUBLIC_KEY)
+        report = pkg.check_signatures(verifier)
+        assert report.digests.is_ok()
+        assert len(report.signatures) == 0
+
+    def test_check_signatures_empty_verifier(self):
         pkg = Package.open(RPM_BASIC)
         verifier = Verifier()
         report = pkg.check_signatures(verifier)
         assert report.digests.is_ok()
 
-    def test_empty_verifier_load_from_asc_bytes(self):
+    def test_verify_signature(self):
+        pkg = Package.open(RPM_SIGNED)
+        verifier = Verifier.from_file(PUBLIC_KEY)
+        for target in [pkg, pkg.metadata]:
+            target.verify_signature(verifier)
+
+    def test_verify_signature_wrong_key_fails(self):
+        pkg = Package.open(RPM_SIGNED)
+        verifier = Verifier.from_file(OTHER_PUBLIC_KEY)
+        for target in [pkg, pkg.metadata]:
+            with pytest.raises(RuntimeError):
+                target.verify_signature(verifier)
+
+    def test_verify_unsigned_fails(self):
+        pkg = Package.open(RPM_BASIC)
+        verifier = Verifier.from_file(PUBLIC_KEY)
+        for target in [pkg, pkg.metadata]:
+            with pytest.raises(RuntimeError):
+                target.verify_signature(verifier)
+
+    def test_verify_with_loaded_key(self):
         verifier = Verifier()
         verifier.load_from_asc_bytes(open(PUBLIC_KEY, "rb").read())
         pkg = Package.open(RPM_SIGNED)
-        pkg.verify_signature(verifier)
+        for target in [pkg, pkg.metadata]:
+            target.verify_signature(verifier)
 
 
 class TestInPlace:

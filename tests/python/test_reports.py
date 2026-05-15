@@ -2,7 +2,7 @@
 
 import pytest
 
-from rpm_rs import Package, Signer, Verifier
+from rpm_rs import Package, Verifier
 
 from conftest import (
     RPM_BASIC,
@@ -10,7 +10,6 @@ from conftest import (
     RPM_MULTI_SIGNED,
     RPM_V4_BASIC,
     PUBLIC_KEY,
-    PRIVATE_KEY,
     OTHER_PUBLIC_KEY,
 )
 
@@ -45,42 +44,49 @@ class TestDigestStatus:
 class TestDigestReport:
     def test_v6_package(self):
         pkg = Package.open(RPM_BASIC)
+        for target in [pkg, pkg.metadata]:
+            report = target.check_digests()
+            assert report.is_ok()
+            assert report.has_header_digest()
+
+            # v6 has SHA-256 and SHA3-256 header digests
+            assert report.header_sha256.is_verified()
+            assert report.header_sha3_256.is_verified()
+
+            # v6 does not have SHA-1 header digest
+            assert report.header_sha1.is_not_present()
+
+        # payload digests only checked on Package
         report = pkg.check_digests()
-        assert report.is_ok()
-
-        # v6 has SHA-256 and SHA3-256 header digests
-        assert report.header_sha256.is_verified()
-        assert report.header_sha3_256.is_verified()
-
-        # v6 does not have SHA-1 header digest
-        assert report.header_sha1.is_not_present()
-
-        # v6 has payload digests
+        assert report.has_payload_digest()
         assert report.payload_sha256.is_verified()
         assert report.payload_sha512.is_verified()
         assert report.payload_sha3_256.is_verified()
 
     def test_v4_package(self):
         pkg = Package.open(RPM_V4_BASIC)
+        for target in [pkg, pkg.metadata]:
+            report = target.check_digests()
+            assert report.is_ok()
+            assert report.has_header_digest()
+
+            # v4 has SHA-1 and SHA-256 header digests
+            assert report.header_sha1.is_verified()
+            assert report.header_sha256.is_verified()
+
+            # v4 does not have SHA3-256
+            assert report.header_sha3_256.is_not_present()
+
+        # payload digests only checked on Package
         report = pkg.check_digests()
-        assert report.is_ok()
-
-        # v4 has SHA-1 and SHA-256 header digests
-        assert report.header_sha1.is_verified()
-        assert report.header_sha256.is_verified()
-
-        # v4 does not have SHA3-256
-        assert report.header_sha3_256.is_not_present()
-
-        # v4 has SHA-256 payload digest but not SHA-512 or SHA3-256
         assert report.payload_sha256.is_verified()
         assert report.payload_sha512.is_not_present()
         assert report.payload_sha3_256.is_not_present()
 
     def test_verify_passes(self):
         pkg = Package.open(RPM_BASIC)
-        report = pkg.check_digests()
-        report.verify()  # should not raise
+        for target in [pkg, pkg.metadata]:
+            target.check_digests().verify()  # should not raise
 
     def test_repr(self):
         pkg = Package.open(RPM_BASIC)

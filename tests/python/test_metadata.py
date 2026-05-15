@@ -10,17 +10,19 @@ from rpm_rs import (
     DigestAlgorithm,
     FileEntry,
     FileType,
+    Package,
     PackageMetadata,
     Scriptlet,
     SignatureInfo,
     SignatureTag,
     Tag,
+    Trigger,
+    TriggerCondition,
 )
 
 from conftest import (
     RPM_BASIC,
     RPM_EMPTY,
-    RPM_FILE_TYPES,
     RPM_SCRIPTLETS,
     RPM_RICH_DEPS,
     RPM_SIGNED,
@@ -341,3 +343,72 @@ class TestRawSignatureTagAccess:
         assert isinstance(entries, dict)
         assert len(entries) > 0
         assert int(SignatureTag.SHA256) in entries
+
+
+class TestHeaderBytes:
+    def test_header_bytes_returns_bytes(self):
+        m = PackageMetadata.open(RPM_BASIC)
+        header = m.header_bytes()
+        assert isinstance(header, bytes)
+        assert len(header) > 0
+
+    def test_header_bytes_matches_package(self):
+        pkg = Package.open(RPM_SIGNED)
+        assert pkg.header_bytes() == pkg.metadata.header_bytes()
+
+
+class TestDigests:
+    def test_check_digests(self):
+        m = PackageMetadata.open(RPM_BASIC)
+        report = m.check_digests()
+        assert report.is_ok()
+        assert report.has_header_digest()
+
+    def test_verify_digests(self):
+        PackageMetadata.open(RPM_BASIC).verify_digests()
+
+    def test_verify_digests_signed(self):
+        PackageMetadata.open(RPM_SIGNED).verify_digests()
+
+
+class TestVerifyScript:
+    def test_verify_script_missing_raises(self):
+        m = PackageMetadata.open(RPM_BASIC)
+        with pytest.raises(RuntimeError):
+            m.verify_script()
+
+
+class TestTriggers:
+    def test_package_triggers(self):
+        m = PackageMetadata.open(RPM_SCRIPTLETS)
+        triggers = m.triggers()
+        assert len(triggers) > 0
+        assert all(isinstance(t, Trigger) for t in triggers)
+
+    def test_trigger_properties(self):
+        m = PackageMetadata.open(RPM_SCRIPTLETS)
+        t = m.triggers()[0]
+        assert isinstance(t.script, str)
+        assert len(t.script) > 0
+        assert isinstance(t.program, list)
+        assert len(t.conditions) > 0
+        c = t.conditions[0]
+        assert isinstance(c, TriggerCondition)
+        assert isinstance(c.name, str)
+        assert isinstance(c.version, str)
+
+    def test_file_triggers(self):
+        m = PackageMetadata.open(RPM_SCRIPTLETS)
+        triggers = m.file_triggers()
+        assert len(triggers) > 0
+
+    def test_trans_file_triggers(self):
+        m = PackageMetadata.open(RPM_SCRIPTLETS)
+        triggers = m.trans_file_triggers()
+        assert len(triggers) > 0
+
+    def test_no_triggers(self):
+        m = PackageMetadata.open(RPM_BASIC)
+        assert m.triggers() == []
+        assert m.file_triggers() == []
+        assert m.trans_file_triggers() == []

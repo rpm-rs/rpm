@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.23.5
+
+### Added
+
+- Added `PackageMetadata.verify_signature()` and `PackageMetadata.check_signatures()` to the Python API.
+- Added `PackageMetadata.header_bytes()`, `PackageMetadata.check_digests()`, and `PackageMetadata.verify_digests()` to the Python API.
+- Added `PackageMetadata.verify_script()`, `PackageMetadata.triggers()`, `PackageMetadata.file_triggers()`, and `PackageMetadata.trans_file_triggers()` to the Python API.
+- Added `PackageBuilder` trigger methods: `trigger_in()`, `trigger_un()`, `trigger_postun()`, `trigger_prein()`, `file_trigger_in()`, `file_trigger_un()`, `file_trigger_postun()`, `trans_file_trigger_in()`, `trans_file_trigger_un()`, `trans_file_trigger_postun()`.
+- Added `Trigger` and `TriggerCondition` types to the Python API.
+- Added `DigestReport.has_header_digest()` and `DigestReport.has_payload_digest()` to the Python API.
+
 ## 0.23.4
 
 ### Added

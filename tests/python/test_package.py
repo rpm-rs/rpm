@@ -1,13 +1,12 @@
 """Tests for Package (full package with payload)."""
 
 import os
-import shutil
 import tempfile
 from pathlib import Path
 
 from rpm_rs import FileEntry, FileType, Package, PackageMetadata, RpmFile
 
-from conftest import RPM_BASIC, RPM_EMPTY, RPM_FILE_TYPES, RPM_SIGNED
+from conftest import RPM_BASIC, RPM_EMPTY, RPM_FILE_TYPES
 
 
 class TestOpen:
