@@ -5,7 +5,9 @@ import argparse
 from rpm_rs import FileOptions, PackageBuilder
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("output", nargs="?", default=".", help="Output RPM path or directory")
+parser.add_argument(
+    "output", nargs="?", default=".", help="Output RPM path or directory"
+)
 args = parser.parse_args()
 
 builder = PackageBuilder(

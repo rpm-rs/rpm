@@ -317,6 +317,54 @@ class TestSigning:
         pkg.verify_signature(verifier)
 
 
+class TestTriggers:
+    def test_trigger_in(self):
+        b = PackageBuilder("test", "1.0", "MIT", "noarch")
+        b.trigger_in("bash", "echo triggered")
+        pkg = b.build()
+        triggers = pkg.metadata.triggers()
+        assert len(triggers) == 1
+        assert "echo triggered" in triggers[0].script
+
+    def test_trigger_with_version_condition(self):
+        from rpm_rs import DependencyFlags
+
+        b = PackageBuilder("test", "1.0", "MIT", "noarch")
+        b.trigger_in(
+            "bash",
+            "echo versioned",
+            flags=int(DependencyFlags.GREATER | DependencyFlags.EQUAL),
+            version="5.0",
+        )
+        pkg = b.build()
+        triggers = pkg.metadata.triggers()
+        assert len(triggers) == 1
+        c = triggers[0].conditions[0]
+        assert c.name == "bash"
+        assert c.version == "5.0"
+
+    def test_file_trigger_in(self):
+        b = PackageBuilder("test", "1.0", "MIT", "noarch")
+        b.file_trigger_in("/usr/lib", "echo file triggered")
+        pkg = b.build()
+        triggers = pkg.metadata.file_triggers()
+        assert len(triggers) == 1
+
+    def test_trans_file_trigger_in(self):
+        b = PackageBuilder("test", "1.0", "MIT", "noarch")
+        b.trans_file_trigger_in("/usr/lib", "echo trans triggered")
+        pkg = b.build()
+        triggers = pkg.metadata.trans_file_triggers()
+        assert len(triggers) == 1
+
+    def test_verify_script_roundtrip(self):
+        b = PackageBuilder("test", "1.0", "MIT", "noarch")
+        b.verify_script("echo verify")
+        pkg = b.build()
+        s = pkg.metadata.verify_script()
+        assert "echo verify" in s.script
+
+
 class TestBuilderReuse:
     def test_double_build_raises(self):
         b = PackageBuilder("test", "1.0", "MIT", "noarch")
